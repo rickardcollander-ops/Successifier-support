@@ -15,7 +15,10 @@ async function getEmailAccounts() {
     });
 
     return accounts.map(account => ({
-      ...account,
+      id: account.id,
+      email: account.email,
+      provider: account.provider,
+      isActive: account.isActive,
       ownerName: account.user?.name || null,
       ownerEmail: account.user?.email || null,
       createdAt: account.createdAt.toISOString(),

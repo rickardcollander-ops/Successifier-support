@@ -158,33 +158,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: {
-        emailAccounts: {
-          where: { isActive: true },
-          orderBy: { createdAt: 'asc' },
-          select: {
-            id: true,
-            email: true,
-            accessToken: true,
-            refreshToken: true,
-          },
-        },
+    // Sync ALL active email accounts, not just the current user's
+    const accounts = await prisma.emailAccount.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        email: true,
+        accessToken: true,
+        refreshToken: true,
       },
     });
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    if (user.emailAccounts.length === 0) {
+    if (accounts.length === 0) {
       return NextResponse.json({ success: true, syncedAccounts: 0, totalNewTickets: 0, results: [] });
     }
 
     const results = [] as Array<{ accountId: string; email: string; newTickets: number; error?: string }>;
 
-    for (const account of user.emailAccounts) {
+    for (const account of accounts) {
       try {
         const result = await syncSingleAccount(account);
         results.push(result);
