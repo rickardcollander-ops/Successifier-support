@@ -3,24 +3,26 @@ import { prisma } from '@/lib/db/client';
 import EmailAccountsClient from '@/components/EmailAccountsClient';
 import { auth } from '@/lib/auth';
 
-async function getEmailAccounts(userEmail: string) {
+async function getEmailAccounts() {
   try {
-    const user = await prisma.user.findUnique({
-      where: { email: userEmail },
+    const accounts = await prisma.emailAccount.findMany({
+      orderBy: { createdAt: 'desc' },
       include: {
-        emailAccounts: {
-          orderBy: { createdAt: 'desc' },
+        user: {
+          select: { name: true, email: true },
         },
       },
     });
 
-    return user?.emailAccounts.map(account => ({
+    return accounts.map(account => ({
       ...account,
+      ownerName: account.user?.name || null,
+      ownerEmail: account.user?.email || null,
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),
       lastSyncAt: account.lastSyncAt?.toISOString() || null,
       expiresAt: account.expiresAt?.toISOString() || null,
-    })) || [];
+    }));
   } catch (error) {
     console.error('Error fetching email accounts:', error);
     return [];
@@ -34,7 +36,7 @@ export default async function EmailAccountsPage() {
     redirect('/auth/signin');
   }
 
-  const accounts = await getEmailAccounts(session.user.email);
+  const accounts = await getEmailAccounts();
 
   return (
     <div className="p-8">

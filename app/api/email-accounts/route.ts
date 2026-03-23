@@ -5,25 +5,22 @@ import { prisma } from '@/lib/db/client';
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
-    
+
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+    // Return all email accounts with owner info so everyone can see connected accounts
+    const accounts = await prisma.emailAccount.findMany({
+      orderBy: { createdAt: 'desc' },
       include: {
-        emailAccounts: {
-          orderBy: { createdAt: 'desc' },
+        user: {
+          select: { name: true, email: true },
         },
       },
     });
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ accounts: user.emailAccounts });
+    return NextResponse.json({ accounts });
   } catch (error) {
     console.error('Error fetching email accounts:', error);
     return NextResponse.json(
