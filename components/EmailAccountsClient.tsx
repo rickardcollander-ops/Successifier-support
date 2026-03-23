@@ -10,6 +10,8 @@ interface EmailAccount {
   isActive: boolean;
   lastSyncAt: string | null;
   createdAt: string;
+  ownerName?: string | null;
+  ownerEmail?: string | null;
 }
 
 interface EmailAccountsClientProps {
@@ -140,6 +142,11 @@ export default function EmailAccountsClient({ initialAccounts }: EmailAccountsCl
                     <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100">
                       {account.email}
                     </h3>
+                    {account.ownerName && (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        Kopplat av {account.ownerName}{account.ownerEmail ? ` (${account.ownerEmail})` : ''}
+                      </p>
+                    )}
                     <div className="flex items-center gap-3 mt-1">
                       <span className={`text-xs px-2 py-1 rounded-full ${
                         account.isActive

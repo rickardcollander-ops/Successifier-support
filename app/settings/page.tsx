@@ -11,6 +11,7 @@ interface ConnectedEmailAccount {
   provider: string;
   isActive: boolean;
   lastSyncAt: string | null;
+  user?: { name: string | null; email: string | null };
 }
 
 export default function SettingsPage() {
@@ -201,6 +202,11 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <p className="font-medium text-slate-900 dark:text-slate-100 text-sm">{account.email}</p>
+                      {account.user?.name && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Kopplat av {account.user.name}
+                        </p>
+                      )}
                       <div className="flex items-center gap-2 mt-0.5">
                         {account.isActive ? (
                           <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
