@@ -291,7 +291,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400">
               <span>{ticket.customerEmail}</span>
               <span>•</span>
-              <span>{new Date(ticket.createdAt).toLocaleString()}</span>
+              <span suppressHydrationWarning>{new Date(ticket.createdAt).toLocaleString()}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">

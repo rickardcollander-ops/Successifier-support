@@ -69,7 +69,7 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket }: 
               <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                 <span>{ticket.customerEmail}</span>
                 <span>•</span>
-                <span>{new Date(ticket.createdAt).toLocaleString()}</span>
+                <span suppressHydrationWarning>{new Date(ticket.createdAt).toLocaleString()}</span>
                 {ticket.aiResponse && (
                   <>
                     <span>•</span>
