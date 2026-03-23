@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { decryptJSON, isEncrypted } from '@/lib/crypto';
 
 async function stripeProbe(apiKey: string) {
   try {
@@ -238,24 +239,25 @@ export async function POST(
       return NextResponse.json({ ok: false, message: 'Integration not found' }, { status: 404 });
     }
 
-    const credentials = integration.credentials as any;
-    
-    // Debug logging
-    console.log('Integration type:', integration.type);
-    console.log('Credentials type:', typeof credentials);
-    console.log('Credentials keys:', credentials ? Object.keys(credentials) : 'null');
+    // Decrypt credentials if they are encrypted
+    const rawCredentials = integration.credentials;
+    const credentialsStr = typeof rawCredentials === 'string'
+      ? rawCredentials
+      : JSON.stringify(rawCredentials);
+
+    const credentials: any = isEncrypted(credentialsStr)
+      ? decryptJSON(credentialsStr)
+      : rawCredentials;
     
     let result;
 
     switch (integration.type) {
       case 'stripe': {
         const apiKey = credentials?.apiKey ? String(credentials.apiKey).trim() : '';
-        console.log('Stripe apiKey exists:', !!apiKey, 'length:', apiKey.length);
         if (!apiKey) {
-          return NextResponse.json({ 
-            ok: false, 
-            message: 'Missing Stripe API key',
-            debug: { credentialsKeys: credentials ? Object.keys(credentials) : null }
+          return NextResponse.json({
+            ok: false,
+            message: 'Missing Stripe API key'
           }, { status: 400 });
         }
         result = await stripeProbe(apiKey);
