@@ -156,7 +156,7 @@ export default function EmailAccountsClient({ initialAccounts }: EmailAccountsCl
                         {account.isActive ? 'Aktiv' : 'Inaktiv'}
                       </span>
                       {account.lastSyncAt && (
-                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                        <span className="text-xs text-slate-500 dark:text-slate-400" suppressHydrationWarning>
                           Senast synkad: {new Date(account.lastSyncAt).toLocaleString('sv-SE')}
                         </span>
                       )}

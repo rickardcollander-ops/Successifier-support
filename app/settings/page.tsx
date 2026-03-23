@@ -218,7 +218,7 @@ export default function SettingsPage() {
                           </span>
                         )}
                         {account.lastSyncAt && (
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-slate-400" suppressHydrationWarning>
                             · Senast synkad {new Date(account.lastSyncAt).toLocaleString('sv-SE')}
                           </span>
                         )}
