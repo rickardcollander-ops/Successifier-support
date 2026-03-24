@@ -290,6 +290,12 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1.5">{ticket.subject}</h2>
             <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400">
               <span>{ticket.customerEmail}</span>
+              {ticket.customerNumber && (
+                <>
+                  <span>•</span>
+                  <span>#{ticket.customerNumber}</span>
+                </>
+              )}
               <span>•</span>
               <span suppressHydrationWarning>{new Date(ticket.createdAt).toLocaleString()}</span>
             </div>

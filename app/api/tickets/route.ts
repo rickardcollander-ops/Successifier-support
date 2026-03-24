@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { customerEmail, customerName, subject, originalMessage, priority } = body;
+    const { customerEmail, customerName, customerNumber, subject, originalMessage, priority } = body;
 
     if (!customerEmail || !subject || !originalMessage) {
       return NextResponse.json(
@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
         tenantId: tenant.id,
         customerEmail,
         customerName,
+        customerNumber,
         subject,
         originalMessage,
         priority: priority || 'normal',
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Generate AI response immediately in background
-    generateAIResponse(subject, originalMessage, null, tenant.id)
+    generateAIResponse(subject, originalMessage, null, tenant.id, customerNumber)
       .then(async ({ response, confidence }) => {
         await prisma.ticket.update({
           where: { id: ticket.id },

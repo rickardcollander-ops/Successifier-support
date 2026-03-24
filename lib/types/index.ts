@@ -11,6 +11,7 @@ export interface Ticket {
   tenantId: string;
   customerEmail: string;
   customerName?: string;
+  customerNumber?: string;
   subject: string;
   status: 'new' | 'in_progress' | 'waiting_ai' | 'review' | 'sent' | 'closed' | 'archived';
   priority: 'low' | 'normal' | 'high' | 'urgent';
