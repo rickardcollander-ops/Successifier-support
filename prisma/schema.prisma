@@ -42,6 +42,7 @@ model Ticket {
   tenantId        String
   customerEmail   String
   customerName    String?
+  customerNumber  String?
   subject         String
   status          String   @default("new")
   priority        String   @default("normal")
