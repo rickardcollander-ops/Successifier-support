@@ -103,7 +103,7 @@ export default function ReportsPage() {
               <p className="text-sm text-slate-600 dark:text-slate-400">Total Tickets</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.totalTickets}</p>
             </div>
-            <div className="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-lg border border-blue-300 dark:border-blue-700 flex items-center justify-center">
               <BarChart3 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
@@ -115,7 +115,7 @@ export default function ReportsPage() {
               <p className="text-sm text-slate-600 dark:text-slate-400">Resolved Today</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.resolvedToday}</p>
             </div>
-            <div className="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-lg border border-green-300 dark:border-green-700 flex items-center justify-center">
               <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function ReportsPage() {
               <p className="text-sm text-slate-600 dark:text-slate-400">Pending</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.pendingTickets}</p>
             </div>
-            <div className="w-12 h-12 rounded-lg bg-yellow-100 dark:bg-yellow-900 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-lg border border-yellow-300 dark:border-yellow-700 flex items-center justify-center">
               <AlertCircle className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
             </div>
           </div>
@@ -139,7 +139,7 @@ export default function ReportsPage() {
               <p className="text-sm text-slate-600 dark:text-slate-400">Avg Response Time</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.avgResponseTime}h</p>
             </div>
-            <div className="w-12 h-12 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-lg border border-purple-300 dark:border-purple-700 flex items-center justify-center">
               <Clock className="w-6 h-6 text-purple-600 dark:text-purple-400" />
             </div>
           </div>

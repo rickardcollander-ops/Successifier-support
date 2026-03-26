@@ -188,8 +188,8 @@ export default function DeveloperPage() {
                       <h3 className="font-medium text-slate-900 dark:text-slate-100">{apiKey.name}</h3>
                       <span className={`px-2 py-0.5 rounded-full text-xs ${
                         apiKey.isActive
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                          : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                          ? 'border border-green-300 text-green-700 dark:border-green-700 dark:text-green-300'
+                          : 'border border-slate-300 text-slate-700 dark:border-slate-600 dark:text-slate-300'
                       }`}>
                         {apiKey.isActive ? 'Active' : 'Inactive'}
                       </span>
@@ -261,7 +261,7 @@ export default function DeveloperPage() {
             
             {newlyCreatedKey ? (
               <div className="space-y-4">
-                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
+                <div className="p-4 bg-white dark:bg-slate-800 border border-green-200 dark:border-green-800 rounded">
                   <p className="text-sm text-green-800 dark:text-green-200 mb-2">
                     ✓ API key created successfully! Copy it now - you won't be able to see it again.
                   </p>

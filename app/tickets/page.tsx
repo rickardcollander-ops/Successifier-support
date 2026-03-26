@@ -429,8 +429,8 @@ export default function TicketsPage() {
           {/* Email Sync Status - Moved to top right */}
           <div className={`text-xs px-3 py-1.5 rounded-md border whitespace-nowrap ${
             emailSyncStatus.error
-              ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300'
-              : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300'
+              ? 'bg-white border-red-200 text-red-700 dark:bg-slate-800 dark:border-red-800 dark:text-red-300'
+              : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
           }`}>
             {emailSyncStatus.error ? (
               <span>{emailSyncStatus.error}</span>

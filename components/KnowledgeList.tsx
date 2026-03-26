@@ -50,7 +50,7 @@ export default function KnowledgeList({
               {article.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   {article.tags.slice(0, 3).map((tag) => (
-                    <span key={tag} className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                    <span key={tag} className="text-xs px-2 py-0.5 rounded border border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300">
                       {tag}
                     </span>
                   ))}
