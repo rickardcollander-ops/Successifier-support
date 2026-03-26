@@ -671,7 +671,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               )}
 
               {!billectaSearching && billectaSearchResults?.error && (
-                <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+                <div className="p-4 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
                   {billectaSearchResults.error}
                 </div>
               )}
@@ -691,8 +691,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                         <p className="font-semibold text-slate-900 dark:text-slate-100">Faktura #{inv.invoiceNumber}</p>
                         <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                           inv.isPaid
-                            ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
-                            : 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
+                            ? 'border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
+                            : 'border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
                         }`}>
                           {inv.stage}
                         </span>
@@ -755,8 +755,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                                   <p className="font-medium text-slate-900 dark:text-slate-100">#{inv.invoiceNumber}</p>
                                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                                     inv.isPaid
-                                      ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
-                                      : 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
+                                      ? 'border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
+                                      : 'border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
                                   }`}>
                                     {inv.stage}
                                   </span>
@@ -799,7 +799,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   <div className="space-y-4">
                     {(debtorName || debtorOrgNo) && (
                       <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-700">
-                        <div className="w-9 h-9 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-full border border-green-300 dark:border-green-700 flex items-center justify-center">
                           <span className="text-green-700 dark:text-green-300 text-sm font-bold">
                             {(debtorName || '?')[0].toUpperCase()}
                           </span>
@@ -823,8 +823,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                             </p>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                               inv.isPaid
-                                ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
-                                : 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
+                                ? 'border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
+                                : 'border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
                             }`}>
                               {inv.status || (inv.isPaid ? 'Betald' : 'Obetald')}
                             </span>

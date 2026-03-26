@@ -54,7 +54,7 @@ export default async function EmailAccountsPage() {
 
       <EmailAccountsClient initialAccounts={accounts} />
 
-      <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+      <div className="mt-6 p-4 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-lg">
         <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
           💡 Tips
         </h3>

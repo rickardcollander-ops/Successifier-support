@@ -197,7 +197,7 @@ export default function SettingsPage() {
               {emailAccounts.map((account) => (
                 <div key={account.id} className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-full border border-blue-300 dark:border-blue-700 flex items-center justify-center">
                       <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div>

@@ -10,19 +10,19 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket }: 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'new':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+        return 'border border-blue-300 text-blue-800 dark:border-blue-700 dark:text-blue-200';
       case 'in_progress':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+        return 'border border-yellow-300 text-yellow-800 dark:border-yellow-700 dark:text-yellow-200';
       case 'review':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+        return 'border border-purple-300 text-purple-800 dark:border-purple-700 dark:text-purple-200';
       case 'sent':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+        return 'border border-green-300 text-green-800 dark:border-green-700 dark:text-green-200';
       case 'closed':
-        return 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200';
+        return 'border border-zinc-300 text-zinc-800 dark:border-zinc-600 dark:text-zinc-200';
       case 'archived':
-        return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+        return 'border border-amber-300 text-amber-800 dark:border-amber-700 dark:text-amber-200';
       default:
-        return 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200';
+        return 'border border-zinc-300 text-zinc-800 dark:border-zinc-600 dark:text-zinc-200';
     }
   };
 

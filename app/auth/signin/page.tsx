@@ -21,13 +21,13 @@ function SignInContent() {
         </div>
 
         {error === 'AccessDenied' && (
-          <div className="mb-6 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300 text-center">
+          <div className="mb-6 p-3 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300 text-center">
             Åtkomst nekad. Bara @doldadress.se-konton kan logga in.
           </div>
         )}
 
         {error === 'OAuthAccountNotLinked' && (
-          <div className="mb-6 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-300 text-center">
+          <div className="mb-6 p-3 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-300 text-center">
             Det gick inte att logga in. Försök igen.
           </div>
         )}

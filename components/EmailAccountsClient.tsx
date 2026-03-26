@@ -150,8 +150,8 @@ export default function EmailAccountsClient({ initialAccounts }: EmailAccountsCl
                     <div className="flex items-center gap-3 mt-1">
                       <span className={`text-xs px-2 py-1 rounded-full ${
                         account.isActive
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                          : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
+                          ? 'border border-green-300 text-green-800 dark:border-green-700 dark:text-green-200'
+                          : 'border border-slate-300 text-slate-800 dark:border-slate-600 dark:text-slate-300'
                       }`}>
                         {account.isActive ? 'Aktiv' : 'Inaktiv'}
                       </span>

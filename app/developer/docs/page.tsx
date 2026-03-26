@@ -37,7 +37,7 @@ Authorization: Bearer dold_your_api_key_here`}</code>
         {/* Create Ticket */}
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-3 mb-4">
-            <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 rounded font-mono text-sm font-semibold">
+            <span className="px-3 py-1 border border-green-300 text-green-700 dark:border-green-700 dark:text-green-300 rounded font-mono text-sm font-semibold">
               POST
             </span>
             <code className="text-lg font-mono text-slate-900 dark:text-slate-100">/tickets</code>
@@ -78,7 +78,7 @@ Authorization: Bearer dold_your_api_key_here`}</code>
         {/* List Tickets */}
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-3 mb-4">
-            <span className="px-3 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 rounded font-mono text-sm font-semibold">
+            <span className="px-3 py-1 border border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300 rounded font-mono text-sm font-semibold">
               GET
             </span>
             <code className="text-lg font-mono text-slate-900 dark:text-slate-100">/tickets</code>
@@ -118,7 +118,7 @@ Authorization: Bearer dold_your_api_key_here`}</code>
         {/* Get Ticket */}
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-3 mb-4">
-            <span className="px-3 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 rounded font-mono text-sm font-semibold">
+            <span className="px-3 py-1 border border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300 rounded font-mono text-sm font-semibold">
               GET
             </span>
             <code className="text-lg font-mono text-slate-900 dark:text-slate-100">/tickets/:id</code>
@@ -150,7 +150,7 @@ Authorization: Bearer dold_your_api_key_here`}</code>
         {/* Update Ticket */}
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-3 mb-4">
-            <span className="px-3 py-1 bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300 rounded font-mono text-sm font-semibold">
+            <span className="px-3 py-1 border border-yellow-300 text-yellow-700 dark:border-yellow-700 dark:text-yellow-300 rounded font-mono text-sm font-semibold">
               PATCH
             </span>
             <code className="text-lg font-mono text-slate-900 dark:text-slate-100">/tickets/:id</code>
@@ -171,7 +171,7 @@ Authorization: Bearer dold_your_api_key_here`}</code>
         {/* Send Response */}
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-3 mb-4">
-            <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 rounded font-mono text-sm font-semibold">
+            <span className="px-3 py-1 border border-green-300 text-green-700 dark:border-green-700 dark:text-green-300 rounded font-mono text-sm font-semibold">
               POST
             </span>
             <code className="text-lg font-mono text-slate-900 dark:text-slate-100">/tickets/:id/send</code>

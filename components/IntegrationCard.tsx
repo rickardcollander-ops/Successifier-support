@@ -94,8 +94,8 @@ export default function IntegrationCard({
             {isConfigured && (
               <span className={`text-xs px-2 py-1 rounded-full ${
                 integration?.isActive
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                  : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200'
+                  ? 'border border-green-300 text-green-800 dark:border-green-700 dark:text-green-200'
+                  : 'border border-slate-300 text-slate-800 dark:border-slate-600 dark:text-slate-200'
               }`}>
                 {integration?.isActive ? 'Active' : 'Inactive'}
               </span>
@@ -172,8 +172,8 @@ export default function IntegrationCard({
             <span
               className={`text-xs px-2 py-1 rounded-full ${
                 testResult.ok
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                  ? 'border border-green-300 text-green-800 dark:border-green-700 dark:text-green-200'
+                  : 'border border-red-300 text-red-800 dark:border-red-700 dark:text-red-200'
               }`}
             >
               {testResult.message}
