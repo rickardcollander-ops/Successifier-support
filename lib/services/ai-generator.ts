@@ -150,8 +150,7 @@ export async function generateAIResponse(
   subject: string,
   originalMessage: string,
   contextData?: any,
-  tenantId?: string,
-  customerNumber?: string
+  tenantId?: string
 ): Promise<{ response: string; confidence: number }> {
   try {
     const contextPrompt = formatContextForPrompt(contextData);
@@ -200,7 +199,7 @@ ABSOLUT FÖRBUD: Ge ALDRIG information om uppsägning som INTE finns i kunskapsb
         },
         {
           role: 'user',
-          content: `Ämne: ${subject}\n\nMeddelande: ${originalMessage}${contextPrompt}${knowledgePrompt}${learningPrompt}${customerNumber ? `\n\nKundnummer: ${customerNumber}` : ''}`,
+          content: `Ämne: ${subject}\n\nMeddelande: ${originalMessage}${contextPrompt}${knowledgePrompt}${learningPrompt}`,
         },
       ],
       temperature: 0.7,
