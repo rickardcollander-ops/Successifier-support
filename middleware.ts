@@ -12,6 +12,14 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Allow API routes with API key authentication (X-API-Key or Bearer token)
+  if (pathname.startsWith("/api/")) {
+    const apiKey = req.headers.get("x-api-key") || req.headers.get("authorization")?.replace("Bearer ", "");
+    if (apiKey) {
+      return NextResponse.next();
+    }
+  }
+
   // Redirect unauthenticated users to sign in
   if (!req.auth) {
     const signInUrl = new URL("/auth/signin", req.url);
