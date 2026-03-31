@@ -9,6 +9,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+    let step = 'fetch-ticket';
 
     const ticket = await prisma.ticket.findUnique({
       where: { id },
@@ -21,6 +22,7 @@ export async function POST(
       );
     }
 
+    step = 'fetch-integrations';
     const integrations = await prisma.integration.findMany({
       where: {
         tenantId: ticket.tenantId,
@@ -28,6 +30,7 @@ export async function POST(
       },
     });
 
+    step = 'fetch-knowledgebase';
     const knowledgeBase = await prisma.knowledgeBase.findMany({
       where: {
         tenantId: ticket.tenantId,
@@ -35,14 +38,17 @@ export async function POST(
       },
     });
 
+    step = 'gather-context';
     const contextAggregator = new ContextAggregator();
     const context = await contextAggregator.gatherContext(
       ticket.customerEmail,
       integrations as any
     );
 
+    step = 'format-context';
     const contextFormatted = contextAggregator.formatContextForAI(context);
 
+    step = 'check-api-key';
     const openaiApiKey = process.env.OPENAI_API_KEY;
     if (!openaiApiKey) {
       return NextResponse.json(
@@ -51,6 +57,7 @@ export async function POST(
       );
     }
 
+    step = 'openai-generate';
     const aiService = new AIService(openaiApiKey);
     const aiResponse = await aiService.generateResponse(
       ticket.originalMessage,
@@ -59,6 +66,7 @@ export async function POST(
       knowledgeBase
     );
 
+    step = 'save-to-db';
     const updatedTicket = await prisma.ticket.update({
       where: { id },
       data: {
@@ -72,8 +80,9 @@ export async function POST(
   } catch (error) {
     console.error('Error generating AI response:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
+    const stack = error instanceof Error ? error.stack : undefined;
     return NextResponse.json(
-      { error: 'Failed to generate AI response', details: message },
+      { error: 'Failed to generate AI response', details: message, stack },
       { status: 500 }
     );
   }
