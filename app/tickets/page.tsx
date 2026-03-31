@@ -478,6 +478,7 @@ export default function TicketsPage() {
                     onSend={handleSendResponse}
                     onDelete={handleDeleteTicket}
                     onSpam={handleSpamTicket}
+                    onSelectTicket={setSelectedTicket}
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">

@@ -55,11 +55,14 @@ async function syncSingleAccount(account: {
       });
 
       const headers = msg.data.payload?.headers || [];
-      const subject = headers.find((h) => h.name === 'Subject')?.value || 'No Subject';
-      const from = headers.find((h) => h.name === 'From')?.value || '';
-      const emailMatch = from.match(/<(.+)>/);
-      const customerEmail = emailMatch ? emailMatch[1] : from;
-      const customerName = from.replace(/<.+>/, '').trim();
+      const getHeader = (name: string) => headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+      const subject = getHeader('Subject') || 'No Subject';
+      const replyTo = getHeader('Reply-To');
+      const from = getHeader('From');
+      const senderRaw = replyTo || from;
+      const emailMatch = senderRaw.match(/<([^>]+)>/);
+      const customerEmail = emailMatch ? emailMatch[1] : senderRaw.trim();
+      const customerName = from.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
 
       // Recursive function to extract all text content from nested parts
       function extractTextFromParts(parts: any[]): string {

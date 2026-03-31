@@ -60,6 +60,7 @@ interface TicketDetailProps {
   onSend: (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string) => void;
   onDelete?: (ticketId: string) => void;
   onSpam?: (ticketId: string) => void;
+  onSelectTicket?: (ticket: Ticket) => void;
 }
 
 function sortInvoicesDesc(invoices: any[]): any[] {
@@ -70,7 +71,7 @@ function sortInvoicesDesc(invoices: any[]): any[] {
   });
 }
 
-export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, onDelete, onSpam }: TicketDetailProps) {
+export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, onDelete, onSpam, onSelectTicket }: TicketDetailProps) {
   const [response, setResponse] = useState(ticket.finalResponse || ticket.aiResponse || '');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -89,6 +90,19 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   const [resendModalOpen, setResendModalOpen] = useState(false);
   const [gmailModalOpen, setGmailModalOpen] = useState(false);
   const [retoolModalOpen, setRetoolModalOpen] = useState(false);
+
+  const handleNavigateToTicket = async (ticketId: string) => {
+    if (!onSelectTicket) return;
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}`);
+      if (res.ok) {
+        const ticketData = await res.json();
+        onSelectTicket(ticketData);
+      }
+    } catch (error) {
+      console.error('Error navigating to ticket:', error);
+    }
+  };
 
   const handleBillectaSearch = async () => {
     if (!billectaSearchQuery.trim()) return;
@@ -366,6 +380,35 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 </div>
               </div>
 
+              {customerHistory.previousTickets.length > 0 && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Tidigare ärenden ({customerHistory.previousTickets.length})</p>
+                  <div className="space-y-2">
+                    {customerHistory.previousTickets.map((prevTicket) => (
+                      <div
+                        key={prevTicket.id}
+                        onClick={() => handleNavigateToTicket(prevTicket.id)}
+                        className="bg-white dark:bg-slate-800 rounded-md p-3 border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-md hover:border-[#7C5CFF]/40 transition-all"
+                      >
+                        <div className="flex items-center justify-between gap-3 mb-1">
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{prevTicket.subject}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            prevTicket.status === 'closed' || prevTicket.status === 'sent'
+                              ? 'border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
+                              : 'border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                          }`}>
+                            {prevTicket.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {new Date(prevTicket.createdAt).toLocaleDateString('sv-SE')} • {prevTicket.priority}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Liknande tidigare ärenden</p>
                 {customerHistory.similarIssues.length === 0 ? (
@@ -375,7 +418,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     {customerHistory.similarIssues.map((issue) => (
                       <div
                         key={issue.id}
-                        className="bg-white dark:bg-slate-800 rounded-md p-3 border border-slate-200 dark:border-slate-700"
+                        onClick={() => handleNavigateToTicket(issue.id)}
+                        className="bg-white dark:bg-slate-800 rounded-md p-3 border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-md hover:border-[#7C5CFF]/40 transition-all"
                       >
                         <div className="flex items-center justify-between gap-3 mb-1">
                           <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{issue.subject}</p>
@@ -384,7 +428,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-                          {new Date(issue.createdAt).toLocaleDateString()} • {issue.status}
+                          {new Date(issue.createdAt).toLocaleDateString('sv-SE')} • {issue.status}
                         </p>
                         <p className="text-sm text-slate-600 dark:text-slate-300">{issue.snippet}...</p>
                       </div>
