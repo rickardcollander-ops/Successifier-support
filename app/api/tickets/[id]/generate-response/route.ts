@@ -71,8 +71,9 @@ export async function POST(
     return NextResponse.json(updatedTicket);
   } catch (error) {
     console.error('Error generating AI response:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to generate AI response' },
+      { error: 'Failed to generate AI response', details: message },
       { status: 500 }
     );
   }
