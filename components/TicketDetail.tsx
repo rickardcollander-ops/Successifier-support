@@ -85,6 +85,10 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   const [billectaSearchType, setBillectaSearchType] = useState<'auto' | 'invoice' | 'orgno'>('auto');
   const [billectaSearchResults, setBillectaSearchResults] = useState<any>(null);
   const [billectaSearching, setBillectaSearching] = useState(false);
+  const [stripeModalOpen, setStripeModalOpen] = useState(false);
+  const [resendModalOpen, setResendModalOpen] = useState(false);
+  const [gmailModalOpen, setGmailModalOpen] = useState(false);
+  const [retoolModalOpen, setRetoolModalOpen] = useState(false);
 
   const handleBillectaSearch = async () => {
     if (!billectaSearchQuery.trim()) return;
@@ -397,18 +401,23 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">Customer Context</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {ticket.contextData.stripe && (
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                <div
+                  onClick={() => setStripeModalOpen(true)}
+                  className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 rounded-lg p-4 border border-blue-200 dark:border-blue-800 cursor-pointer hover:shadow-md hover:border-blue-400 dark:hover:border-blue-600 transition-all"
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
                       <span className="text-white text-xs font-bold">S</span>
                     </div>
                     <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">Stripe</p>
+                    <ChevronDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ml-auto" />
                   </div>
                   <div className="space-y-1 text-xs text-blue-800 dark:text-blue-200">
-                    <p>💳 {ticket.contextData.stripe.subscriptions?.length || 0} subscriptions</p>
-                    <p>📄 {ticket.contextData.stripe.invoices?.length || 0} invoices</p>
-                    <p>💰 {ticket.contextData.stripe.charges?.length || 0} charges</p>
+                    <p>💳 {ticket.contextData.stripe.subscriptions?.length || 0} prenumerationer</p>
+                    <p>📄 {ticket.contextData.stripe.invoices?.length || 0} fakturor</p>
+                    <p>💰 {ticket.contextData.stripe.charges?.length || 0} betalningar</p>
                   </div>
+                  <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-2">Klicka för detaljer</p>
                 </div>
               )}
               {(ticket.contextData?.billecta || customerHistory?.billecta) && (() => {
@@ -445,30 +454,59 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 );
               })()}
               {ticket.contextData.resend && (
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
+                <div
+                  onClick={() => setResendModalOpen(true)}
+                  className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 rounded-lg p-4 border border-purple-200 dark:border-purple-800 cursor-pointer hover:shadow-md hover:border-purple-400 dark:hover:border-purple-600 transition-all"
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center">
                       <span className="text-white text-xs font-bold">R</span>
                     </div>
                     <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">Resend</p>
+                    <ChevronDown className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 ml-auto" />
                   </div>
                   <div className="space-y-1 text-xs text-purple-800 dark:text-purple-200">
-                    <p>📧 {ticket.contextData.resend.emailsSent || 0} emails sent</p>
-                    <p>📬 {ticket.contextData.resend.recentEmails?.length || 0} recent emails</p>
+                    <p>📧 {ticket.contextData.resend.emailsSent || 0} skickade mail</p>
+                    <p>📬 {ticket.contextData.resend.recentEmails?.length || 0} senaste mail</p>
                   </div>
+                  <p className="text-[10px] text-purple-600 dark:text-purple-400 mt-2">Klicka för detaljer</p>
                 </div>
               )}
               {ticket.contextData.retool && (
-                <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900 rounded-lg p-4 border border-orange-200 dark:border-orange-800">
+                <div
+                  onClick={() => setRetoolModalOpen(true)}
+                  className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900 rounded-lg p-4 border border-orange-200 dark:border-orange-800 cursor-pointer hover:shadow-md hover:border-orange-400 dark:hover:border-orange-600 transition-all"
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-8 h-8 rounded-lg bg-orange-600 flex items-center justify-center">
                       <span className="text-white text-xs font-bold">RT</span>
                     </div>
                     <p className="text-sm font-semibold text-orange-900 dark:text-orange-100">Retool</p>
+                    <ChevronDown className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 ml-auto" />
                   </div>
                   <div className="space-y-1 text-xs text-orange-800 dark:text-orange-200">
-                    <p>🔧 Custom data available</p>
+                    <p>🔧 Kunddata tillgänglig</p>
                   </div>
+                  <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-2">Klicka för detaljer</p>
+                </div>
+              )}
+              {ticket.contextData.gmail && (
+                <div
+                  onClick={() => setGmailModalOpen(true)}
+                  className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950 dark:to-red-900 rounded-lg p-4 border border-red-200 dark:border-red-800 cursor-pointer hover:shadow-md hover:border-red-400 dark:hover:border-red-600 transition-all"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">G</span>
+                    </div>
+                    <p className="text-sm font-semibold text-red-900 dark:text-red-100">Gmail</p>
+                    <ChevronDown className="w-3.5 h-3.5 text-red-600 dark:text-red-400 ml-auto" />
+                  </div>
+                  <div className="space-y-1 text-xs text-red-800 dark:text-red-200">
+                    <p>📧 {ticket.contextData.gmail.totalEmails || 0} mail</p>
+                    <p>📬 {ticket.contextData.gmail.recentEmails?.length || 0} senaste trådar</p>
+                  </div>
+                  <p className="text-[10px] text-red-600 dark:text-red-400 mt-2">Klicka för detaljer</p>
                 </div>
               )}
             </div>
@@ -838,6 +876,291 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   </div>
                 );
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Stripe Detail Modal */}
+      {stripeModalOpen && ticket.contextData?.stripe && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setStripeModalOpen(false)}>
+          <div
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">S</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Stripe</h2>
+                  {ticket.contextData.stripe.customerId && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Kund: {ticket.contextData.stripe.customerId}</p>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setStripeModalOpen(false)}
+                className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-5 space-y-6">
+              {ticket.contextData.stripe.subscriptions && ticket.contextData.stripe.subscriptions.length > 0 && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-3">
+                    Prenumerationer ({ticket.contextData.stripe.subscriptions.length})
+                  </p>
+                  <div className="space-y-2">
+                    {ticket.contextData.stripe.subscriptions.map((sub: any, idx: number) => (
+                      <div key={idx} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{sub.id}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            sub.status === 'active'
+                              ? 'border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
+                              : 'border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                          }`}>
+                            {sub.status}
+                          </span>
+                        </div>
+                        <div className="flex gap-4 text-xs text-slate-600 dark:text-slate-300">
+                          {sub.currentPeriodEnd && (
+                            <span>Period slutar: {new Date(sub.currentPeriodEnd * 1000).toLocaleDateString('sv-SE')}</span>
+                          )}
+                          {sub.items?.map((item: any, i: number) => (
+                            <span key={i}>Pris: {item.price ? `${(item.price / 100).toFixed(2)} kr` : '-'}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {ticket.contextData.stripe.invoices && ticket.contextData.stripe.invoices.length > 0 && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-3">
+                    Fakturor ({ticket.contextData.stripe.invoices.length})
+                  </p>
+                  <div className="space-y-2">
+                    {ticket.contextData.stripe.invoices.map((inv: any, idx: number) => (
+                      <div key={idx} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{inv.id}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            inv.paid
+                              ? 'border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
+                              : 'border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                          }`}>
+                            {inv.status || (inv.paid ? 'Betald' : 'Obetald')}
+                          </span>
+                        </div>
+                        <div className="flex gap-4 text-xs text-slate-600 dark:text-slate-300">
+                          <span>Belopp: {inv.amount ? `${(inv.amount / 100).toFixed(2)} kr` : '-'}</span>
+                          {inv.dueDate && <span>Förfaller: {new Date(inv.dueDate * 1000).toLocaleDateString('sv-SE')}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {ticket.contextData.stripe.charges && ticket.contextData.stripe.charges.length > 0 && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-3">
+                    Betalningar ({ticket.contextData.stripe.charges.length})
+                  </p>
+                  <div className="space-y-2">
+                    {ticket.contextData.stripe.charges.map((charge: any, idx: number) => (
+                      <div key={idx} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-medium text-sm text-slate-900 dark:text-slate-100">{charge.id}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            charge.status === 'succeeded'
+                              ? 'border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
+                              : 'border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                          }`}>
+                            {charge.status}
+                          </span>
+                        </div>
+                        <div className="flex gap-4 text-xs text-slate-600 dark:text-slate-300">
+                          <span>Belopp: {charge.amount ? `${(charge.amount / 100).toFixed(2)} kr` : '-'}</span>
+                          {charge.created && <span>Datum: {new Date(charge.created * 1000).toLocaleDateString('sv-SE')}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(!ticket.contextData.stripe.subscriptions?.length && !ticket.contextData.stripe.invoices?.length && !ticket.contextData.stripe.charges?.length) && (
+                <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+                  <p className="text-sm">Ingen detaljerad Stripe-data tillgänglig</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resend Detail Modal */}
+      {resendModalOpen && ticket.contextData?.resend && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setResendModalOpen(false)}>
+          <div
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-purple-600 flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">R</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Resend</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">E-posthistorik</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setResendModalOpen(false)}
+                className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-5">
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+                Totalt skickade: <span className="font-semibold">{ticket.contextData.resend.emailsSent || 0}</span> mail
+              </p>
+              {ticket.contextData.resend.recentEmails && ticket.contextData.resend.recentEmails.length > 0 ? (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-3">
+                    Senaste mail ({ticket.contextData.resend.recentEmails.length})
+                  </p>
+                  <div className="space-y-2">
+                    {ticket.contextData.resend.recentEmails.map((email: any, idx: number) => (
+                      <div key={idx} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                        <p className="font-medium text-sm text-slate-900 dark:text-slate-100 mb-1">
+                          {email.subject || '(Inget ämne)'}
+                        </p>
+                        <div className="flex flex-wrap gap-3 text-xs text-slate-600 dark:text-slate-300">
+                          {email.from && <span>Från: {email.from}</span>}
+                          {email.to && <span>Till: {Array.isArray(email.to) ? email.to.join(', ') : email.to}</span>}
+                          {email.createdAt && <span>Datum: {new Date(email.createdAt).toLocaleDateString('sv-SE')}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+                  <p className="text-sm">Inga mail hittades</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gmail Detail Modal */}
+      {gmailModalOpen && ticket.contextData?.gmail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setGmailModalOpen(false)}>
+          <div
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-red-600 flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">G</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Gmail</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">E-postkonversationer</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setGmailModalOpen(false)}
+                className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-5">
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+                Totalt: <span className="font-semibold">{ticket.contextData.gmail.totalEmails || 0}</span> mail
+              </p>
+              {ticket.contextData.gmail.recentEmails && ticket.contextData.gmail.recentEmails.length > 0 ? (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-3">
+                    Senaste trådar ({ticket.contextData.gmail.recentEmails.length})
+                  </p>
+                  <div className="space-y-2">
+                    {ticket.contextData.gmail.recentEmails.map((email: any, idx: number) => (
+                      <div key={idx} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                        <div className="flex gap-4 text-xs text-slate-600 dark:text-slate-300">
+                          {email.id && <span>Mail-ID: {email.id}</span>}
+                          {email.threadId && <span>Tråd: {email.threadId}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+                  <p className="text-sm">Inga Gmail-trådar hittades</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Retool Detail Modal */}
+      {retoolModalOpen && ticket.contextData?.retool && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setRetoolModalOpen(false)}>
+          <div
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-orange-600 flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">RT</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Retool</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Kunddata</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setRetoolModalOpen(false)}
+                className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-5">
+              {ticket.contextData.retool.data ? (
+                <div className="space-y-3">
+                  {typeof ticket.contextData.retool.data === 'object' ? (
+                    Object.entries(ticket.contextData.retool.data).map(([key, value]: [string, any]) => (
+                      <div key={key} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wide mb-1">{key}</p>
+                        <p className="text-sm text-slate-900 dark:text-slate-100">
+                          {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <pre className="text-sm text-slate-900 dark:text-slate-100 whitespace-pre-wrap bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+                      {JSON.stringify(ticket.contextData.retool.data, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              ) : (
+                <pre className="text-sm text-slate-900 dark:text-slate-100 whitespace-pre-wrap bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+                  {JSON.stringify(ticket.contextData.retool, null, 2)}
+                </pre>
+              )}
             </div>
           </div>
         </div>
