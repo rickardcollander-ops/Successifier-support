@@ -22,6 +22,23 @@ async function syncSingleAccount(account: {
     refresh_token: account.refreshToken,
   });
 
+  // Persist refreshed tokens so future syncs don't fail
+  oauth2Client.on('tokens', async (tokens) => {
+    try {
+      const updateData: { accessToken?: string; refreshToken?: string } = {};
+      if (tokens.access_token) updateData.accessToken = tokens.access_token;
+      if (tokens.refresh_token) updateData.refreshToken = tokens.refresh_token;
+      if (Object.keys(updateData).length > 0) {
+        await prisma.emailAccount.update({
+          where: { id: account.id },
+          data: updateData,
+        });
+      }
+    } catch (err) {
+      console.error(`[Email Sync] Failed to persist refreshed tokens for ${account.email}:`, err);
+    }
+  });
+
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
   const tenant = await prisma.tenant.findUnique({ where: { subdomain: 'doldadress' } });
 
