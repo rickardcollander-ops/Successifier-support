@@ -469,6 +469,11 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">Stripe</p>
                     <ChevronDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ml-auto" />
                   </div>
+                  {ticket.contextData.stripe.accountClosed && (
+                    <div className="mb-2 px-2 py-1 bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700 rounded text-xs font-semibold text-red-800 dark:text-red-300">
+                      Konto avslutat
+                    </div>
+                  )}
                   <div className="space-y-1 text-xs text-blue-800 dark:text-blue-200">
                     <p>💳 {ticket.contextData.stripe.subscriptions?.length || 0} prenumerationer</p>
                     <p>📄 {ticket.contextData.stripe.invoices?.length || 0} fakturor</p>
@@ -484,6 +489,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 const totalInvoices = hb?.invoices ?? invoices.length;
                 const unpaidCount = hb?.unpaidInvoices ?? invoices.filter((i: any) => !i.isPaid).length;
                 const debtorName = bc?.debtorName || null;
+                const debtorStatus = bc?.debtorStatus || null;
 
                 return (
                   <div
@@ -499,6 +505,11 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     </div>
                     {debtorName && (
                       <p className="text-xs font-medium text-green-800 dark:text-green-200 mb-1">{debtorName}</p>
+                    )}
+                    {debtorStatus && (
+                      <div className={`mb-1 px-2 py-0.5 rounded text-xs font-semibold inline-block ${debtorStatus === 'Active' ? 'bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100' : 'bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
+                        {debtorStatus === 'Active' ? 'Aktivt konto' : `Konto: ${debtorStatus}`}
+                      </div>
                     )}
                     <div className="flex gap-4 text-xs text-green-800 dark:text-green-200">
                       <span>📋 {totalInvoices} fakturor</span>
@@ -969,6 +980,11 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               </button>
             </div>
             <div className="flex-1 overflow-auto p-5 space-y-6">
+              {ticket.contextData.stripe.accountClosed && (
+                <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg">
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-300">Konto avslutat - Alla prenumerationer är avslutade</p>
+                </div>
+              )}
               {ticket.contextData.stripe.subscriptions && ticket.contextData.stripe.subscriptions.length > 0 && (
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-3">

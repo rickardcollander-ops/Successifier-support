@@ -97,6 +97,9 @@ export class ContextAggregator {
     if (context.stripe) {
       formatted += '=== Stripe ===\n';
       formatted += `Customer ID: ${context.stripe.customerId}\n`;
+      if (context.stripe.accountClosed) {
+        formatted += `⚠️ KONTO AVSLUTAT - Alla prenumerationer är avslutade\n`;
+      }
       formatted += `Active Subscriptions: ${context.stripe.subscriptions?.length || 0}\n`;
       if (context.stripe.subscriptions && context.stripe.subscriptions.length > 0) {
         formatted += 'Subscriptions:\n';
@@ -114,6 +117,9 @@ export class ContextAggregator {
 
     if (context.billecta) {
       formatted += '=== Billecta ===\n';
+      if (context.billecta.debtorStatus) {
+        formatted += `Gäldenärstatus: ${context.billecta.debtorStatus}\n`;
+      }
       formatted += `Total Invoices: ${context.billecta.invoices?.length || 0}\n`;
       const unpaidBillecta = context.billecta.invoices?.filter(inv => !inv.isPaid) || [];
       if (unpaidBillecta.length > 0) {

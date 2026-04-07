@@ -111,6 +111,7 @@ export class BillectaService {
         debtorPublicId: debtor.DebtorPublicId,
         debtorName: debtor.Name || null,
         debtorOrgNo: debtor.OrgNo || null,
+        debtorStatus: debtor.Status || null,
         invoices: allInvoices.map((inv: any) => ({
           id: inv.ActionPublicId,
           number: inv.InvoiceNumber,
