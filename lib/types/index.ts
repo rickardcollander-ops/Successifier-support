@@ -28,6 +28,7 @@ export interface TicketContext {
   [key: string]: any;
   stripe?: {
     customerId?: string;
+    accountClosed?: boolean;
     subscriptions?: any[];
     invoices?: any[];
     charges?: any[];
@@ -37,6 +38,7 @@ export interface TicketContext {
     debtorPublicId?: string;
     debtorName?: string;
     debtorOrgNo?: string;
+    debtorStatus?: string;
     creditorPublicId?: string;
     invoices?: any[];
   };

@@ -33,9 +33,7 @@ export class StripeService {
         this.stripe.charges.list({ customer: customer.id, limit: 10 }),
       ]);
 
-      return {
-        customerId: customer.id,
-        subscriptions: subscriptions.data.map(sub => ({
+      const subscriptionsList = subscriptions.data.map(sub => ({
           id: sub.id,
           status: sub.status,
           currentPeriodEnd: (sub as any).current_period_end,
@@ -43,7 +41,20 @@ export class StripeService {
             price: item.price.unit_amount,
             product: item.price.product,
           })),
-        })),
+        }));
+
+      const hasActiveSubscription = subscriptionsList.some(
+        sub => sub.status === 'active' || sub.status === 'trialing'
+      );
+      const hasAnyCanceled = subscriptionsList.some(
+        sub => sub.status === 'canceled'
+      );
+      const accountClosed = subscriptionsList.length > 0 && !hasActiveSubscription && hasAnyCanceled;
+
+      return {
+        customerId: customer.id,
+        accountClosed,
+        subscriptions: subscriptionsList,
         invoices: invoices.data.map(inv => ({
           id: inv.id,
           status: inv.status,
