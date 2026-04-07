@@ -57,7 +57,7 @@ interface TicketDetailProps {
   ticket: Ticket;
   onUpdate: (ticketId: string, updates: Partial<Ticket>) => void;
   onGenerateAI: (ticketId: string) => Promise<string | null>;
-  onSend: (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string) => void;
+  onSend: (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string) => Promise<boolean>;
   onDelete?: (ticketId: string) => void;
   onSpam?: (ticketId: string) => void;
   onSelectTicket?: (ticket: Ticket) => void;
@@ -90,6 +90,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   const [resendModalOpen, setResendModalOpen] = useState(false);
   const [gmailModalOpen, setGmailModalOpen] = useState(false);
   const [retoolModalOpen, setRetoolModalOpen] = useState(false);
+  const [sendConfirmation, setSendConfirmation] = useState<string | null>(null);
 
   const handleNavigateToTicket = async (ticketId: string) => {
     if (!onSelectTicket) return;
@@ -154,7 +155,9 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   useEffect(() => {
     setResponse(ticket.finalResponse || ticket.aiResponse || '');
     setAiSuggestion(ticket.aiResponse || null);
-  }, [ticket.id, ticket.aiResponse, ticket.finalResponse, ticket.aiConfidence]);
+    setRecipientEmail(ticket.customerEmail);
+    setSendConfirmation(null);
+  }, [ticket.id, ticket.aiResponse, ticket.finalResponse, ticket.aiConfidence, ticket.customerEmail]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -229,7 +232,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   const handleSend = async () => {
     if (!response) return;
     setIsSending(true);
-    
+    setSendConfirmation(null);
+
     // Save feedback if AI was used and response was edited
     if (aiSuggestion && response !== aiSuggestion) {
       await fetch('/api/ai-feedback', {
@@ -244,14 +248,23 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
         }),
       });
     }
-    
+
     // Update recipient email if changed
     if (recipientEmail !== ticket.customerEmail) {
       await onUpdate(ticket.id, { customerEmail: recipientEmail });
     }
-    
-    await onSend(ticket.id, response, selectedFromAccount || undefined, recipientEmail);
+
+    const success = await onSend(ticket.id, response, selectedFromAccount || undefined, recipientEmail);
     setIsSending(false);
+
+    if (success) {
+      const fromAccount = emailAccounts.find(a => a.id === selectedFromAccount);
+      setSendConfirmation(`Mailet har skickats till ${recipientEmail}${fromAccount ? ` från ${fromAccount.email}` : ''} och lagts i skickade.`);
+      setTimeout(() => setSendConfirmation(null), 8000);
+    } else {
+      setSendConfirmation('Fel: Mailet kunde inte skickas. Försök igen.');
+      setTimeout(() => setSendConfirmation(null), 8000);
+    }
   };
 
   const handleStatusChange = (status: string) => {
@@ -659,19 +672,24 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             </div>
           </div>
         )}
+        {sendConfirmation && (
+          <div className={`mb-3 p-3 rounded-md text-sm font-medium ${sendConfirmation.startsWith('Fel') ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-700' : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border border-green-300 dark:border-green-700'}`}>
+            {sendConfirmation}
+          </div>
+        )}
         <div className="flex gap-3">
           <button
             onClick={handleSend}
             disabled={!response || isSending}
             className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
-            {isSending ? 'Sending...' : `Send Response${emailAccounts.length > 0 && selectedFromAccount ? ` (${emailAccounts.find(a => a.id === selectedFromAccount)?.email || ''})` : ''}`}
+            {isSending ? 'Skickar...' : `Skicka svar${emailAccounts.length > 0 && selectedFromAccount ? ` (${emailAccounts.find(a => a.id === selectedFromAccount)?.email || ''})` : ''}`}
           </button>
           <button
             onClick={handleClose}
             className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-medium transition-colors"
           >
-            Close Ticket
+            Stäng ärende
           </button>
         </div>
       </div>

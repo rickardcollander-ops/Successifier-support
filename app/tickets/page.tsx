@@ -216,7 +216,7 @@ export default function TicketsPage() {
     }
   };
 
-  const handleSendResponse = async (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string) => {
+  const handleSendResponse = async (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string): Promise<boolean> => {
     try {
       const res = await fetch(`/api/tickets/${ticketId}/send`, {
         method: 'POST',
@@ -230,9 +230,12 @@ export default function TicketsPage() {
         if (selectedTicket?.id === ticketId) {
           setSelectedTicket(updatedTicket);
         }
+        return true;
       }
+      return false;
     } catch (error) {
       console.error('Error sending response:', error);
+      return false;
     }
   };
 
