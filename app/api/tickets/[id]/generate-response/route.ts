@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
-import { AIService } from '@/lib/services/ai-service';
+import { generateAIResponse } from '@/lib/services/ai-generator';
 
 export async function POST(
   request: NextRequest,
@@ -30,14 +30,6 @@ export async function POST(
       },
     });
 
-    step = 'fetch-knowledgebase';
-    const knowledgeBase = await prisma.knowledgeBase.findMany({
-      where: {
-        tenantId: ticket.tenantId,
-        isActive: true,
-      },
-    });
-
     step = 'gather-context';
     const contextAggregator = new ContextAggregator();
     const context = await contextAggregator.gatherContext(
@@ -45,12 +37,8 @@ export async function POST(
       integrations as any
     );
 
-    step = 'format-context';
-    const contextFormatted = contextAggregator.formatContextForAI(context);
-
     step = 'check-api-key';
-    const openaiApiKey = process.env.OPENAI_API_KEY;
-    if (!openaiApiKey) {
+    if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
         { error: 'OpenAI API key not configured' },
         { status: 500 }
@@ -58,12 +46,14 @@ export async function POST(
     }
 
     step = 'openai-generate';
-    const aiService = new AIService(openaiApiKey);
-    const aiResponse = await aiService.generateResponse(
+    // Use the unified AI generator which includes KB, learning examples, and previous tickets
+    const { response: aiResponse, confidence } = await generateAIResponse(
+      ticket.subject,
       ticket.originalMessage,
       context,
-      contextFormatted,
-      knowledgeBase
+      ticket.tenantId,
+      ticket.id,
+      ticket.customerEmail
     );
 
     step = 'save-to-db';
@@ -71,6 +61,7 @@ export async function POST(
       where: { id },
       data: {
         aiResponse,
+        aiConfidence: confidence,
         contextData: context,
         status: 'review',
       },
