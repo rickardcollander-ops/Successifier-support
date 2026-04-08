@@ -31,11 +31,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ tickets });
     }
 
-    // Default: exclude archived and Zendesk imports
+    // Default: exclude archived and Zendesk imports (include duplicates so they appear in tab)
     const tickets = await prisma.ticket.findMany({
       where: {
         tenantId: tenant.id,
-        status: { not: 'archived' },
+        status: { notIn: ['archived'] },
         NOT: {
           originalMessage: {
             contains: ZENDESK_IMPORT_MARKER,

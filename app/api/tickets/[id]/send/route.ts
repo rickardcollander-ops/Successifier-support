@@ -74,13 +74,23 @@ export async function POST(
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
+      // Check if response contains inline images
+      const hasImages = response.includes('[INLINE_IMAGES]');
+      const textPart = hasImages ? response.split('[INLINE_IMAGES]')[0] : response;
+      const imageHtml = hasImages ? response.split('[INLINE_IMAGES]')[1] : '';
+
+      const contentType = hasImages ? 'text/html; charset="UTF-8"' : 'text/plain; charset="UTF-8"';
+      const emailBody = hasImages
+        ? `<div style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;">${textPart.replace(/\n/g, '<br/>')}</div>${imageHtml}`
+        : textPart;
+
       const rawMessage = [
         `From: ${emailAccount.email}`,
         `To: ${recipientEmail || ticket.customerEmail}`,
         `Subject: Re: ${ticket.subject}`,
-        `Content-Type: text/plain; charset="UTF-8"`,
+        `Content-Type: ${contentType}`,
         '',
-        response,
+        emailBody,
       ].join('\r\n');
 
       const encodedMessage = Buffer.from(rawMessage)
@@ -117,10 +127,18 @@ export async function POST(
         (resendIntegration.credentials as any).fromEmail as string
       );
 
+      // Handle inline images for Resend too
+      const hasImagesResend = response.includes('[INLINE_IMAGES]');
+      const textPartResend = hasImagesResend ? response.split('[INLINE_IMAGES]')[0] : response;
+      const imageHtmlResend = hasImagesResend ? response.split('[INLINE_IMAGES]')[1] : '';
+      const htmlContent = hasImagesResend
+        ? `<div style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;">${textPartResend.replace(/\n/g, '<br/>')}</div>${imageHtmlResend}`
+        : `<div style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;">${response.replace(/\n/g, '<br/>')}</div>`;
+
       await resendService.sendEmail(
         recipientEmail || ticket.customerEmail,
         `Re: ${ticket.subject}`,
-        response
+        htmlContent
       );
 
       sentVia = (resendIntegration.credentials as any).fromEmail || 'resend';

@@ -12,6 +12,9 @@ interface EmailSyncStatus {
   error: string | null;
 }
 
+type PresenceViewer = { name: string; email: string; initials: string };
+type PresenceMap = Record<string, PresenceViewer[]>;
+
 export default function TicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [archivedTickets, setArchivedTickets] = useState<Ticket[]>([]);
@@ -23,6 +26,7 @@ export default function TicketsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'priority' | 'status'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [ticketPresence, setTicketPresence] = useState<PresenceMap>({});
   const [emailSyncStatus, setEmailSyncStatus] = useState<EmailSyncStatus>({
     lastSyncAt: null,
     totalNewTickets: 0,
@@ -60,23 +64,60 @@ export default function TicketsPage() {
     }
   };
 
+  // Report presence and fetch other viewers
+  const reportPresence = async (ticketId: string | null) => {
+    try {
+      await fetch('/api/tickets/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId }),
+      });
+    } catch {}
+  };
+
+  const fetchPresence = async () => {
+    try {
+      const res = await fetch('/api/tickets/presence');
+      if (res.ok) {
+        const data = await res.json();
+        setTicketPresence(data.viewers || {});
+      }
+    } catch {}
+  };
+
+  // Report presence when selected ticket changes
+  useEffect(() => {
+    reportPresence(selectedTicket?.id || null);
+  }, [selectedTicket?.id]);
+
   useEffect(() => {
     fetchTickets();
     triggerEmailSync();
-    
+    fetchPresence();
+
     // Poll for updates every 3 seconds to catch AI responses being generated
     const interval = setInterval(() => {
       fetchTickets();
+      fetchPresence();
     }, 3000);
 
     // Pull unread emails from all connected Gmail accounts periodically
     const emailSyncInterval = setInterval(() => {
       triggerEmailSync();
     }, 60000);
-    
+
+    // Presence heartbeat every 5 seconds
+    const presenceInterval = setInterval(() => {
+      if (selectedTicket) {
+        reportPresence(selectedTicket.id);
+      }
+    }, 5000);
+
     return () => {
       clearInterval(interval);
       clearInterval(emailSyncInterval);
+      clearInterval(presenceInterval);
+      reportPresence(null); // clear presence on unmount
     };
   }, []);
 
@@ -305,11 +346,13 @@ export default function TicketsPage() {
   
   // Filter by status
   let statusFilteredTickets = activeStatus === 'all'
-    ? tickets.filter(t => t.customerEmail.toLowerCase() !== 'no-reply@billecta.com')
+    ? tickets.filter(t => t.customerEmail.toLowerCase() !== 'no-reply@billecta.com' && t.status !== 'duplicate')
     : activeStatus === 'billecta'
     ? billectaOtherTickets
     : activeStatus === 'billecta-kivra'
     ? billectaKivraTickets
+    : activeStatus === 'duplicate'
+    ? tickets.filter(t => t.status === 'duplicate')
     : tickets.filter(t => t.status === activeStatus && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com');
 
   // Apply search filter
@@ -350,7 +393,7 @@ export default function TicketsPage() {
   });
 
   const statusCounts = {
-    all: tickets.filter(t => t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
+    all: tickets.filter(t => t.customerEmail.toLowerCase() !== 'no-reply@billecta.com' && t.status !== 'duplicate').length,
     billecta: billectaOtherTickets.length,
     billectaKivra: billectaKivraTickets.length,
     new: tickets.filter(t => t.status === 'new' && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
@@ -358,17 +401,19 @@ export default function TicketsPage() {
     review: tickets.filter(t => t.status === 'review' && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
     sent: tickets.filter(t => t.status === 'sent' && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
     closed: tickets.filter(t => t.status === 'closed' && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
+    duplicate: tickets.filter(t => t.status === 'duplicate').length,
   };
 
   const tabs = [
     { id: 'new', label: 'Nya', count: statusCounts.new },
-    { id: 'in_progress', label: 'Pågående', count: statusCounts.in_progress },
+    { id: 'in_progress', label: 'Öppna', count: statusCounts.in_progress },
     { id: 'review', label: 'Granskning', count: statusCounts.review },
     { id: 'sent', label: 'Skickade', count: statusCounts.sent },
     { id: 'closed', label: 'Stängda', count: statusCounts.closed },
     { id: 'all', label: 'Alla', count: statusCounts.all },
     { id: 'billecta', label: 'Billecta', count: statusCounts.billecta },
     { id: 'billecta-kivra', label: 'Billecta Kivra', count: statusCounts.billectaKivra },
+    { id: 'duplicate', label: 'Dubletter', count: statusCounts.duplicate },
     { id: 'archived', label: 'Arkiverade', count: archivedTickets.length || '...' },
   ];
 
@@ -499,6 +544,7 @@ export default function TicketsPage() {
               tickets={filteredTickets}
               selectedTicket={selectedTicket}
               onSelectTicket={setSelectedTicket}
+              presence={ticketPresence}
             />
           </div>
           <div className="lg:col-span-2 overflow-auto">
@@ -510,10 +556,11 @@ export default function TicketsPage() {
                 onSend={handleSendResponse}
                 onDelete={handleDeleteTicket}
                 onSpam={handleSpamTicket}
+                onSelectTicket={setSelectedTicket}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
-                Select a ticket to view details
+                Välj ett ärende för att visa detaljer
               </div>
             )}
           </div>

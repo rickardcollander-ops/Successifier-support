@@ -37,6 +37,9 @@ export class StripeService {
           id: sub.id,
           status: sub.status,
           currentPeriodEnd: (sub as any).current_period_end,
+          canceledAt: (sub as any).canceled_at || null,
+          endedAt: (sub as any).ended_at || null,
+          cancelAt: (sub as any).cancel_at || null,
           items: sub.items.data.map(item => ({
             price: item.price.unit_amount,
             product: item.price.product,
