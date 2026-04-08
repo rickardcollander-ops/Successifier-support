@@ -92,17 +92,21 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   const [retoolModalOpen, setRetoolModalOpen] = useState(false);
   const [sendConfirmation, setSendConfirmation] = useState<string | null>(null);
   const [inlineImages, setInlineImages] = useState<Array<{ name: string; dataUrl: string }>>([]);
+  const [popoutTicket, setPopoutTicket] = useState<any>(null);
+  const [popoutLoading, setPopoutLoading] = useState(false);
 
   const handleNavigateToTicket = async (ticketId: string) => {
-    if (!onSelectTicket) return;
+    setPopoutLoading(true);
     try {
       const res = await fetch(`/api/tickets/${ticketId}`);
       if (res.ok) {
         const ticketData = await res.json();
-        onSelectTicket(ticketData);
+        setPopoutTicket(ticketData);
       }
     } catch (error) {
-      console.error('Error navigating to ticket:', error);
+      console.error('Error fetching ticket:', error);
+    } finally {
+      setPopoutLoading(false);
     }
   };
 
@@ -1317,6 +1321,142 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 <pre className="text-sm text-slate-900 dark:text-slate-100 whitespace-pre-wrap bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
                   {JSON.stringify(ticket.contextData.retool, null, 2)}
                 </pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Previous Ticket Popout Modal */}
+      {popoutLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-8 shadow-2xl flex items-center gap-3">
+            <Loader2 className="w-5 h-5 animate-spin text-[#7C5CFF]" />
+            <span className="text-sm text-slate-700 dark:text-slate-300">Laddar ärende...</span>
+          </div>
+        </div>
+      )}
+      {popoutTicket && !popoutLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setPopoutTicket(null)}>
+          <div
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Popout Header */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">{popoutTicket.subject}</h2>
+                <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  <span>{popoutTicket.customerEmail}</span>
+                  <span>•</span>
+                  <span>{new Date(popoutTicket.createdAt).toLocaleString('sv-SE')}</span>
+                  <span>•</span>
+                  <span className={`px-2 py-0.5 rounded-full font-medium ${
+                    popoutTicket.status === 'closed' || popoutTicket.status === 'sent'
+                      ? 'border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
+                      : popoutTicket.status === 'new'
+                      ? 'border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                      : 'border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                  }`}>
+                    {popoutTicket.status}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 ml-4">
+                {onSelectTicket && (
+                  <button
+                    onClick={() => {
+                      onSelectTicket(popoutTicket);
+                      setPopoutTicket(null);
+                    }}
+                    className="px-3 py-1.5 text-xs bg-[#7C5CFF] text-white rounded-md hover:bg-[#6B4FE0] transition-colors"
+                  >
+                    Öppna ärendet
+                  </button>
+                )}
+                <button
+                  onClick={() => setPopoutTicket(null)}
+                  className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Popout Body */}
+            <div className="flex-1 overflow-auto p-5 space-y-4">
+              {/* Original Message */}
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">Kundens meddelande</p>
+                <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 text-sm whitespace-pre-wrap text-slate-900 dark:text-slate-100 max-h-[300px] overflow-auto">
+                  {popoutTicket.originalMessage?.replace(/\[Gmail ID:.*?\]\n?\[Inbox account:.*?\]\n?\n?/g, '').trim() || 'Inget meddelande'}
+                </div>
+              </div>
+
+              {/* Attachments */}
+              {popoutTicket.contextData?.attachments && popoutTicket.contextData.attachments.length > 0 && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">Bifogade bilder</p>
+                  <div className="flex flex-wrap gap-3">
+                    {popoutTicket.contextData.attachments.map((att: any, idx: number) => (
+                      <img
+                        key={idx}
+                        src={att.dataUrl}
+                        alt={att.filename}
+                        className="max-w-[180px] max-h-[180px] rounded-lg border border-slate-200 dark:border-slate-700 object-cover cursor-pointer hover:shadow-lg"
+                        onClick={() => window.open(att.dataUrl, '_blank')}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* AI Response */}
+              {popoutTicket.aiResponse && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2 flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-full bg-gradient-to-r from-[#7C5CFF] to-[#9F7BFF] flex items-center justify-center">
+                      <span className="text-white text-[8px]">✨</span>
+                    </span>
+                    AI-förslag
+                    {popoutTicket.aiConfidence && (
+                      <span className="ml-1 px-1.5 py-0.5 bg-[#7C5CFF]/15 text-[#7C5CFF] dark:text-[#B8A6FF] rounded text-[10px] font-bold">
+                        {Math.round(popoutTicket.aiConfidence * 100)}%
+                      </span>
+                    )}
+                  </p>
+                  <div className="bg-[#7C5CFF]/5 border border-[#7C5CFF]/20 rounded-lg p-4 text-sm whitespace-pre-wrap text-slate-800 dark:text-slate-200 max-h-[250px] overflow-auto">
+                    {popoutTicket.aiResponse}
+                  </div>
+                </div>
+              )}
+
+              {/* Sent Response */}
+              {popoutTicket.finalResponse && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">Skickat svar</p>
+                  <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4 text-sm whitespace-pre-wrap text-slate-800 dark:text-slate-200 max-h-[250px] overflow-auto">
+                    {popoutTicket.finalResponse}
+                  </div>
+                  {popoutTicket.sentAt && (
+                    <p className="text-[10px] text-slate-400 mt-1">Skickat: {new Date(popoutTicket.sentAt).toLocaleString('sv-SE')}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Context summary */}
+              {popoutTicket.contextData && (
+                <div className="flex flex-wrap gap-2">
+                  {popoutTicket.contextData.stripe && (
+                    <span className="text-[10px] px-2 py-1 rounded bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
+                      Stripe: {popoutTicket.contextData.stripe.subscriptions?.length || 0} pren.
+                    </span>
+                  )}
+                  {popoutTicket.contextData.billecta && (
+                    <span className="text-[10px] px-2 py-1 rounded bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300">
+                      Billecta: {popoutTicket.contextData.billecta.invoices?.length || 0} fakturor
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>
