@@ -102,9 +102,13 @@ export class ContextAggregator {
       }
       formatted += `Active Subscriptions: ${context.stripe.subscriptions?.length || 0}\n`;
       if (context.stripe.subscriptions && context.stripe.subscriptions.length > 0) {
-        formatted += 'Subscriptions:\n';
+        formatted += 'Prenumerationer:\n';
         context.stripe.subscriptions.forEach(sub => {
-          formatted += `  - Status: ${sub.status}, Period ends: ${new Date(sub.currentPeriodEnd * 1000).toLocaleDateString()}\n`;
+          formatted += `  - Status: ${sub.status}, Period slutar: ${new Date(sub.currentPeriodEnd * 1000).toLocaleDateString('sv-SE')}`;
+          if (sub.canceledAt) formatted += `, Avslutad: ${new Date(sub.canceledAt * 1000).toLocaleDateString('sv-SE')}`;
+          if (sub.endedAt) formatted += `, Upphörd: ${new Date(sub.endedAt * 1000).toLocaleDateString('sv-SE')}`;
+          if (sub.cancelAt && !sub.canceledAt) formatted += `, Avslutas: ${new Date(sub.cancelAt * 1000).toLocaleDateString('sv-SE')}`;
+          formatted += '\n';
         });
       }
       formatted += `Total Invoices: ${context.stripe.invoices?.length || 0}\n`;
