@@ -99,11 +99,62 @@ async function syncSingleAccount(account: {
         return text;
       }
 
+      // Extract image attachments from nested parts
+      interface ImageAttachment {
+        filename: string;
+        mimeType: string;
+        attachmentId: string;
+        size: number;
+      }
+      function extractImageAttachments(parts: any[]): ImageAttachment[] {
+        const images: ImageAttachment[] = [];
+        for (const part of parts) {
+          if (part.mimeType?.startsWith('image/') && part.body?.attachmentId) {
+            images.push({
+              filename: part.filename || 'image',
+              mimeType: part.mimeType,
+              attachmentId: part.body.attachmentId,
+              size: part.body.size || 0,
+            });
+          }
+          if (part.parts) {
+            images.push(...extractImageAttachments(part.parts));
+          }
+        }
+        return images;
+      }
+
       let body = '';
       if (msg.data.payload?.body?.data) {
         body = Buffer.from(msg.data.payload.body.data, 'base64').toString();
       } else if (msg.data.payload?.parts) {
         body = extractTextFromParts(msg.data.payload.parts);
+      }
+
+      // Fetch image attachments (limit to 5, max 2MB each)
+      const imageAttachmentMeta = msg.data.payload?.parts
+        ? extractImageAttachments(msg.data.payload.parts)
+        : [];
+      const attachments: Array<{ filename: string; mimeType: string; dataUrl: string }> = [];
+      for (const img of imageAttachmentMeta.slice(0, 5)) {
+        if (img.size > 2 * 1024 * 1024) continue; // skip > 2MB
+        try {
+          const attachmentRes = await gmail.users.messages.attachments.get({
+            userId: 'me',
+            messageId: message.id!,
+            id: img.attachmentId,
+          });
+          if (attachmentRes.data.data) {
+            const base64Data = attachmentRes.data.data.replace(/-/g, '+').replace(/_/g, '/');
+            attachments.push({
+              filename: img.filename,
+              mimeType: img.mimeType,
+              dataUrl: `data:${img.mimeType};base64,${base64Data}`,
+            });
+          }
+        } catch (err) {
+          console.error(`[Email Sync] Failed to fetch attachment ${img.filename}:`, err);
+        }
       }
 
       // Check if ticket already exists for this Gmail message ID
@@ -123,6 +174,54 @@ async function syncSingleAccount(account: {
 
       const contextData = await contextAggregator.gatherContext(customerEmail, integrations as any);
 
+      // Check for duplicate: same sender within 60 seconds
+      const sixtySecondsAgo = new Date(Date.now() - 60000);
+      const recentDuplicate = await prisma.ticket.findFirst({
+        where: {
+          tenantId: tenant.id,
+          customerEmail,
+          createdAt: { gte: sixtySecondsAgo },
+          status: { not: 'duplicate' },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const isDuplicate = !!recentDuplicate;
+
+      // Check if this is a customer reply to a previously sent ticket
+      // If subject starts with Re:/Sv: and there's a sent ticket from same customer, reopen it
+      const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
+      const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
+      let isCustomerReply = false;
+      if (isReply && !isDuplicate) {
+        const sentTicket = await prisma.ticket.findFirst({
+          where: {
+            tenantId: tenant.id,
+            customerEmail,
+            status: 'sent',
+            subject: {
+              contains: subjectNormalized.substring(0, 50),
+            },
+          },
+          orderBy: { sentAt: 'desc' },
+        });
+
+        if (sentTicket) {
+          // Reopen the original ticket by setting it to in_progress (Öppna)
+          await prisma.ticket.update({
+            where: { id: sentTicket.id },
+            data: { status: 'in_progress' },
+          });
+          isCustomerReply = true;
+          console.log(`[Email Sync] Customer reply detected, reopened ticket ${sentTicket.id} to Öppna`);
+        }
+      }
+
+      // Add attachments to context data
+      if (attachments.length > 0) {
+        contextData.attachments = attachments;
+      }
+
       const ticket = await prisma.ticket.create({
         data: {
           tenantId: tenant.id,
@@ -130,11 +229,15 @@ async function syncSingleAccount(account: {
           customerName,
           subject,
           originalMessage: `[Gmail ID: ${message.id}]\n[Inbox account: ${account.email}]\n\n${body || 'No content'}`,
-          status: 'new',
+          status: isDuplicate ? 'duplicate' : isCustomerReply ? 'in_progress' : 'new',
           priority: 'normal',
           contextData,
         },
       });
+
+      if (isDuplicate) {
+        console.log(`[Email Sync] Duplicate detected for ${customerEmail} (within 60s of ticket ${recentDuplicate.id}), marking as duplicate`);
+      }
 
       newTickets += 1;
 

@@ -1,12 +1,16 @@
 import type { Ticket } from '@/lib/types';
 
+type PresenceViewer = { name: string; email: string; initials: string };
+type PresenceMap = Record<string, PresenceViewer[]>;
+
 interface TicketListProps {
   tickets: Ticket[];
   selectedTicket: Ticket | null;
   onSelectTicket: (ticket: Ticket) => void;
+  presence?: PresenceMap;
 }
 
-export default function TicketList({ tickets, selectedTicket, onSelectTicket }: TicketListProps) {
+export default function TicketList({ tickets, selectedTicket, onSelectTicket, presence = {} }: TicketListProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'new':
@@ -21,6 +25,8 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket }: 
         return 'border border-zinc-300 text-zinc-800 dark:border-zinc-600 dark:text-zinc-200';
       case 'archived':
         return 'border border-amber-300 text-amber-800 dark:border-amber-700 dark:text-amber-200';
+      case 'duplicate':
+        return 'border border-rose-300 text-rose-800 dark:border-rose-700 dark:text-rose-200';
       default:
         return 'border border-zinc-300 text-zinc-800 dark:border-zinc-600 dark:text-zinc-200';
     }
@@ -65,6 +71,19 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket }: 
                 <h3 className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">
                   {ticket.subject}
                 </h3>
+                {presence[ticket.id] && presence[ticket.id].length > 0 && (
+                  <div className="flex -space-x-1 flex-shrink-0">
+                    {presence[ticket.id].map((viewer, idx) => (
+                      <div
+                        key={idx}
+                        title={`${viewer.name} (${viewer.email})`}
+                        className="w-6 h-6 rounded-full bg-[#7C5CFF] text-white text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-800"
+                      >
+                        {viewer.initials}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                 <span>{ticket.customerEmail}</span>

@@ -12,7 +12,7 @@ export interface Ticket {
   customerEmail: string;
   customerName?: string;
   subject: string;
-  status: 'new' | 'in_progress' | 'waiting_ai' | 'review' | 'sent' | 'closed' | 'archived';
+  status: 'new' | 'in_progress' | 'waiting_ai' | 'review' | 'sent' | 'closed' | 'archived' | 'duplicate';
   priority: 'low' | 'normal' | 'high' | 'urgent';
   originalMessage: string;
   aiResponse?: string;
@@ -39,6 +39,7 @@ export interface TicketContext {
     debtorName?: string;
     debtorOrgNo?: string;
     debtorStatus?: string;
+    debtorClosedDate?: string;
     creditorPublicId?: string;
     invoices?: any[];
   };
@@ -51,6 +52,11 @@ export interface TicketContext {
     totalEmails?: number;
     recentEmails?: any[];
   };
+  attachments?: Array<{
+    filename: string;
+    mimeType: string;
+    dataUrl: string;
+  }>;
 }
 
 export interface KnowledgeBase {

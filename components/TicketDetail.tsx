@@ -91,6 +91,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   const [gmailModalOpen, setGmailModalOpen] = useState(false);
   const [retoolModalOpen, setRetoolModalOpen] = useState(false);
   const [sendConfirmation, setSendConfirmation] = useState<string | null>(null);
+  const [inlineImages, setInlineImages] = useState<Array<{ name: string; dataUrl: string }>>([]);
 
   const handleNavigateToTicket = async (ticketId: string) => {
     if (!onSelectTicket) return;
@@ -157,6 +158,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     setAiSuggestion(ticket.aiResponse || null);
     setRecipientEmail(ticket.customerEmail);
     setSendConfirmation(null);
+    setInlineImages([]);
   }, [ticket.id, ticket.aiResponse, ticket.finalResponse, ticket.aiConfidence, ticket.customerEmail]);
 
   useEffect(() => {
@@ -254,7 +256,16 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
       await onUpdate(ticket.id, { customerEmail: recipientEmail });
     }
 
-    const success = await onSend(ticket.id, response, selectedFromAccount || undefined, recipientEmail);
+    // Build HTML response with inline images if any
+    let finalResponseContent = response;
+    if (inlineImages.length > 0) {
+      const imagesHtml = inlineImages
+        .map(img => `<br/><img src="${img.dataUrl}" alt="${img.name}" style="max-width:600px;"/>`)
+        .join('');
+      finalResponseContent = response + '\n[INLINE_IMAGES]' + imagesHtml;
+    }
+
+    const success = await onSend(ticket.id, finalResponseContent, selectedFromAccount || undefined, recipientEmail);
     setIsSending(false);
 
     if (success) {
@@ -365,6 +376,24 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
           <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 text-sm whitespace-pre-wrap text-slate-900 dark:text-slate-100">
             {ticket.originalMessage}
           </div>
+          {ticket.contextData?.attachments && ticket.contextData.attachments.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Bifogade bilder ({ticket.contextData.attachments.length})</p>
+              <div className="flex flex-wrap gap-3">
+                {ticket.contextData.attachments.map((att: any, idx: number) => (
+                  <div key={idx} className="relative group">
+                    <img
+                      src={att.dataUrl}
+                      alt={att.filename}
+                      className="max-w-[200px] max-h-[200px] rounded-lg border border-slate-200 dark:border-slate-700 object-cover cursor-pointer hover:shadow-lg transition-shadow"
+                      onClick={() => window.open(att.dataUrl, '_blank')}
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1 truncate max-w-[200px]">{att.filename}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
@@ -395,27 +424,22 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
 
               {customerHistory.previousTickets.length > 0 && (
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Tidigare ärenden ({customerHistory.previousTickets.length})</p>
-                  <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Tidigare ärenden ({customerHistory.previousTickets.length})</p>
+                  <div className="space-y-1">
                     {customerHistory.previousTickets.map((prevTicket) => (
                       <div
                         key={prevTicket.id}
                         onClick={() => handleNavigateToTicket(prevTicket.id)}
-                        className="bg-white dark:bg-slate-800 rounded-md p-3 border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-md hover:border-[#7C5CFF]/40 transition-all"
+                        className="flex items-center gap-2 px-2 py-1.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-[#7C5CFF]/40 transition-all text-xs"
                       >
-                        <div className="flex items-center justify-between gap-3 mb-1">
-                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{prevTicket.subject}</p>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                            prevTicket.status === 'closed' || prevTicket.status === 'sent'
-                              ? 'border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
-                              : 'border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
-                          }`}>
-                            {prevTicket.status}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {new Date(prevTicket.createdAt).toLocaleDateString('sv-SE')} • {prevTicket.priority}
-                        </p>
+                        <span className={`flex-shrink-0 w-1.5 h-1.5 rounded-full ${
+                          prevTicket.status === 'closed' || prevTicket.status === 'sent'
+                            ? 'bg-green-500'
+                            : 'bg-amber-500'
+                        }`} />
+                        <span className="font-medium text-slate-900 dark:text-slate-100 truncate flex-1">{prevTicket.subject}</span>
+                        <span className="text-slate-400 dark:text-slate-500 flex-shrink-0">{new Date(prevTicket.createdAt).toLocaleDateString('sv-SE')}</span>
+                        <span className="text-slate-400 dark:text-slate-500 flex-shrink-0">{prevTicket.status}</span>
                       </div>
                     ))}
                   </div>
@@ -423,27 +447,22 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               )}
 
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Liknande tidigare ärenden</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Liknande ärenden</p>
                 {customerHistory.similarIssues.length === 0 ? (
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Inga tydligt liknande tidigare ärenden för den här kunden.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Inga liknande ärenden hittades.</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {customerHistory.similarIssues.map((issue) => (
                       <div
                         key={issue.id}
                         onClick={() => handleNavigateToTicket(issue.id)}
-                        className="bg-white dark:bg-slate-800 rounded-md p-3 border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-md hover:border-[#7C5CFF]/40 transition-all"
+                        className="flex items-center gap-2 px-2 py-1.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-[#7C5CFF]/40 transition-all text-xs"
                       >
-                        <div className="flex items-center justify-between gap-3 mb-1">
-                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{issue.subject}</p>
-                          <span className="text-xs px-2 py-1 rounded-full bg-[#7C5CFF]/15 text-[#7C5CFF] dark:text-[#B8A6FF]">
-                            {issue.similarityScore}% match
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-                          {new Date(issue.createdAt).toLocaleDateString('sv-SE')} • {issue.status}
-                        </p>
-                        <p className="text-sm text-slate-600 dark:text-slate-300">{issue.snippet}...</p>
+                        <span className="px-1.5 py-0.5 rounded bg-[#7C5CFF]/15 text-[#7C5CFF] dark:text-[#B8A6FF] font-medium flex-shrink-0">
+                          {issue.similarityScore}%
+                        </span>
+                        <span className="font-medium text-slate-900 dark:text-slate-100 truncate flex-1">{issue.subject}</span>
+                        <span className="text-slate-400 dark:text-slate-500 flex-shrink-0">{new Date(issue.createdAt).toLocaleDateString('sv-SE')}</span>
                       </div>
                     ))}
                   </div>
@@ -469,11 +488,15 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">Stripe</p>
                     <ChevronDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ml-auto" />
                   </div>
-                  {ticket.contextData.stripe.accountClosed && (
-                    <div className="mb-2 px-2 py-1 bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700 rounded text-xs font-semibold text-red-800 dark:text-red-300">
-                      Konto avslutat
-                    </div>
-                  )}
+                  {ticket.contextData.stripe.accountClosed && (() => {
+                    const canceledSub = ticket.contextData.stripe?.subscriptions?.find((s: any) => s.canceledAt || s.endedAt);
+                    const closedDate = canceledSub?.canceledAt || canceledSub?.endedAt;
+                    return (
+                      <div className="mb-2 px-2 py-1 bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700 rounded text-xs font-semibold text-red-800 dark:text-red-300">
+                        Konto avslutat{closedDate ? ` ${new Date(closedDate * 1000).toLocaleDateString('sv-SE')}` : ''}
+                      </div>
+                    );
+                  })()}
                   <div className="space-y-1 text-xs text-blue-800 dark:text-blue-200">
                     <p>💳 {ticket.contextData.stripe.subscriptions?.length || 0} prenumerationer</p>
                     <p>📄 {ticket.contextData.stripe.invoices?.length || 0} fakturor</p>
@@ -509,6 +532,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     {debtorStatus && (
                       <div className={`mb-1 px-2 py-0.5 rounded text-xs font-semibold inline-block ${debtorStatus === 'Active' ? 'bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100' : 'bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
                         {debtorStatus === 'Active' ? 'Aktivt konto' : `Konto: ${debtorStatus}`}
+                        {bc?.debtorClosedDate ? ` (${new Date(bc.debtorClosedDate).toLocaleDateString('sv-SE')})` : ''}
                       </div>
                     )}
                     <div className="flex gap-4 text-xs text-green-800 dark:text-green-200">
@@ -646,6 +670,52 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             className="w-full h-64 p-4 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
             placeholder="Type your response or generate one with AI..."
           />
+          <div className="mt-2 flex items-center gap-2">
+            <label className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer transition-colors">
+              Bifoga bild
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (!files) return;
+                  Array.from(files).forEach(file => {
+                    if (file.size > 2 * 1024 * 1024) return; // max 2MB
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const dataUrl = ev.target?.result as string;
+                      if (dataUrl) {
+                        setInlineImages(prev => [...prev, { name: file.name, dataUrl }]);
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  });
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            {inlineImages.length > 0 && (
+              <span className="text-xs text-slate-500 dark:text-slate-400">{inlineImages.length} bild(er) bifogade</span>
+            )}
+          </div>
+          {inlineImages.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {inlineImages.map((img, idx) => (
+                <div key={idx} className="relative group">
+                  <img src={img.dataUrl} alt={img.name} className="w-16 h-16 object-cover rounded border border-slate-200 dark:border-slate-700" />
+                  <button
+                    onClick={() => setInlineImages(prev => prev.filter((_, i) => i !== idx))}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    ×
+                  </button>
+                  <p className="text-[9px] text-slate-400 truncate max-w-[64px]">{img.name}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1003,9 +1073,18 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                             {sub.status}
                           </span>
                         </div>
-                        <div className="flex gap-4 text-xs text-slate-600 dark:text-slate-300">
+                        <div className="flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-300">
                           {sub.currentPeriodEnd && (
                             <span>Period slutar: {new Date(sub.currentPeriodEnd * 1000).toLocaleDateString('sv-SE')}</span>
+                          )}
+                          {sub.canceledAt && (
+                            <span className="text-red-600 dark:text-red-400">Avslutad: {new Date(sub.canceledAt * 1000).toLocaleDateString('sv-SE')}</span>
+                          )}
+                          {sub.endedAt && (
+                            <span className="text-red-600 dark:text-red-400">Upphörd: {new Date(sub.endedAt * 1000).toLocaleDateString('sv-SE')}</span>
+                          )}
+                          {sub.cancelAt && !sub.canceledAt && (
+                            <span className="text-amber-600 dark:text-amber-400">Avslutas: {new Date(sub.cancelAt * 1000).toLocaleDateString('sv-SE')}</span>
                           )}
                           {sub.items?.map((item: any, i: number) => (
                             <span key={i}>Pris: {item.price ? `${(item.price / 100).toFixed(2)} kr` : '-'}</span>

@@ -28,12 +28,19 @@ export class ResendService {
     try {
       const response = await this.resend.emails.list();
       if (!response.data) return [];
-      
-      const emailList = Array.isArray(response.data) ? response.data : (response.data as any).data || [];
-      const filtered = emailList.filter((e: any) => 
-        e.to?.includes(email) || e.from?.includes(email)
-      );
-      
+
+      // Resend v6 returns { data: { object: 'list', data: [...] } }
+      const raw = response.data as any;
+      const emailList = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+
+      const normalizedEmail = email.toLowerCase().trim();
+      const filtered = emailList.filter((e: any) => {
+        const toAddresses = Array.isArray(e.to) ? e.to : [e.to].filter(Boolean);
+        const fromStr = typeof e.from === 'string' ? e.from : '';
+        return toAddresses.some((addr: string) => addr.toLowerCase().includes(normalizedEmail)) ||
+               fromStr.toLowerCase().includes(normalizedEmail);
+      });
+
       return filtered.map((e: any) => ({
         id: e.id,
         subject: e.subject,
