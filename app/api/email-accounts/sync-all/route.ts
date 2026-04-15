@@ -241,7 +241,7 @@ async function syncSingleAccount(account: {
 
       newTickets += 1;
 
-      generateAIResponse(subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail)
+      generateAIResponse(subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined)
         .then(async ({ response: aiResponse, confidence }) => {
           await prisma.ticket.update({
             where: { id: ticket.id },

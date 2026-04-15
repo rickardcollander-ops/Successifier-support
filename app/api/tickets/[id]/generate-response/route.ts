@@ -53,7 +53,8 @@ export async function POST(
       context,
       ticket.tenantId,
       ticket.id,
-      ticket.customerEmail
+      ticket.customerEmail,
+      ticket.customerName ?? undefined
     );
 
     step = 'save-to-db';

@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Generate AI response immediately in background
-    generateAIResponse(subject, originalMessage, null, tenant.id, ticket.id, customerEmail)
+    generateAIResponse(subject, originalMessage, null, tenant.id, ticket.id, customerEmail, customerName || undefined)
       .then(async ({ response, confidence }) => {
         await prisma.ticket.update({
           where: { id: ticket.id },
