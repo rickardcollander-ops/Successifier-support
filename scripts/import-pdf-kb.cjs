@@ -2,7 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const fs = require('fs');
 const { PDFParse } = require('pdf-parse');
 
-const NEW_DB_URL = "postgresql://neondb_owner:npg_GuEe9BOY3Srv@ep-rapid-bird-akvjmjl9.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require";
+const NEW_DB_URL = "postgresql://neondb_owner:npg_GuEe9BOY3Srv@ep-rapid-bird-akvjmjl9.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
 const db = new PrismaClient({ datasources: { db: { url: NEW_DB_URL } } });
 
 const PDF_PATH = "C:\\Users\\cozm0\\Downloads\\Support Doldadress.pdf";

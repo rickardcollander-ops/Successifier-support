@@ -1,7 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const crypto = require('crypto');
 
-const DB_URL = "postgresql://neondb_owner:npg_GuEe9BOY3Srv@ep-rapid-bird-akvjmjl9.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require";
+const DB_URL = "postgresql://neondb_owner:npg_GuEe9BOY3Srv@ep-rapid-bird-akvjmjl9.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
 const db = new PrismaClient({ datasources: { db: { url: DB_URL } } });
 
 const ALGORITHM = 'aes-256-gcm';
