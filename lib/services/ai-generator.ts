@@ -78,7 +78,6 @@ async function findRelevantKnowledge(
     const messageLower = fullQuery.toLowerCase();
     const words = messageLower.split(/\s+/).filter(w => w.length > 2);
     const expandedTerms = expandKeywords(messageLower);
-    const expandedTokens = tokenize(expandedTerms.join(' '));
 
     // Stage 1: keyword scoring — take broad top-12 (or all if KB is small)
     const scored: { kb: KnowledgeBase; score: number }[] = knowledgeBase
@@ -467,7 +466,7 @@ export async function generateAIResponse(
   ticketId?: string,
   customerEmail?: string,
   customerName?: string
-): Promise<{ response: string; confidence: number }> {
+): Promise<{ response: string; confidence: number; knowledgeUsed: string[] }> {
   try {
     const contextPrompt = formatContextForPrompt(contextData);
     const hasContext = contextPrompt.length > 0;
@@ -482,7 +481,22 @@ export async function generateAIResponse(
     const hasPreviousTickets = previousTicketsPrompt.length > 0;
     const hasLearning = learningPrompt.length > 0;
 
-    const greeting = customerName ? `Hej ${customerName.split(' ')[0]},` : 'Hej,';
+    // Extract customer first name for greeting (use provided name, then email prefix as fallback)
+    let customerFirstName = '';
+    if (customerName) {
+      customerFirstName = customerName.split(/\s+/)[0];
+    } else if (customerEmail) {
+      const localPart = customerEmail.split('@')[0].replace(/[._\-+]/g, ' ').trim();
+      // Only use if it looks like a real name (not e.g. "info", "support", "noreply")
+      const genericPrefixes = new Set(['info', 'support', 'kontakt', 'noreply', 'no-reply', 'admin', 'hej', 'mail', 'post']);
+      if (!genericPrefixes.has(localPart.toLowerCase())) {
+        customerFirstName = localPart.split(/\s+/)[0];
+        // Capitalize first letter
+        customerFirstName = customerFirstName.charAt(0).toUpperCase() + customerFirstName.slice(1).toLowerCase();
+      }
+    }
+
+    const greeting = customerFirstName ? `Hej ${customerFirstName},` : 'Hej,';
 
     const systemPrompt = `Du är en professionell, empatisk och hjälpsam kundtjänstmedarbetare för Doldadress.
 
@@ -526,23 +540,6 @@ DU SKA SVARA MED ENBART GILTIG JSON i detta format (inga markdown-block):
 }`;
 
     const userContent = `Ämne: ${subject}\n\nKundens meddelande:\n${originalMessage}${contextPrompt}${previousTicketsPrompt}${knowledgeResult.formatted}${learningPrompt}`;
-
-    // Extract customer first name for greeting (use provided name, then email prefix as fallback)
-    let customerFirstName = '';
-    if (customerName) {
-      customerFirstName = customerName.split(/\s+/)[0];
-    } else if (customerEmail) {
-      const localPart = customerEmail.split('@')[0].replace(/[._\-+]/g, ' ').trim();
-      // Only use if it looks like a real name (not e.g. "info", "support", "noreply")
-      const genericPrefixes = new Set(['info', 'support', 'kontakt', 'noreply', 'no-reply', 'admin', 'hej', 'mail', 'post']);
-      if (!genericPrefixes.has(localPart.toLowerCase())) {
-        customerFirstName = localPart.split(/\s+/)[0];
-        // Capitalize first letter
-        customerFirstName = customerFirstName.charAt(0).toUpperCase() + customerFirstName.slice(1).toLowerCase();
-      }
-    }
-
-    const greeting = customerFirstName ? `Hej ${customerFirstName},` : 'Hej,';
 
     const completion = await openai.chat.completions.create({
       model: MAIN_MODEL,
@@ -593,7 +590,7 @@ DU SKA SVARA MED ENBART GILTIG JSON i detta format (inga markdown-block):
     return {
       response: aiResponse,
       confidence: Math.min(Math.max(confidence, 0.1), 0.99),
-      knowledgeUsed: knowledgeItems.map(kb => kb.id),
+      knowledgeUsed: knowledgeResult.citedIds,
     };
   } catch (error) {
     console.error('[AI] Error generating AI response:', error);
