@@ -5,7 +5,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pdf = require('pdf-parse');
 
-const NEW_DB_URL = "postgresql://neondb_owner:npg_GuEe9BOY3Srv@ep-rapid-bird-akvjmjl9.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
+const NEW_DB_URL = "postgresql://neondb_owner:npg_GuEe9BOY3Srv@ep-rapid-bird-akvjmjl9.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require";
 const db = new PrismaClient({ datasources: { db: { url: NEW_DB_URL } } });
 
 const CSV_PATH = "C:\\Users\\cozm0\\Downloads\\tmp_export_csv\\export-2026-02-23-0754-20082570-33527325756050a1bd_1.csv";

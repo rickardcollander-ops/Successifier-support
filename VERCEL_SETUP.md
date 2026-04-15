@@ -6,10 +6,9 @@ Lägg till följande i Vercel Dashboard → Settings → Environment Variables:
 
 ### 1. Database
 ```
-DATABASE_URL=postgresql://neondb_owner:npg_GuEe9BOY3Srv@ep-rapid-bird-akvjmjl9.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+DATABASE_URL=postgresql://neondb_owner:npg_GuEe9BOY3Srv@ep-rapid-bird-akvjmjl9-pooler.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+DATABASE_URL_UNPOOLED=postgresql://neondb_owner:npg_GuEe9BOY3Srv@ep-rapid-bird-akvjmjl9.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 ```
-
-**VIKTIGT:** Detta är den enda databas-URL som ska användas — samma URL i Vercel (alla environments: Production, Preview, Development) och lokalt i `.env.local`. Ingen pooled variant, inga gamla URLs.
 
 ### 2. Security - Encryption Key ⚠️ KRITISK
 ```
