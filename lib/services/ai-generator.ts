@@ -1,13 +1,57 @@
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import { prisma } from '@/lib/db/client';
 import type { KnowledgeBase } from '@/lib/types';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const MAIN_MODEL = 'gpt-4o';
-const HELPER_MODEL = 'gpt-4o-mini';
+const MAIN_MODEL = 'claude-sonnet-4-6';
+const HELPER_MODEL = 'claude-haiku-4-5';
+
+const RERANK_TOOL: Anthropic.Tool = {
+  name: 'select_relevant_articles',
+  description: 'Välj de mest relevanta kunskapsbasartiklarna för kundens fråga.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      selected: {
+        type: 'array',
+        items: { type: 'integer' },
+        description: '1-baserade artikelnummer (max 5). Tom array om ingen artikel är relevant.',
+      },
+    },
+    required: ['selected'],
+  },
+};
+
+const RESPONSE_TOOL: Anthropic.Tool = {
+  name: 'submit_customer_response',
+  description: 'Skicka det slutgiltiga kundsvaret till kunden.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      response: {
+        type: 'string',
+        description: 'Hela e-posttexten som ska skickas till kunden, inklusive hälsning och signatur.',
+      },
+      confidence: {
+        type: 'number',
+        description: 'Självskattad säkerhet 0.0–1.0 att svaret är korrekt och fullständigt.',
+      },
+      usedKbArticleIds: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'ID:n för de kunskapsbasartiklar du använde för att formulera svaret.',
+      },
+      missingInfo: {
+        type: 'string',
+        description: 'Vad som saknas för att svara bättre, eller tom sträng om inget saknas.',
+      },
+    },
+    required: ['response', 'confidence', 'usedKbArticleIds', 'missingInfo'],
+  },
+};
 
 // --- Keyword Groups (synonym expansion, Stage 1 only) ---
 
@@ -111,28 +155,30 @@ async function findRelevantKnowledge(
           `${i + 1}. [ID:${c.kb.id}] ${c.kb.title}${c.kb.category ? ` [${c.kb.category}]` : ''}\n${c.kb.content.substring(0, 400)}`
         ).join('\n\n');
 
-        const rerank = await openai.chat.completions.create({
+        const rerank = await anthropic.messages.create({
           model: HELPER_MODEL,
+          max_tokens: 300,
+          system: 'Du är en sökmotor för kunskapsbas-artiklar. Välj de artiklar (max 5) som är mest relevanta för kundens fråga. Om ingen artikel är relevant, returnera en tom lista.',
           messages: [
-            {
-              role: 'system',
-              content: 'Du är en sökmotor för kunskapsbas-artiklar. Välj de artiklar (max 5) som är mest relevanta för kundens fråga. Returnera ENBART JSON: {"selected": [1, 3, 5]} med 1-baserade artikelnummer. Om ingen artikel är relevant, returnera {"selected": []}.',
-            },
             {
               role: 'user',
               content: `KUNDENS FRÅGA:\nÄmne: ${subject}\n${message.substring(0, 800)}\n\nTILLGÄNGLIGA ARTIKLAR:\n${candidateList}`,
             },
           ],
-          response_format: { type: 'json_object' },
-          temperature: 0,
-          max_tokens: 100,
+          tools: [RERANK_TOOL],
+          tool_choice: { type: 'tool', name: 'select_relevant_articles' },
         });
 
-        const parsed = JSON.parse(rerank.choices[0].message.content || '{}');
-        if (Array.isArray(parsed.selected) && parsed.selected.length > 0) {
-          selected = parsed.selected
-            .filter((i: unknown) => typeof i === 'number' && i >= 1 && i <= candidates.length)
-            .map((i: number) => candidates[i - 1].kb);
+        const toolUse = rerank.content.find(
+          (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+        );
+        const input = (toolUse?.input ?? {}) as { selected?: unknown };
+        const rawSelected = Array.isArray(input.selected) ? input.selected : [];
+        const validIndices = rawSelected.filter(
+          (i: unknown): i is number => typeof i === 'number' && i >= 1 && i <= candidates.length,
+        );
+        if (validIndices.length > 0) {
+          selected = validIndices.map((i: number) => candidates[i - 1].kb);
         } else {
           selected = [];
         }
@@ -432,31 +478,44 @@ async function findPreviousTicketContext(
   }
 }
 
-// --- Structured AI Output ---
-
-interface AIStructuredOutput {
-  response: string;
-  confidence: number; // 0.0–1.0, model's own estimate
-  usedKbArticleIds: string[];
-  missingInfo: string; // empty string if no info missing
-}
-
-function parseStructuredOutput(raw: string): AIStructuredOutput | null {
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed.response === 'string' && parsed.response.length > 0) {
-      return {
-        response: parsed.response,
-        confidence: typeof parsed.confidence === 'number' ? Math.min(Math.max(parsed.confidence, 0), 1) : 0.5,
-        usedKbArticleIds: Array.isArray(parsed.usedKbArticleIds) ? parsed.usedKbArticleIds : [],
-        missingInfo: typeof parsed.missingInfo === 'string' ? parsed.missingInfo : '',
-      };
-    }
-  } catch (_) { /* fall through */ }
-  return null;
-}
-
 // --- Main Generation Function ---
+
+// Static system prompt — cacheable across requests (all dynamic content lives
+// in the user message). Keeping this byte-stable preserves the prompt cache.
+const STATIC_SYSTEM_PROMPT = `Du är en professionell, empatisk och hjälpsam kundtjänstmedarbetare för Doldadress.
+
+DITT UPPDRAG: Ge ett korrekt, tydligt och personligt svar som löser kundens problem.
+
+VIKTIGA REGLER:
+
+1. SPRÅK: Svara på SAMMA SPRÅK som kunden skriver på.
+
+2. KUNSKAPSBAS = SANNING:
+   - Basera svaret ALLTID på kunskapsbasartiklarna när de är relevanta.
+   - Hitta INTE på policys, priser, villkor eller processer som inte finns där.
+   - Om kunskapsbasen beskriver specifika steg, URL:er eller "Mina sidor" — inkludera dem exakt.
+   - Notera vilka artikel-ID:n du använder i fältet usedKbArticleIds när du anropar verktyget.
+
+3. KUNDDATA: Om faktura- eller prenumerationsdata finns:
+   - Referera till specifika fakturanummer, belopp och datum.
+   - Nämn ALDRIG systemnamn (Stripe, Billecta, Resend, OpenAI, Anthropic, Claude) — säg "vårt system" eller "våra register".
+
+4. OSÄKERHET: Om du saknar information för att svara korrekt:
+   - Skriv "Jag ska undersöka detta och återkommer till dig" — GISSA INTE.
+   - Ange i fältet missingInfo vad du behöver få bekräftat av kunden.
+   - Sätt confidence lågt (0.3–0.4).
+
+5. FORMAT:
+   - Börja svaret med den hälsningsfras som anges under "HÄLSNING" i användarmeddelandet nedan.
+   - Ge svaret tidigt — ingen lång inledning.
+   - Punktlistor för instruktioner med flera steg.
+   - Avsluta med "Hör av dig om du har fler frågor!" eller liknande.
+   - Signera: "Vänliga hälsningar,\\nDoldadress Kundtjänst"
+   - Längd: kort för enkla frågor, utförligare för komplexa.
+
+6. TIDIGARE ÄRENDEN: Referera till tidigare kontakt om relevant. Upprepa inte redan given information.
+
+SVARSLEVERANS: Leverera ALLTID ditt svar genom att anropa verktyget submit_customer_response. Hela e-posttexten (inklusive hälsning och signatur) ska ligga i fältet "response".`;
 
 export async function generateAIResponse(
   subject: string,
@@ -498,80 +557,63 @@ export async function generateAIResponse(
 
     const greeting = customerFirstName ? `Hej ${customerFirstName},` : 'Hej,';
 
-    const systemPrompt = `Du är en professionell, empatisk och hjälpsam kundtjänstmedarbetare för Doldadress.
+    const userContent = `HÄLSNING: ${greeting}\n\nÄmne: ${subject}\n\nKundens meddelande:\n${originalMessage}${contextPrompt}${previousTicketsPrompt}${knowledgeResult.formatted}${learningPrompt}`;
 
-DITT UPPDRAG: Ge ett korrekt, tydligt och personligt svar som löser kundens problem.
-
-VIKTIGA REGLER:
-
-1. SPRÅK: Svara på SAMMA SPRÅK som kunden skriver på.
-
-2. KUNSKAPSBAS = SANNING:
-   - Basera svaret ALLTID på kunskapsbasartiklarna nedan när de är relevanta.
-   - Hitta INTE på policys, priser, villkor eller processer som inte finns där.
-   - Om kunskapsbasen beskriver specifika steg, URL:er eller "Mina sidor" — inkludera dem exakt.
-   - Notera vilka artikel-ID:n du använder i ditt JSON-svar (fältet usedKbArticleIds).
-
-3. KUNDDATA: Om faktura- eller prenumerationsdata finns:
-   - Referera till specifika fakturanummer, belopp och datum.
-   - Nämn ALDRIG systemnamn (Stripe, Billecta, Resend, OpenAI) — säg "vårt system" eller "våra register".
-
-4. OSÄKERHET: Om du saknar information för att svara korrekt:
-   - Skriv "Jag ska undersöka detta och återkommer till dig" — GISSA INTE.
-   - Ange vilket behov du behöver kunden bekräfta i missingInfo-fältet.
-   - Sätt confidence lågt (0.3–0.4).
-
-5. FORMAT:
-   - Börja med hälsning: "${greeting}"
-   - Ge svaret tidigt — ingen lång inledning.
-   - Punktlistor för instruktioner med flera steg.
-   - Avsluta med "Hör av dig om du har fler frågor!" eller liknande.
-   - Signera: "Vänliga hälsningar,\\nDoldadress Kundtjänst"
-   - Längd: kort för enkla frågor, utförligare för komplexa.
-
-6. TIDIGARE ÄRENDEN: Referera till tidigare kontakt om relevant. Upprepa inte redan given information.
-
-DU SKA SVARA MED ENBART GILTIG JSON i detta format (inga markdown-block):
-{
-  "response": "<hela e-posttexten>",
-  "confidence": <0.0–1.0 hur säker du är på att svaret är korrekt och fullständigt>,
-  "usedKbArticleIds": ["<id1>", "<id2>"],
-  "missingInfo": "<vad som saknas för att svara bättre, eller tom sträng>"
-}`;
-
-    const userContent = `Ämne: ${subject}\n\nKundens meddelande:\n${originalMessage}${contextPrompt}${previousTicketsPrompt}${knowledgeResult.formatted}${learningPrompt}`;
-
-    const completion = await openai.chat.completions.create({
+    const completion = await anthropic.messages.create({
       model: MAIN_MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
-      ],
-      response_format: { type: 'json_object' },
+      max_tokens: 2000,
       temperature: 0.4,
-      max_tokens: 1500,
+      system: [
+        {
+          type: 'text',
+          text: STATIC_SYSTEM_PROMPT,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      messages: [{ role: 'user', content: userContent }],
+      tools: [RESPONSE_TOOL],
+      tool_choice: { type: 'tool', name: 'submit_customer_response' },
     });
 
-    const rawOutput = completion.choices[0].message.content || '';
-    const structured = parseStructuredOutput(rawOutput);
+    const toolUse = completion.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+    );
 
     let aiResponse: string;
     let modelConfidence: number;
 
-    if (structured) {
-      aiResponse = structured.response;
-      modelConfidence = structured.confidence;
+    if (toolUse) {
+      const input = toolUse.input as {
+        response?: unknown;
+        confidence?: unknown;
+      };
+      if (typeof input.response === 'string' && input.response.length > 0) {
+        aiResponse = input.response;
+        modelConfidence = typeof input.confidence === 'number'
+          ? Math.min(Math.max(input.confidence, 0), 1)
+          : 0.5;
+      } else {
+        console.warn('[AI] Tool response missing/empty, falling back to text block');
+        const textBlock = completion.content.find(
+          (b): b is Anthropic.TextBlock => b.type === 'text',
+        );
+        aiResponse = textBlock?.text ?? '';
+        modelConfidence = 0.5;
+      }
     } else {
-      // Fallback: treat raw output as plain text response
-      console.warn('[AI] Failed to parse structured JSON output, using raw text as fallback');
-      aiResponse = rawOutput;
+      // Fallback: treat any text block as the response
+      console.warn('[AI] No tool_use block found, falling back to text block');
+      const textBlock = completion.content.find(
+        (b): b is Anthropic.TextBlock => b.type === 'text',
+      );
+      aiResponse = textBlock?.text ?? '';
       modelConfidence = 0.5;
     }
 
     // --- Heuristic confidence adjustments on top of model self-report ---
     let confidence = modelConfidence;
 
-    if (completion.choices[0].finish_reason === 'length') {
+    if (completion.stop_reason === 'max_tokens') {
       confidence -= 0.15; // Response was cut off
     }
 
