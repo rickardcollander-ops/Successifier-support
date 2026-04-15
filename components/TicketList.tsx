@@ -1,4 +1,5 @@
 import type { Ticket } from '@/lib/types';
+import { statusLabelSv } from '@/lib/constants';
 
 type PresenceViewer = { name: string; email: string; initials: string };
 type PresenceMap = Record<string, PresenceViewer[]>;
@@ -50,13 +51,13 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Tickets</h2>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{tickets.length} total</p>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Ärenden</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{tickets.length} totalt</p>
       </div>
       <div className="divide-y divide-slate-200 dark:divide-slate-700 max-h-[calc(100vh-12rem)] overflow-y-auto">
         {tickets.length === 0 ? (
           <div className="p-8 text-center text-slate-500 dark:text-slate-400">
-            No tickets yet
+            Inga ärenden ännu
           </div>
         ) : (
           tickets.map((ticket) => (
@@ -103,12 +104,17 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
                   </>
                 )}
               </div>
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
                 <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(ticket.status)}`}>
-                  {ticket.status.replace('_', ' ')}
+                  {statusLabelSv(ticket.status)}
                 </span>
+                {ticket.assignedTo && (
+                  <span className="text-xs px-2 py-1 rounded-full border border-[#7C5CFF]/40 text-[#7C5CFF] dark:text-[#B8A6FF]">
+                    {ticket.assignedTo}
+                  </span>
+                )}
                 <span className="text-xs text-slate-500 dark:text-slate-400">
-                  {new Date(ticket.createdAt).toLocaleDateString()}
+                  {new Date(ticket.createdAt).toLocaleDateString('sv-SE')}
                 </span>
               </div>
             </button>

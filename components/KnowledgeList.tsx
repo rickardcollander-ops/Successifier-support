@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import type { KnowledgeBase } from '@/lib/types';
 
 interface KnowledgeListProps {
@@ -7,35 +8,99 @@ interface KnowledgeListProps {
   onCreateNew: () => void;
 }
 
+type KnowledgeTab = 'manual' | 'learned';
+
+const AUTO_LEARNED_CATEGORY = 'Lärande från skickade svar';
+
+function isAutoLearned(article: KnowledgeBase): boolean {
+  return article.category === AUTO_LEARNED_CATEGORY;
+}
+
 export default function KnowledgeList({
   articles,
   selectedArticle,
   onSelectArticle,
   onCreateNew,
 }: KnowledgeListProps) {
+  const [activeTab, setActiveTab] = useState<KnowledgeTab>('manual');
+
+  const { manualArticles, learnedArticles, visibleArticles } = useMemo(() => {
+    const manual = articles.filter((a) => !isAutoLearned(a));
+    const learned = articles.filter(isAutoLearned);
+    return {
+      manualArticles: manual,
+      learnedArticles: learned,
+      visibleArticles: activeTab === 'manual' ? manual : learned,
+    };
+  }, [articles, activeTab]);
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Knowledge Base</h2>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Kunskapsbas</h2>
           <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            {articles.length} articles
+            {articles.length} artiklar
           </p>
         </div>
         <button
           onClick={onCreateNew}
           className="px-3 py-1 text-sm bg-gradient-to-r from-[#7C5CFF] to-[#9F7BFF] text-white rounded-md hover:brightness-110 shadow-[0_0_15px_rgba(124,92,255,0.4)]"
         >
-          + New
+          + Ny
         </button>
       </div>
-      <div className="divide-y divide-slate-200 dark:divide-slate-700 max-h-[calc(100vh-12rem)] overflow-y-auto">
-        {articles.length === 0 ? (
+      <div className="flex border-b border-slate-200 dark:border-slate-700" role="tablist">
+        <button
+          role="tab"
+          aria-selected={activeTab === 'manual'}
+          onClick={() => setActiveTab('manual')}
+          className={`flex-1 px-4 py-2.5 text-sm font-medium transition-all ${
+            activeTab === 'manual'
+              ? 'text-[#7C5CFF] border-b-2 border-[#7C5CFF] bg-[#7C5CFF]/5'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+          }`}
+          title="Manuellt skapade artiklar från hemsida/FAQ"
+        >
+          Manuella
+          <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+            activeTab === 'manual'
+              ? 'bg-[#7C5CFF] text-white'
+              : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+          }`}>
+            {manualArticles.length}
+          </span>
+        </button>
+        <button
+          role="tab"
+          aria-selected={activeTab === 'learned'}
+          onClick={() => setActiveTab('learned')}
+          className={`flex-1 px-4 py-2.5 text-sm font-medium transition-all ${
+            activeTab === 'learned'
+              ? 'text-[#7C5CFF] border-b-2 border-[#7C5CFF] bg-[#7C5CFF]/5'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+          }`}
+          title="Automatiskt lärda från skickade mail"
+        >
+          Lärda från mail
+          <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+            activeTab === 'learned'
+              ? 'bg-[#7C5CFF] text-white'
+              : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+          }`}>
+            {learnedArticles.length}
+          </span>
+        </button>
+      </div>
+      <div className="divide-y divide-slate-200 dark:divide-slate-700 max-h-[calc(100vh-14rem)] overflow-y-auto">
+        {visibleArticles.length === 0 ? (
           <div className="p-8 text-center text-slate-500 dark:text-slate-400">
-            No articles yet. Create your first one!
+            {activeTab === 'manual'
+              ? 'Inga manuella artiklar ännu. Skapa din första!'
+              : 'Inga automatiskt lärda artiklar ännu. De skapas när du skickar svar.'}
           </div>
         ) : (
-          articles.map((article) => (
+          visibleArticles.map((article) => (
             <button
               key={article.id}
               onClick={() => onSelectArticle(article)}

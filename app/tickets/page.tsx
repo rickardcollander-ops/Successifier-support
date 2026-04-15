@@ -319,7 +319,7 @@ export default function TicketsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-600 dark:text-slate-400">Loading tickets...</div>
+        <div className="text-slate-600 dark:text-slate-400">Laddar ärenden…</div>
       </div>
     );
   }
