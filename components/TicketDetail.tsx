@@ -89,7 +89,6 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   const [billectaSearching, setBillectaSearching] = useState(false);
   const [stripeModalOpen, setStripeModalOpen] = useState(false);
   const [resendModalOpen, setResendModalOpen] = useState(false);
-  const [gmailModalOpen, setGmailModalOpen] = useState(false);
   const [retoolModalOpen, setRetoolModalOpen] = useState(false);
   const [sendConfirmation, setSendConfirmation] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [inlineImages, setInlineImages] = useState<Array<{ name: string; dataUrl: string }>>([]);
@@ -651,25 +650,6 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     <p>🔧 Kunddata tillgänglig</p>
                   </div>
                   <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-2">Klicka för detaljer</p>
-                </div>
-              )}
-              {ticket.contextData?.gmail && (
-                <div
-                  onClick={() => setGmailModalOpen(true)}
-                  className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950 dark:to-red-900 rounded-lg p-4 border border-red-200 dark:border-red-800 cursor-pointer hover:shadow-md hover:border-red-400 dark:hover:border-red-600 transition-all"
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">G</span>
-                    </div>
-                    <p className="text-sm font-semibold text-red-900 dark:text-red-100">Gmail</p>
-                    <ChevronDown className="w-3.5 h-3.5 text-red-600 dark:text-red-400 ml-auto" />
-                  </div>
-                  <div className="space-y-1 text-xs text-red-800 dark:text-red-200">
-                    <p>📧 {ticket.contextData.gmail.totalEmails || 0} mail</p>
-                    <p>📬 {ticket.contextData.gmail.recentEmails?.length || 0} senaste trådar</p>
-                  </div>
-                  <p className="text-[10px] text-red-600 dark:text-red-400 mt-2">Klicka för detaljer</p>
                 </div>
               )}
             </div>
@@ -1303,60 +1283,6 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               ) : (
                 <div className="text-center py-12 text-slate-400 dark:text-slate-500">
                   <p className="text-sm">Inga mail hittades</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Gmail Detail Modal */}
-      {gmailModalOpen && ticket.contextData?.gmail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setGmailModalOpen(false)}>
-          <div
-            className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-red-600 flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">G</span>
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Gmail</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">E-postkonversationer</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setGmailModalOpen(false)}
-                className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-5">
-              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-                Totalt: <span className="font-semibold">{ticket.contextData.gmail.totalEmails || 0}</span> mail
-              </p>
-              {ticket.contextData.gmail.recentEmails && ticket.contextData.gmail.recentEmails.length > 0 ? (
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-3">
-                    Senaste trådar ({ticket.contextData.gmail.recentEmails.length})
-                  </p>
-                  <div className="space-y-2">
-                    {ticket.contextData.gmail.recentEmails.map((email: any, idx: number) => (
-                      <div key={idx} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                        <div className="flex gap-4 text-xs text-slate-600 dark:text-slate-300">
-                          {email.id && <span>Mail-ID: {email.id}</span>}
-                          {email.threadId && <span>Tråd: {email.threadId}</span>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-12 text-slate-400 dark:text-slate-500">
-                  <p className="text-sm">Inga Gmail-trådar hittades</p>
                 </div>
               )}
             </div>
