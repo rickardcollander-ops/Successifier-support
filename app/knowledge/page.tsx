@@ -61,7 +61,7 @@ export default function KnowledgePage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this article?')) return;
+    if (!confirm('Är du säker på att du vill ta bort denna artikel?')) return;
 
     try {
       const response = await fetch(`/api/knowledge/${id}`, {
@@ -87,7 +87,7 @@ export default function KnowledgePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-600 dark:text-slate-400">Loading knowledge base...</div>
+        <div className="text-slate-600 dark:text-slate-400">Laddar kunskapsbas…</div>
       </div>
     );
   }
@@ -112,7 +112,7 @@ export default function KnowledgePage() {
           />
         ) : (
           <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
-            Select an article or create a new one
+            Välj en artikel eller skapa en ny
           </div>
         )}
       </div>
