@@ -26,6 +26,29 @@ export async function POST(request: NextRequest) {
     const contextAggregator = new ContextAggregator();
     const context = await contextAggregator.gatherContext(email, integrations as any);
 
+    // Detect replies so they land in Öppna (in_progress) instead of Nytt.
+    const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
+    const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
+    if (isReply) {
+      const priorTicket = await prisma.ticket.findFirst({
+        where: {
+          tenantId,
+          customerEmail: email,
+          status: { notIn: ['duplicate', 'archived'] },
+          subject: {
+            contains: subjectNormalized.substring(0, 50),
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (priorTicket && priorTicket.status !== 'in_progress') {
+        await prisma.ticket.update({
+          where: { id: priorTicket.id },
+          data: { status: 'in_progress' },
+        });
+      }
+    }
+
     const ticket = await prisma.ticket.create({
       data: {
         tenantId,
@@ -34,7 +57,7 @@ export async function POST(request: NextRequest) {
         subject,
         originalMessage: message,
         priority: priority || 'normal',
-        status: 'new',
+        status: isReply ? 'in_progress' : 'new',
         contextData: context,
       },
     });

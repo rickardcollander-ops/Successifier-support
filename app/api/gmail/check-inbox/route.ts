@@ -64,6 +64,29 @@ export async function POST(request: NextRequest) {
       // Gather context for this customer
       const context = await contextAggregator.gatherContext(email.from, integrations as any);
 
+      // Detect customer replies so they land in Öppna instead of Nytt.
+      const subjectNormalized = email.subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
+      const isReply = /^(Re|Sv|Fwd|Fw):/i.test(email.subject);
+      if (isReply) {
+        const priorTicket = await prisma.ticket.findFirst({
+          where: {
+            tenantId,
+            customerEmail: email.from,
+            status: { notIn: ['duplicate', 'archived'] },
+            subject: {
+              contains: subjectNormalized.substring(0, 50),
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (priorTicket && priorTicket.status !== 'in_progress') {
+          await prisma.ticket.update({
+            where: { id: priorTicket.id },
+            data: { status: 'in_progress' },
+          });
+        }
+      }
+
       // Create ticket
       const ticket = await prisma.ticket.create({
         data: {
@@ -72,7 +95,7 @@ export async function POST(request: NextRequest) {
           customerName: email.name,
           subject: email.subject,
           originalMessage: email.body,
-          status: 'new',
+          status: isReply ? 'in_progress' : 'new',
           priority: 'normal',
           contextData: context,
         },
