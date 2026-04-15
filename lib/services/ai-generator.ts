@@ -467,7 +467,7 @@ export async function generateAIResponse(
   ticketId?: string,
   customerEmail?: string,
   customerName?: string
-): Promise<{ response: string; confidence: number }> {
+): Promise<{ response: string; confidence: number; knowledgeUsed: string[] }> {
   try {
     const contextPrompt = formatContextForPrompt(contextData);
     const hasContext = contextPrompt.length > 0;
@@ -591,7 +591,7 @@ DU SKA SVARA MED ENBART GILTIG JSON i detta format (inga markdown-block):
     return {
       response: aiResponse,
       confidence: Math.min(Math.max(confidence, 0.1), 0.99),
-      knowledgeUsed: knowledgeItems.map(kb => kb.id),
+      knowledgeUsed: knowledgeResult.citedIds,
     };
   } catch (error) {
     console.error('[AI] Error generating AI response:', error);
