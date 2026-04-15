@@ -1,132 +1,25 @@
 import OpenAI from 'openai';
 import { prisma } from '@/lib/db/client';
+import type { KnowledgeBase } from '@/lib/types';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// --- Swedish-aware text processing ---
+const MAIN_MODEL = 'gpt-4o';
+const HELPER_MODEL = 'gpt-4o-mini';
 
-const SWEDISH_STOPWORDS = new Set([
-  'och', 'det', 'att', 'en', 'ett', 'är', 'på', 'för', 'med', 'av', 'till',
-  'som', 'har', 'inte', 'om', 'från', 'den', 'de', 'ska', 'var', 'kan',
-  'men', 'vi', 'jag', 'du', 'han', 'hon', 'sin', 'sig', 'hur', 'när',
-  'vad', 'vem', 'har', 'hade', 'vara', 'bli', 'bli', 'mer', 'mot', 'vid',
-  'min', 'din', 'han', 'hon', 'dem', 'ni', 'mig', 'dig', 'oss', 'er',
-  'hej', 'tack', 'mvh', 'vänliga', 'hälsningar', 'the', 'and', 'or', 'is',
-]);
-
-/**
- * Strips common Swedish inflectional suffixes to normalize words for matching.
- * E.g. "fakturan" → "faktur", "prenumerationer" → "prenumeration"
- */
-function sweStem(word: string): string {
-  if (word.length < 5) return word;
-  // Definite plural forms first (longer suffixes first)
-  const suffixes = ['ationerna', 'ningarna', 'ationerna', 'elserna', 'arerna',
-    'ationens', 'ingarnas', 'ningars', 'orernas', 'ationens',
-    'elsernas', 'ingarna', 'arernas', 'ationens',
-    'ningarna', 'ationerna',
-    'ationens', 'ationerna',
-    'ationer', 'ationens', 'ationers',
-    'ningarna', 'ningars', 'ningarnas',
-    'ationerna',
-    'ationens',
-    'elserna', 'elsernas', 'elsers',
-    'arerna', 'arernas', 'arers',
-    'orerna', 'orernas', 'orers',
-    'ningarna', 'ningarnas', 'ningars',
-    'ationerna', 'ationernas', 'ationers',
-    'ningar', 'ningens', 'ningens',
-    'ationens', 'ationers',
-    'elsers', 'ationens',
-    'ningens', 'ationers',
-    'ationer', 'ningar', 'ningen', 'ningens',
-    'ationens', 'ationen',
-    'elserna', 'ationen',
-    'ningar', 'ningen',
-    'arerna', 'arnas',
-    'orerna', 'ornas',
-    'ernas', 'arnas', 'ornas',
-    'andes', 'andes',
-    'anden', 'andet',
-    'ernas', 'arnas', 'ornas',
-    'ation', 'ning', 'else',
-    'ernas', 'arnas', 'ornas',
-    'anden', 'andet', 'andes',
-    'ande', 'andes',
-    'ernas', 'arnas', 'ornas',
-    'erna', 'arna', 'orna',
-    'ande', 'andes',
-    'erna', 'arna', 'orna',
-    'ades', 'ades',
-    'ande', 'erna', 'arna', 'orna',
-    'ade', 'ades',
-    'ens', 'ers', 'ars', 'ors',
-    'are', 'ast',
-    'ens', 'ers',
-    'ade', 'ares',
-    'ens', 'ers',
-    'en', 'et', 'ar', 'or', 'er', 'na', 'ns', 'ts',
-    's',
-  ];
-  for (const suffix of suffixes) {
-    if (word.endsWith(suffix) && word.length - suffix.length >= 3) {
-      return word.slice(0, word.length - suffix.length);
-    }
-  }
-  return word;
-}
-
-/**
- * Tokenize text into meaningful words: lowercase, remove stopwords, strip punctuation, stem.
- */
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-zåäö0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 2 && !SWEDISH_STOPWORDS.has(w))
-    .map(sweStem)
-    .filter(w => w.length > 2);
-}
-
-/**
- * Extract bigrams (word pairs) from a token list for phrase matching.
- */
-function bigrams(tokens: string[]): string[] {
-  const result: string[] = [];
-  for (let i = 0; i < tokens.length - 1; i++) {
-    result.push(`${tokens[i]} ${tokens[i + 1]}`);
-  }
-  return result;
-}
-
-// --- Synonym/keyword groups (expanded for Swedish support domain) ---
+// --- Keyword Groups (synonym expansion, Stage 1 only) ---
 
 const KEYWORD_GROUPS: Record<string, string[]> = {
-  uppsägning: ['säga upp', 'säger upp', 'avsluta', 'avslutar', 'stänga', 'cancel',
-    'cancellation', 'terminate', 'sluta', 'inte vill ha', 'vill inte ha',
-    'avslut', 'uppsäg', 'avbryta', 'avbryt', 'upphör'],
-  faktura: ['invoice', 'räkning', 'betalning', 'betala', 'obetald', 'förfallen',
-    'förfaller', 'bill', 'belopp', 'fakturor', 'kreditfaktura', 'avgift',
-    'skuld', 'fakturanummer', 'fakturadatum', 'förfallodatum'],
-  abonnemang: ['prenumeration', 'subscription', 'plan', 'förnyelse', 'förnya',
-    'period', 'månadskostnad', 'årsabonnemang', 'månadsabonnemang', 'paket'],
-  leverans: ['leverera', 'delivery', 'frakt', 'skicka', 'skickad', 'posta', 'brev',
-    'kivra', 'e-faktura', 'efaktura', 'digitalt', 'brevlåda', 'utskick'],
-  inloggning: ['logga in', 'login', 'lösenord', 'password', 'konto', 'mina sidor',
-    'account', 'glömt lösenord', 'återställa', 'inloggningsproblem', 'access'],
-  adress: ['address', 'adressändring', 'flytta', 'flytt', 'ny adress',
-    'ändra adress', 'byta adress', 'ny bostad', 'omflyttning', 'folkbokföringsadress'],
-  betalning: ['swish', 'kort', 'card', 'autogiro', 'bankgiro', 'betalt',
-    'betalat', 'payment', 'kreditkort', 'bankkort', 'direktbetalning', 'ocr'],
-  reklamation: ['klaga', 'complaint', 'missnöjd', 'fel', 'problem', 'fungerar inte',
-    'trasig', 'skadat', 'felaktig', 'felaktigt', 'klagomål', 'inte nöjd'],
-  pris: ['kostnad', 'kostar', 'priset', 'prisändring', 'ny prislista', 'höjning',
-    'sänkning', 'rabatt', 'erbjudande', 'kampanj', 'värde'],
-  återbetalning: ['återbetala', 'refund', 'pengar tillbaka', 'kreditera', 'gottgöra',
-    'kompensation', 'ersättning'],
+  uppsägning: ['säga upp', 'säger upp', 'avsluta', 'avslutar', 'stänga', 'cancel', 'cancellation', 'terminate', 'sluta', 'inte vill ha', 'vill inte ha', 'avslut', 'uppsäg'],
+  faktura: ['invoice', 'räkning', 'betalning', 'betala', 'obetald', 'förfallen', 'förfaller', 'bill', 'belopp', 'fakturor', 'kreditfaktura', 'avgift'],
+  abonnemang: ['prenumeration', 'subscription', 'plan', 'förnyelse', 'förnya', 'period', 'månadskostnad'],
+  leverans: ['leverera', 'delivery', 'frakt', 'skicka', 'skickad', 'posta', 'brev', 'kivra', 'e-faktura', 'efaktura'],
+  inloggning: ['logga in', 'login', 'lösenord', 'password', 'konto', 'mina sidor', 'account', 'glömt lösenord', 'komma in', 'nå min', 'nå mitt'],
+  adress: ['address', 'adressändring', 'flytta', 'flytt', 'ny adress', 'ändra adress', 'byta adress'],
+  betalning: ['swish', 'kort', 'card', 'autogiro', 'bankgiro', 'betalt', 'betalat', 'payment'],
+  reklamation: ['klaga', 'complaint', 'missnöjd', 'fel', 'problem', 'fungerar inte', 'trasig', 'skadat'],
 };
 
 function expandKeywords(text: string): string[] {
@@ -140,110 +33,172 @@ function expandKeywords(text: string): string[] {
   return expanded;
 }
 
-// --- Knowledge Base Matching ---
+function keywordScore(
+  titleLower: string,
+  contentLower: string,
+  category: string | null,
+  tags: string[],
+  words: string[],
+  messageLower: string,
+  expandedTerms: string[]
+): number {
+  let score = 0;
+  if (messageLower.includes(titleLower) || titleLower.includes(messageLower.substring(0, 60))) score += 15;
+  score += words.filter(w => titleLower.includes(w)).length * 3;
+  score += Math.min(words.filter(w => contentLower.includes(w)).length * 1.5, 10);
+  score += tags.filter(tag =>
+    messageLower.includes(tag.toLowerCase()) || words.some(w => tag.toLowerCase().includes(w))
+  ).length * 4;
+  if (expandedTerms.length > 0) {
+    score += expandedTerms.filter(t => titleLower.includes(t)).length * 5;
+    score += Math.min(expandedTerms.filter(t => contentLower.includes(t)).length * 2, 8);
+  }
+  if (category) {
+    const catLower = category.toLowerCase();
+    if (words.some(w => catLower.includes(w))) score += 3;
+    if (expandedTerms.some(t => catLower.includes(t))) score += 3;
+  }
+  return score;
+}
 
-async function findRelevantKnowledge(tenantId: string, message: string): Promise<{ items: any[]; formatted: string }> {
+// --- Stage 1+2: Hybrid KB Retrieval ---
+
+async function findRelevantKnowledge(
+  tenantId: string,
+  subject: string,
+  message: string
+): Promise<{ formatted: string; citedIds: string[] }> {
   try {
     const knowledgeBase = await prisma.knowledgeBase.findMany({
       where: { tenantId, isActive: true },
     });
+    if (knowledgeBase.length === 0) return { formatted: '', citedIds: [] };
 
-    if (knowledgeBase.length === 0) return { items: [], formatted: '' };
-
-    const messageLower = message.toLowerCase();
-    const tokens = tokenize(message);
-    const messageBigrams = bigrams(tokens);
+    const fullQuery = `${subject} ${message}`;
+    const messageLower = fullQuery.toLowerCase();
+    const words = messageLower.split(/\s+/).filter(w => w.length > 2);
     const expandedTerms = expandKeywords(messageLower);
     const expandedTokens = tokenize(expandedTerms.join(' '));
 
-    type KbItem = typeof knowledgeBase[0];
-    type ScoredKb = { kb: KbItem; score: number };
-    const scored: ScoredKb[] = knowledgeBase
-      .map((kb: KbItem) => {
-        const titleLower = kb.title.toLowerCase();
-        const contentLower = kb.content.toLowerCase();
-        const titleTokens = tokenize(kb.title);
-        const contentTokens = tokenize(kb.content);
-        const titleBigrams = bigrams(titleTokens);
-
-        let score = 0;
-
-        // Exact title substring (high value)
-        if (messageLower.includes(titleLower)) score += 20;
-        if (titleLower.includes(messageLower.substring(0, 50))) score += 10;
-
-        // Stemmed token overlap in title
-        const titleTokenMatches = tokens.filter(t => titleTokens.includes(t)).length;
-        score += titleTokenMatches * 4;
-
-        // Stemmed token overlap in content (capped to avoid long articles dominating)
-        const contentTokenMatches = tokens.filter(t => contentTokens.includes(t)).length;
-        score += Math.min(contentTokenMatches * 1.5, 12);
-
-        // Bigram phrase matching in title (high signal)
-        const titleBigramMatches = messageBigrams.filter(bg => titleBigrams.includes(bg)).length;
-        score += titleBigramMatches * 8;
-
-        // Tag matching (stemmed)
-        const tagScore = kb.tags.reduce((acc: number, tag: string) => {
-          const tagTokens = tokenize(tag);
-          const directHit = messageLower.includes(tag.toLowerCase()) ? 6 : 0;
-          const tokenHit = tokens.some(t => tagTokens.includes(t)) ? 3 : 0;
-          return acc + directHit + tokenHit;
-        }, 0);
-        score += Math.min(tagScore, 15);
-
-        // Synonym/keyword expansion matching
-        if (expandedTokens.length > 0) {
-          const expandedTitleMatches = expandedTokens.filter(t => titleTokens.includes(t)).length;
-          const expandedContentMatches = expandedTokens.filter(t => contentTokens.includes(t)).length;
-          score += expandedTitleMatches * 6;
-          score += Math.min(expandedContentMatches * 2, 8);
-        }
-
-        // Category matching
-        if (kb.category) {
-          const catTokens = tokenize(kb.category);
-          if (tokens.some(t => catTokens.includes(t))) score += 3;
-          if (expandedTokens.some(t => catTokens.includes(t))) score += 3;
-        }
-
-        // Slightly deprioritize auto-learned articles
-        if (kb.category === 'Lärande från skickade svar') {
-          score *= 0.65;
-        }
-
+    // Stage 1: keyword scoring — take broad top-12 (or all if KB is small)
+    const scored: { kb: KnowledgeBase; score: number }[] = knowledgeBase
+      .map((kb: KnowledgeBase) => {
+        let score = keywordScore(
+          kb.title.toLowerCase(),
+          kb.content.toLowerCase(),
+          kb.category,
+          kb.tags,
+          words,
+          messageLower,
+          expandedTerms
+        );
+        if (kb.category === 'Lärande från skickade svar') score *= 0.7;
         return { kb, score };
       })
-      .filter(({ score }: ScoredKb) => score > 3)
-      .sort((a: ScoredKb, b: ScoredKb) => b.score - a.score)
-      .slice(0, 6);
+      .sort((a: { kb: KnowledgeBase; score: number }, b: { kb: KnowledgeBase; score: number }) => b.score - a.score);
 
-    if (scored.length === 0) return { items: [], formatted: '' };
+    const candidates: { kb: KnowledgeBase; score: number }[] = knowledgeBase.length <= 8
+      ? scored.filter(({ score }: { kb: KnowledgeBase; score: number }) => score > 2)
+      : scored.filter(({ score }: { kb: KnowledgeBase; score: number }) => score > 2).slice(0, 12);
 
-    const items = scored.map(({ kb }) => kb);
+    if (candidates.length === 0) return { formatted: '', citedIds: [] };
 
-    let formatted = '\n\n=== KUNSKAPSBAS (KRITISK: Basera ditt svar på detta) ===\n';
-    scored.forEach(({ kb }) => {
-      formatted += `\n--- ${kb.title}${kb.category ? ` [${kb.category}]` : ''} ---\n`;
-      formatted += `${kb.content}\n`;
+    let selected: KnowledgeBase[];
+
+    // Stage 2: LLM rerank when we have multiple candidates
+    if (candidates.length > 3) {
+      try {
+        const candidateList = candidates.map((c: { kb: KnowledgeBase; score: number }, i: number) =>
+          `${i + 1}. [ID:${c.kb.id}] ${c.kb.title}${c.kb.category ? ` [${c.kb.category}]` : ''}\n${c.kb.content.substring(0, 400)}`
+        ).join('\n\n');
+
+        const rerank = await openai.chat.completions.create({
+          model: HELPER_MODEL,
+          messages: [
+            {
+              role: 'system',
+              content: 'Du är en sökmotor för kunskapsbas-artiklar. Välj de artiklar (max 5) som är mest relevanta för kundens fråga. Returnera ENBART JSON: {"selected": [1, 3, 5]} med 1-baserade artikelnummer. Om ingen artikel är relevant, returnera {"selected": []}.',
+            },
+            {
+              role: 'user',
+              content: `KUNDENS FRÅGA:\nÄmne: ${subject}\n${message.substring(0, 800)}\n\nTILLGÄNGLIGA ARTIKLAR:\n${candidateList}`,
+            },
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0,
+          max_tokens: 100,
+        });
+
+        const parsed = JSON.parse(rerank.choices[0].message.content || '{}');
+        if (Array.isArray(parsed.selected) && parsed.selected.length > 0) {
+          selected = parsed.selected
+            .filter((i: unknown) => typeof i === 'number' && i >= 1 && i <= candidates.length)
+            .map((i: number) => candidates[i - 1].kb);
+        } else {
+          selected = [];
+        }
+      } catch (err) {
+        console.error('[AI] KB rerank failed, falling back to keyword scoring:', err);
+        selected = candidates.filter(c => c.score > 2).slice(0, 5).map(c => c.kb);
+      }
+    } else {
+      selected = candidates.filter(c => c.score > 2).map(c => c.kb);
+    }
+
+    if (selected.length === 0) return { formatted: '', citedIds: [] };
+
+    let formatted = '\n\n=== KUNSKAPSBAS (VIKTIG: Basera alltid svaret på dessa artiklar. Hitta inte på info som inte finns här) ===\n';
+    selected.forEach(kb => {
+      formatted += `\n--- [${kb.id}] ${kb.title}${kb.category ? ` [${kb.category}]` : ''} ---\n${kb.content}\n`;
     });
 
-    return { items, formatted };
+    return { formatted, citedIds: selected.map(kb => kb.id) };
   } catch (error) {
-    console.error('Error fetching knowledge base:', error);
-    return { items: [], formatted: '' };
+    console.error('[AI] Error fetching knowledge base:', error);
+    return { formatted: '', citedIds: [] };
   }
 }
 
-// --- Learning Examples ---
+// --- Local query result types ---
 
-async function findLearningExamples(tenantId: string, message: string, subject: string): Promise<string> {
+interface FeedbackRow {
+  subject: string;
+  originalMessage: string;
+  finalResponse: string | null;
+  wasEdited: boolean;
+  rating: string | null;
+}
+
+interface NegativeFeedbackRow {
+  subject: string;
+  originalMessage: string;
+  aiResponse: string;
+  finalResponse: string | null;
+}
+
+interface PreviousTicketRow {
+  subject: string;
+  originalMessage: string;
+  finalResponse: string | null;
+  status: string;
+  createdAt: Date;
+}
+
+// --- Learning Examples (positive + sent, with edit signal) ---
+
+async function findLearningExamples(tenantId: string, subject: string, message: string): Promise<string> {
   try {
-    const tokens = tokenize(`${subject} ${message}`);
-    if (tokens.length === 0) return '';
+    const fullText = `${subject} ${message}`;
+    const searchTerms = fullText.toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 3)
+      .slice(0, 6);
 
-    // Fetch a wider pool to find the best matches
+    if (searchTerms.length === 0) return '';
+
+    // Only use explicitly positive-rated feedback as learning examples.
+    // Legacy / unrated rows are excluded — they may contain stale data that
+    // should not influence current responses.
     const feedback = await prisma.aIResponseFeedback.findMany({
       where: {
         tenantId,
@@ -274,37 +229,78 @@ async function findLearningExamples(tenantId: string, message: string, subject: 
         subject: true,
         originalMessage: true,
         finalResponse: true,
+        wasEdited: true,
+        rating: true,
       },
     });
 
     const allFeedback = [...feedback, ...editedFeedback];
     if (allFeedback.length === 0) return '';
 
-    const scored = allFeedback
-      .map(fb => {
-        const fbTokens = tokenize(`${fb.subject} ${fb.originalMessage}`);
-        const matchCount = tokens.filter(t => fbTokens.includes(t)).length;
-        // Normalize by token count to avoid short messages always losing
-        const normalizedScore = tokens.length > 0 ? matchCount / tokens.length : 0;
-        return { fb, score: normalizedScore };
+    // Score by text overlap
+    const scored: { fb: FeedbackRow; score: number }[] = (feedback as FeedbackRow[])
+      .map((fb: FeedbackRow) => {
+        const fbText = `${fb.subject} ${fb.originalMessage}`.toLowerCase();
+        const matchCount = searchTerms.filter(t => fbText.includes(t)).length;
+        // Prefer non-edited (AI was already good) and explicitly positive rated
+        const editBonus = fb.wasEdited ? 0 : 0.5;
+        const ratingBonus = fb.rating === 'positive' ? 1 : 0;
+        return { fb, score: matchCount + editBonus + ratingBonus };
       })
-      .filter(({ score }) => score > 0.1)
-      .sort((a, b) => b.score - a.score)
+      .filter(({ score }: { fb: FeedbackRow; score: number }) => score > 0)
+      .sort((a: { fb: FeedbackRow; score: number }, b: { fb: FeedbackRow; score: number }) => b.score - a.score)
       .slice(0, 3);
 
     if (scored.length === 0) return '';
 
-    let formatted = '\n\n=== EXEMPEL PÅ GODKÄNDA SVAR (Inspireras av ton och format) ===\n';
-    scored.forEach(({ fb }, index) => {
-      formatted += `\nExempel ${index + 1}:\n`;
-      formatted += `Kundens ämne: ${fb.subject}\n`;
-      formatted += `Kund skrev: ${fb.originalMessage.substring(0, 200)}\n`;
-      formatted += `Godkänt svar: ${fb.finalResponse?.substring(0, 400) || 'N/A'}\n`;
+    let formatted = '\n\n=== GODKÄNDA EXEMPELSVAR (Använd som riktlinje för ton, format och längd) ===\n';
+    scored.forEach(({ fb }: { fb: FeedbackRow; score: number }, index: number) => {
+      formatted += `\nExempel ${index + 1}${fb.wasEdited ? ' (redigerat av agent)' : ' (AI-svar, godkänt direkt)'}:\n`;
+      formatted += `Ämne: ${fb.subject}\n`;
+      formatted += `Kund: ${fb.originalMessage.replace(/\[Gmail ID:.*?\]\n?\[Inbox account:.*?\]\n?\n?/g, '').substring(0, 300).trim()}\n`;
+      formatted += `Godkänt svar: ${fb.finalResponse?.substring(0, 500) || 'N/A'}\n`;
     });
+
+    // Anti-examples: recently edited responses where AI clearly got it wrong
+    const negatives = await prisma.aIResponseFeedback.findMany({
+      where: {
+        tenantId,
+        rating: 'negative',
+        wasEdited: true,
+        finalResponse: { not: null },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        subject: true,
+        originalMessage: true,
+        aiResponse: true,
+        finalResponse: true,
+      },
+    });
+
+    const relevantNegatives: { fb: NegativeFeedbackRow; score: number }[] = (negatives as NegativeFeedbackRow[])
+      .map((fb: NegativeFeedbackRow) => {
+        const fbText = `${fb.subject} ${fb.originalMessage}`.toLowerCase();
+        const matchCount = searchTerms.filter(t => fbText.includes(t)).length;
+        return { fb, score: matchCount };
+      })
+      .filter(({ score }: { fb: NegativeFeedbackRow; score: number }) => score > 0)
+      .sort((a: { fb: NegativeFeedbackRow; score: number }, b: { fb: NegativeFeedbackRow; score: number }) => b.score - a.score)
+      .slice(0, 2);
+
+    if (relevantNegatives.length > 0) {
+      formatted += '\n=== UNDVIK (AI-svar som inte godkändes och korrigerades) ===\n';
+      relevantNegatives.forEach(({ fb }: { fb: NegativeFeedbackRow; score: number }, index: number) => {
+        formatted += `\nUndvik-exempel ${index + 1} (ämne: ${fb.subject}):\n`;
+        formatted += `AI svarade: ${fb.aiResponse.substring(0, 300).trim()}\n`;
+        formatted += `Korrekta svaret: ${fb.finalResponse?.substring(0, 300).trim()}\n`;
+      });
+    }
 
     return formatted;
   } catch (error) {
-    console.error('Error fetching learning examples:', error);
+    console.error('[AI] Error fetching learning examples:', error);
     return '';
   }
 }
@@ -323,7 +319,6 @@ function formatContextForPrompt(contextData: any): string {
     if (contextData.stripe.accountClosed) {
       formatted += '⚠️ KONTO AVSLUTAT - Alla prenumerationer är avslutade\n';
     }
-
     const subs = contextData.stripe.subscriptions || [];
     if (subs.length > 0) {
       formatted += `Prenumerationer (${subs.length}):\n`;
@@ -337,16 +332,14 @@ function formatContextForPrompt(contextData: any): string {
         formatted += '\n';
       });
     }
-
     const invoices = contextData.stripe.invoices || [];
     const unpaidStripe = invoices.filter((inv: any) => !inv.paid);
     if (unpaidStripe.length > 0) {
-      formatted += `Obetalda fakturor: ${unpaidStripe.length}\n`;
+      formatted += `Obetalda fakturor (${unpaidStripe.length}):\n`;
       unpaidStripe.forEach((inv: any) => {
         formatted += `  - ${inv.id}: ${inv.amount ? (inv.amount / 100).toFixed(0) + ' kr' : '?'}, förfaller ${inv.dueDate ? new Date(inv.dueDate * 1000).toLocaleDateString('sv-SE') : 'okänt'}\n`;
       });
     }
-
     const charges = contextData.stripe.charges || [];
     if (charges.length > 0) {
       formatted += `Senaste betalningar: ${charges.slice(0, 3).map((c: any) => `${c.amount ? (c.amount / 100).toFixed(0) + ' kr' : '?'} (${c.status})`).join(', ')}\n`;
@@ -364,18 +357,15 @@ function formatContextForPrompt(contextData: any): string {
       if (b.debtorClosedDate) formatted += ` (stängt ${new Date(b.debtorClosedDate).toLocaleDateString('sv-SE')})`;
       formatted += '\n';
     }
-
     const invoices = b.invoices || [];
     const unpaid = invoices.filter((inv: any) => !inv.isPaid);
     const paid = invoices.filter((inv: any) => inv.isPaid);
-
     if (unpaid.length > 0) {
       formatted += `Obetalda fakturor (${unpaid.length}):\n`;
       unpaid.forEach((inv: any) => {
         formatted += `  - Faktura #${inv.number || inv.id}: ${inv.amount ?? '?'} kr, förfaller ${inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('sv-SE') : 'okänt'}, status: ${inv.status || 'okänd'}${inv.deliveryMethod ? `, leverans: ${inv.deliveryMethod}` : ''}\n`;
       });
     }
-
     if (paid.length > 0) {
       formatted += `Betalda fakturor (${paid.length}): `;
       formatted += paid.slice(0, 3).map((inv: any) => `#${inv.number || inv.id} (${inv.amount ?? '?'} kr)`).join(', ');
@@ -386,12 +376,12 @@ function formatContextForPrompt(contextData: any): string {
 
   if (contextData.gmail) {
     hasData = true;
-    formatted += `\n--- E-posthistorik ---\nTidigare mailkonversationer med kunden: ${contextData.gmail.totalEmails || 0}\n`;
+    formatted += `\n--- E-posthistorik ---\nTidigare konversationer med kunden: ${contextData.gmail.totalEmails || 0}\n`;
   }
 
   if (contextData.resend) {
     hasData = true;
-    formatted += `\n--- Utskickad e-post ---\nAntal skickade mail: ${contextData.resend.emailsSent || 0}\n`;
+    formatted += `\n--- Skickade mail ---\nAntal skickade mail: ${contextData.resend.emailsSent || 0}\n`;
   }
 
   if (!hasData) return '';
@@ -400,7 +390,11 @@ function formatContextForPrompt(contextData: any): string {
 
 // --- Previous Ticket History ---
 
-async function findPreviousTicketContext(tenantId: string, customerEmail: string, currentTicketId?: string, subject?: string): Promise<string> {
+async function findPreviousTicketContext(
+  tenantId: string,
+  customerEmail: string,
+  currentTicketId?: string
+): Promise<string> {
   try {
     const previousTickets = await prisma.ticket.findMany({
       where: {
@@ -422,43 +416,45 @@ async function findPreviousTicketContext(tenantId: string, customerEmail: string
 
     if (previousTickets.length === 0) return '';
 
-    // Score by relevance if we have a subject to compare to
-    const tokens = subject ? tokenize(subject) : [];
-    type PrevTicket = typeof previousTickets[0];
-    const scored = previousTickets.map((t: PrevTicket) => {
-      const tTokens = tokenize(`${t.subject} ${t.originalMessage.substring(0, 200)}`);
-      const matchScore = tokens.length > 0
-        ? tokens.filter((tk: string) => tTokens.includes(tk)).length / tokens.length
-        : 0;
-      return { t, relevance: matchScore };
-    });
-
-    // Keep the 3 most relevant + always keep the most recent if not already included
-    const topRelevant = scored
-      .sort((a: { t: PrevTicket; relevance: number }, b: { t: PrevTicket; relevance: number }) => b.relevance - a.relevance)
-      .slice(0, 3)
-      .map((s: { t: PrevTicket; relevance: number }) => s.t);
-
-    const mostRecent = previousTickets[0];
-    const showTickets = topRelevant.some((t: PrevTicket) => t === mostRecent)
-      ? topRelevant
-      : [mostRecent, ...topRelevant.slice(0, 2)];
-
-    let formatted = '\n\n=== KUNDENS TIDIGARE ÄRENDEN ===\n';
-    showTickets.forEach((t: PrevTicket, idx: number) => {
+    let formatted = '\n\n=== KUNDENS TIDIGARE ÄRENDEN (Använd för sammanhängande support, undvik att upprepa) ===\n';
+    (previousTickets as PreviousTicketRow[]).forEach((t: PreviousTicketRow, idx: number) => {
       formatted += `\nÄrende ${idx + 1} (${new Date(t.createdAt).toLocaleDateString('sv-SE')}, ${t.status}):\n`;
       formatted += `  Ämne: ${t.subject}\n`;
-      formatted += `  Kund: ${t.originalMessage.substring(0, 200).replace(/\[Gmail ID:.*?\]\n?\[Inbox account:.*?\]\n?\n?/g, '').trim()}\n`;
+      formatted += `  Kund: ${t.originalMessage.replace(/\[Gmail ID:.*?\]\n?\[Inbox account:.*?\]\n?\n?/g, '').substring(0, 500).trim()}\n`;
       if (t.finalResponse) {
-        formatted += `  Vårt svar: ${t.finalResponse.substring(0, 250)}\n`;
+        formatted += `  Vårt svar: ${t.finalResponse.substring(0, 500)}\n`;
       }
     });
 
     return formatted;
   } catch (error) {
-    console.error('Error fetching previous tickets:', error);
+    console.error('[AI] Error fetching previous tickets:', error);
     return '';
   }
+}
+
+// --- Structured AI Output ---
+
+interface AIStructuredOutput {
+  response: string;
+  confidence: number; // 0.0–1.0, model's own estimate
+  usedKbArticleIds: string[];
+  missingInfo: string; // empty string if no info missing
+}
+
+function parseStructuredOutput(raw: string): AIStructuredOutput | null {
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.response === 'string' && parsed.response.length > 0) {
+      return {
+        response: parsed.response,
+        confidence: typeof parsed.confidence === 'number' ? Math.min(Math.max(parsed.confidence, 0), 1) : 0.5,
+        usedKbArticleIds: Array.isArray(parsed.usedKbArticleIds) ? parsed.usedKbArticleIds : [],
+        missingInfo: typeof parsed.missingInfo === 'string' ? parsed.missingInfo : '',
+      };
+    }
+  } catch (_) { /* fall through */ }
+  return null;
 }
 
 // --- Main Generation Function ---
@@ -471,23 +467,65 @@ export async function generateAIResponse(
   ticketId?: string,
   customerEmail?: string,
   customerName?: string
-): Promise<{ response: string; confidence: number; knowledgeUsed: string[] }> {
+): Promise<{ response: string; confidence: number }> {
   try {
-    const fullQuery = `${subject} ${originalMessage}`;
+    const contextPrompt = formatContextForPrompt(contextData);
+    const hasContext = contextPrompt.length > 0;
 
-    const [contextPrompt, knowledgeResult, learningPrompt, previousTicketsPrompt] = await Promise.all([
-      Promise.resolve(formatContextForPrompt(contextData)),
-      tenantId ? findRelevantKnowledge(tenantId, fullQuery) : Promise.resolve({ items: [], formatted: '' }),
-      tenantId ? findLearningExamples(tenantId, originalMessage, subject) : Promise.resolve(''),
-      (tenantId && customerEmail)
-        ? findPreviousTicketContext(tenantId, customerEmail, ticketId, subject)
-        : Promise.resolve(''),
+    const [knowledgeResult, learningPrompt, previousTicketsPrompt] = await Promise.all([
+      tenantId ? findRelevantKnowledge(tenantId, subject, originalMessage) : Promise.resolve({ formatted: '', citedIds: [] }),
+      tenantId ? findLearningExamples(tenantId, subject, originalMessage) : Promise.resolve(''),
+      (tenantId && customerEmail) ? findPreviousTicketContext(tenantId, customerEmail, ticketId) : Promise.resolve(''),
     ]);
 
-    const { items: knowledgeItems, formatted: knowledgePrompt } = knowledgeResult;
-    const hasKnowledge = knowledgePrompt.length > 0;
-    const hasContext = contextPrompt.length > 0;
+    const hasKnowledge = knowledgeResult.formatted.length > 0;
     const hasPreviousTickets = previousTicketsPrompt.length > 0;
+    const hasLearning = learningPrompt.length > 0;
+
+    const greeting = customerName ? `Hej ${customerName.split(' ')[0]},` : 'Hej,';
+
+    const systemPrompt = `Du är en professionell, empatisk och hjälpsam kundtjänstmedarbetare för Doldadress.
+
+DITT UPPDRAG: Ge ett korrekt, tydligt och personligt svar som löser kundens problem.
+
+VIKTIGA REGLER:
+
+1. SPRÅK: Svara på SAMMA SPRÅK som kunden skriver på.
+
+2. KUNSKAPSBAS = SANNING:
+   - Basera svaret ALLTID på kunskapsbasartiklarna nedan när de är relevanta.
+   - Hitta INTE på policys, priser, villkor eller processer som inte finns där.
+   - Om kunskapsbasen beskriver specifika steg, URL:er eller "Mina sidor" — inkludera dem exakt.
+   - Notera vilka artikel-ID:n du använder i ditt JSON-svar (fältet usedKbArticleIds).
+
+3. KUNDDATA: Om faktura- eller prenumerationsdata finns:
+   - Referera till specifika fakturanummer, belopp och datum.
+   - Nämn ALDRIG systemnamn (Stripe, Billecta, Resend, OpenAI) — säg "vårt system" eller "våra register".
+
+4. OSÄKERHET: Om du saknar information för att svara korrekt:
+   - Skriv "Jag ska undersöka detta och återkommer till dig" — GISSA INTE.
+   - Ange vilket behov du behöver kunden bekräfta i missingInfo-fältet.
+   - Sätt confidence lågt (0.3–0.4).
+
+5. FORMAT:
+   - Börja med hälsning: "${greeting}"
+   - Ge svaret tidigt — ingen lång inledning.
+   - Punktlistor för instruktioner med flera steg.
+   - Avsluta med "Hör av dig om du har fler frågor!" eller liknande.
+   - Signera: "Vänliga hälsningar,\\nDoldadress Kundtjänst"
+   - Längd: kort för enkla frågor, utförligare för komplexa.
+
+6. TIDIGARE ÄRENDEN: Referera till tidigare kontakt om relevant. Upprepa inte redan given information.
+
+DU SKA SVARA MED ENBART GILTIG JSON i detta format (inga markdown-block):
+{
+  "response": "<hela e-posttexten>",
+  "confidence": <0.0–1.0 hur säker du är på att svaret är korrekt och fullständigt>,
+  "usedKbArticleIds": ["<id1>", "<id2>"],
+  "missingInfo": "<vad som saknas för att svara bättre, eller tom sträng>"
+}`;
+
+    const userContent = `Ämne: ${subject}\n\nKundens meddelande:\n${originalMessage}${contextPrompt}${previousTicketsPrompt}${knowledgeResult.formatted}${learningPrompt}`;
 
     // Extract customer first name for greeting (use provided name, then email prefix as fallback)
     let customerFirstName = '';
@@ -507,99 +545,49 @@ export async function generateAIResponse(
     const greeting = customerFirstName ? `Hej ${customerFirstName},` : 'Hej,';
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: MAIN_MODEL,
       messages: [
-        {
-          role: 'system',
-          content: `Du är en professionell och empatisk kundtjänstmedarbetare för Doldadress – en tjänst för hemlig adress/skyddad adress.
-
-════════════════════════════════════
-PRIORITETSORDNING FÖR DITT SVAR:
-1. Kunskapsbasen (absolut sanning – avvik aldrig)
-2. Kundinformation från systemet (fakturor, prenumerationer)
-3. Tidigare ärenden (ge sammanhängande upplevelse)
-4. Din egna formulering (ton, struktur, empati)
-════════════════════════════════════
-
-OBLIGATORISKA REGLER:
-
-▸ KUNSKAPSBAS ÄR LAG
-  – Om kunskapsbasartiklar finns: basera HELA svaret på dem.
-  – Lägg INTE till policys, priser, processer eller löften som inte finns i kunskapsbasen.
-  – Om artikeln nämner "Mina sidor", specifika webbadresser eller steg – ta med dem exakt.
-
-▸ KUNDDATA
-  – Referera till konkreta fakturanummer, belopp och datum om de är relevanta för frågan.
-  – Om kunden frågar om en obetald faktura och data finns – bekräfta det artigt.
-  – Nämn ALDRIG Stripe, Billecta eller andra systemnamn – säg "vårt system" eller "våra register".
-
-▸ OSÄKERHET
-  – Vet du inte svaret? Skriv: "Jag behöver kontrollera detta och återkommer till dig."
-  – Gissa ALDRIG priser, datum, policys eller tekniska detaljer.
-
-▸ SPRÅK
-  – Svara på SAMMA SPRÅK som kunden. Svenska → svenska. Engelska → engelska. Etc.
-
-▸ FORMAT OCH TON
-  – Inled med: "${greeting}" (använd det exakta hälsningsnamnet).
-  – Ge svaret direkt efter hälsningen – ingen lång inledning.
-  – Använd punktlistor för steg-för-steg-instruktioner.
-  – Håll svaret lagom långt: enkla frågor = 2–4 meningar, komplexa = utförligare.
-  – Avsluta med: "Hör av dig om du har fler frågor!" eller liknande.
-  – Signera alltid: "Vänliga hälsningar,\\nDoldadress Kundtjänst"
-
-▸ FÖRBJUDET
-  – Hitta aldrig på policy, pris, leveranstid eller villkor.
-  – Lova aldrig specifika datum om du inte har dem.
-  – Avslöja aldrig intern systeminformation.`,
-        },
-        {
-          role: 'user',
-          content: `Ämne: ${subject}\n\nKundens meddelande:\n${originalMessage}${contextPrompt}${previousTicketsPrompt}${knowledgePrompt}${learningPrompt}`,
-        },
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
       ],
-      temperature: 0.3,
-      max_tokens: 1200,
+      response_format: { type: 'json_object' },
+      temperature: 0.4,
+      max_tokens: 1500,
     });
 
-    const aiResponse = completion.choices[0].message.content || '';
-    const finishReason = completion.choices[0].finish_reason;
+    const rawOutput = completion.choices[0].message.content || '';
+    const structured = parseStructuredOutput(rawOutput);
 
-    // --- Confidence scoring ---
-    let confidence = 0.70;
+    let aiResponse: string;
+    let modelConfidence: number;
 
-    if (finishReason === 'stop') {
-      confidence += 0.08;
-    } else if (finishReason === 'length') {
-      confidence -= 0.15; // Truncated = bad
+    if (structured) {
+      aiResponse = structured.response;
+      modelConfidence = structured.confidence;
+    } else {
+      // Fallback: treat raw output as plain text response
+      console.warn('[AI] Failed to parse structured JSON output, using raw text as fallback');
+      aiResponse = rawOutput;
+      modelConfidence = 0.5;
     }
 
-    if (hasKnowledge) confidence += 0.12;   // KB = much higher confidence
-    if (hasContext) confidence += 0.05;
-    if (hasPreviousTickets) confidence += 0.03;
-    if (learningPrompt.length > 0) confidence += 0.04;
+    // --- Heuristic confidence adjustments on top of model self-report ---
+    let confidence = modelConfidence;
 
-    // Response length sanity
-    if (aiResponse.length < 80) {
-      confidence -= 0.20;
-    } else if (aiResponse.length < 150) {
-      confidence -= 0.08;
-    } else if (aiResponse.length > 200) {
-      confidence += 0.03; // Substantive response
+    if (completion.choices[0].finish_reason === 'length') {
+      confidence -= 0.15; // Response was cut off
     }
 
-    // Structural markers
-    if (aiResponse.toLowerCase().includes('hej')) confidence += 0.02;
-    if (aiResponse.toLowerCase().includes('hälsningar')) confidence += 0.02;
+    if (hasKnowledge) confidence = Math.min(confidence + 0.08, 0.99);
+    if (hasContext) confidence = Math.min(confidence + 0.04, 0.99);
+    if (hasPreviousTickets) confidence = Math.min(confidence + 0.02, 0.99);
+    if (hasLearning) confidence = Math.min(confidence + 0.03, 0.99);
 
-    // Uncertainty markers lower confidence (AI flagged it doesn't know)
-    if (/undersöka|kontrollera|återkommer/i.test(aiResponse)) {
-      confidence -= 0.08;
-    }
+    if (aiResponse.length < 50) confidence -= 0.15;
+    else if (aiResponse.length < 100) confidence -= 0.08;
 
-    // If KB was available but response seems to ignore it (very short despite complex query)
-    if (hasKnowledge && aiResponse.length < 200) {
-      confidence -= 0.05;
+    if (aiResponse.includes('undersöka detta') || aiResponse.includes('återkommer')) {
+      confidence = Math.min(confidence, 0.45);
     }
 
     return {
@@ -608,7 +596,7 @@ OBLIGATORISKA REGLER:
       knowledgeUsed: knowledgeItems.map(kb => kb.id),
     };
   } catch (error) {
-    console.error('Error generating AI response:', error);
+    console.error('[AI] Error generating AI response:', error);
     throw error;
   }
 }
