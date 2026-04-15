@@ -20,7 +20,7 @@ export function statusLabelSv(status: string): string {
     case 'new':
       return 'Nytt';
     case 'in_progress':
-      return 'Pågående';
+      return 'Öppna';
     case 'waiting_ai':
       return 'Väntar på AI';
     case 'review':
