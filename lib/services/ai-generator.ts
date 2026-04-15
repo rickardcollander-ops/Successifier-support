@@ -78,7 +78,6 @@ async function findRelevantKnowledge(
     const messageLower = fullQuery.toLowerCase();
     const words = messageLower.split(/\s+/).filter(w => w.length > 2);
     const expandedTerms = expandKeywords(messageLower);
-    const expandedTokens = tokenize(expandedTerms.join(' '));
 
     // Stage 1: keyword scoring — take broad top-12 (or all if KB is small)
     const scored: { kb: KnowledgeBase; score: number }[] = knowledgeBase
