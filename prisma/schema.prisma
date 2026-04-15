@@ -50,6 +50,8 @@ model Ticket {
   aiConfidence    Float?
   finalResponse   String?  @db.Text
   contextData     Json?
+  assignedTo      String?
+  sentBy          String?
   sentAt          DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -58,6 +60,8 @@ model Ticket {
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
+  @@index([tenantId, assignedTo])
+  @@index([tenantId, sentBy])
 }
 
 model KnowledgeBase {

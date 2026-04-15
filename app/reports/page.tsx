@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send } from 'lucide-react';
+import { statusLabelSv, priorityLabelSv } from '@/lib/constants';
+
+interface AgentStats {
+  name: string;
+  assigned: number;
+  sent: number;
+}
 
 interface ReportData {
   totalTickets: number;
@@ -14,6 +21,7 @@ interface ReportData {
     date: string;
     count: number;
   }>;
+  perUserStats?: AgentStats[];
 }
 
 export default function ReportsPage() {
@@ -42,7 +50,7 @@ export default function ReportsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-600 dark:text-slate-400">Loading reports...</div>
+        <div className="text-slate-600 dark:text-slate-400">Laddar rapporter…</div>
       </div>
     );
   }
@@ -50,7 +58,7 @@ export default function ReportsPage() {
   if (!data) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-600 dark:text-slate-400">No data available</div>
+        <div className="text-slate-600 dark:text-slate-400">Ingen data tillgänglig</div>
       </div>
     );
   }
@@ -76,22 +84,28 @@ export default function ReportsPage() {
     }
   };
 
+  const perUserStats = data.perUserStats || [];
+  const maxAgentTotal = Math.max(
+    1,
+    ...perUserStats.map((s) => s.assigned + s.sent)
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Reports</h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-1">Ticket statistics and analytics</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Rapporter</h1>
+          <p className="text-slate-600 dark:text-slate-400 mt-1">Statistik och analys</p>
         </div>
         <select
           value={timeRange}
           onChange={(e) => setTimeRange(e.target.value as any)}
           className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
         >
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-          <option value="90d">Last 90 days</option>
+          <option value="7d">Senaste 7 dagarna</option>
+          <option value="30d">Senaste 30 dagarna</option>
+          <option value="90d">Senaste 90 dagarna</option>
         </select>
       </div>
 
@@ -100,7 +114,7 @@ export default function ReportsPage() {
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Total Tickets</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Totalt antal ärenden</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.totalTickets}</p>
             </div>
             <div className="w-12 h-12 rounded-lg border border-blue-300 dark:border-blue-700 flex items-center justify-center">
@@ -112,7 +126,7 @@ export default function ReportsPage() {
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Resolved Today</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Lösta idag</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.resolvedToday}</p>
             </div>
             <div className="w-12 h-12 rounded-lg border border-green-300 dark:border-green-700 flex items-center justify-center">
@@ -124,7 +138,7 @@ export default function ReportsPage() {
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Pending</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Väntande</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.pendingTickets}</p>
             </div>
             <div className="w-12 h-12 rounded-lg border border-yellow-300 dark:border-yellow-700 flex items-center justify-center">
@@ -136,7 +150,7 @@ export default function ReportsPage() {
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Avg Response Time</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Genomsnittlig svarstid</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.avgResponseTime}h</p>
             </div>
             <div className="w-12 h-12 rounded-lg border border-purple-300 dark:border-purple-700 flex items-center justify-center">
@@ -146,17 +160,81 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {/* Per-user stats (always visible, even if zero) */}
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Users className="w-5 h-5 text-[#7C5CFF]" />
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Ärenden per medarbetare</h3>
+        </div>
+        {perUserStats.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Ingen statistik tillgänglig ännu. Tilldela eller skicka ärenden för att börja följa upp.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {perUserStats.map((agent) => {
+              const total = agent.assigned + agent.sent;
+              return (
+                <div key={agent.name}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-[#7C5CFF]/15 text-[#7C5CFF] dark:text-[#B8A6FF] flex items-center justify-center text-xs font-bold">
+                        {agent.name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()}
+                      </div>
+                      <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{agent.name}</span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5" />
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">{agent.assigned}</span>
+                        <span>tilldelade</span>
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Send className="w-3.5 h-3.5" />
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">{agent.sent}</span>
+                        <span>skickade</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden flex">
+                    <div
+                      className="bg-[#7C5CFF] h-2 transition-all"
+                      style={{ width: `${(agent.assigned / maxAgentTotal) * 100}%` }}
+                      title={`Tilldelade: ${agent.assigned}`}
+                    />
+                    <div
+                      className="bg-green-500 h-2 transition-all"
+                      style={{ width: `${(agent.sent / maxAgentTotal) * 100}%` }}
+                      title={`Skickade: ${agent.sent}`}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Totalt: {total}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-[#7C5CFF]" /> Tilldelade
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-green-500" /> Skickade
+          </span>
+        </div>
+      </div>
+
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Tickets by Status */}
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Tickets by Status</h3>
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Ärenden per status</h3>
           <div className="space-y-3">
             {Object.entries(data.ticketsByStatus).map(([status, count]) => (
               <div key={status}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm text-slate-600 dark:text-slate-400 capitalize">
-                    {status.replace('_', ' ')}
+                  <span className="text-sm text-slate-600 dark:text-slate-400">
+                    {statusLabelSv(status)}
                   </span>
                   <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{count}</span>
                 </div>
@@ -173,12 +251,12 @@ export default function ReportsPage() {
 
         {/* Tickets by Priority */}
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Tickets by Priority</h3>
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Ärenden per prioritet</h3>
           <div className="space-y-3">
             {Object.entries(data.ticketsByPriority).map(([priority, count]) => (
               <div key={priority}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm text-slate-600 dark:text-slate-400 capitalize">{priority}</span>
+                  <span className="text-sm text-slate-600 dark:text-slate-400">{priorityLabelSv(priority)}</span>
                   <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{count}</span>
                 </div>
                 <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
@@ -195,18 +273,18 @@ export default function ReportsPage() {
 
       {/* Recent Activity */}
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Recent Activity</h3>
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Senaste aktivitet</h3>
         <div className="flex items-end justify-between h-64 gap-2">
           {data.recentActivity.map((day, index) => {
             const maxCount = Math.max(...data.recentActivity.map(d => d.count));
-            const height = (day.count / maxCount) * 100;
+            const height = maxCount > 0 ? (day.count / maxCount) * 100 : 0;
             return (
               <div key={index} className="flex-1 flex flex-col items-center">
                 <div className="w-full flex items-end justify-center h-full">
                   <div
                     className="w-full bg-gradient-to-t from-[#7C5CFF] to-[#9F7BFF] rounded-t-lg transition-all hover:brightness-110"
                     style={{ height: `${height}%` }}
-                    title={`${day.count} tickets`}
+                    title={`${day.count} ärenden`}
                   />
                 </div>
                 <span className="text-xs text-slate-600 dark:text-slate-400 mt-2">

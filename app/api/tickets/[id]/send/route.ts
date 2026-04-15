@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { ResendService } from '@/lib/integrations/resend';
 import { google } from 'googleapis';
+import { auth } from '@/lib/auth';
 
 export async function POST(
   request: NextRequest,
@@ -17,6 +18,16 @@ export async function POST(
         { error: 'Response text is required' },
         { status: 400 }
       );
+    }
+
+    // Capture which signed-in user clicked Send so we can credit them
+    // in reports. Falls back to null when no session (e.g. API usage).
+    let sentBy: string | null = null;
+    try {
+      const session = await auth();
+      sentBy = session?.user?.name || session?.user?.email || null;
+    } catch {
+      sentBy = null;
     }
 
     const ticket = await prisma.ticket.findUnique({
@@ -150,6 +161,7 @@ export async function POST(
         finalResponse: response,
         status: 'sent',
         sentAt: new Date(),
+        sentBy: sentBy,
       },
     });
 

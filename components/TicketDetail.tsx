@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, ChevronDown, Search, X, Loader2, Trash2, AlertOctagon } from 'lucide-react';
+import { Mail, ChevronDown, Search, X, Loader2, Trash2, AlertOctagon, UserCircle2, CheckCircle2 } from 'lucide-react';
 import type { Ticket } from '@/lib/types';
+import { AGENTS, statusLabelSv } from '@/lib/constants';
 
 interface ReplyFromAccount {
   id: string;
@@ -90,10 +91,16 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   const [resendModalOpen, setResendModalOpen] = useState(false);
   const [gmailModalOpen, setGmailModalOpen] = useState(false);
   const [retoolModalOpen, setRetoolModalOpen] = useState(false);
-  const [sendConfirmation, setSendConfirmation] = useState<string | null>(null);
+  const [sendConfirmation, setSendConfirmation] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [inlineImages, setInlineImages] = useState<Array<{ name: string; dataUrl: string }>>([]);
   const [popoutTicket, setPopoutTicket] = useState<any>(null);
   const [popoutLoading, setPopoutLoading] = useState(false);
+  // Lightbox modal for clicking attached images (replaces window.open which
+  // is often blocked by browsers for data: URLs).
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
+  // Active integrations so we can always show the Billecta card when the
+  // integration exists, even when no auto-match was found for the customer.
+  const [hasBillectaIntegration, setHasBillectaIntegration] = useState(false);
 
   const handleNavigateToTicket = async (ticketId: string) => {
     setPopoutLoading(true);
@@ -154,6 +161,26 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
       }
     };
     fetchAccounts();
+  }, []);
+
+  // Fetch active integrations to know whether to always show the Billecta
+  // card (so users can manually search even without auto-match).
+  useEffect(() => {
+    const fetchIntegrations = async () => {
+      try {
+        const res = await fetch('/api/integrations');
+        if (res.ok) {
+          const data = await res.json();
+          const integrations = Array.isArray(data) ? data : data.integrations || [];
+          setHasBillectaIntegration(
+            integrations.some((i: any) => i.type === 'billecta' && i.isActive !== false)
+          );
+        }
+      } catch (error) {
+        console.error('Error fetching integrations:', error);
+      }
+    };
+    fetchIntegrations();
   }, []);
 
   // Reset state when ticket changes
@@ -274,12 +301,23 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
 
     if (success) {
       const fromAccount = emailAccounts.find(a => a.id === selectedFromAccount);
-      setSendConfirmation(`Mailet har skickats till ${recipientEmail}${fromAccount ? ` från ${fromAccount.email}` : ''} och lagts i skickade.`);
-      setTimeout(() => setSendConfirmation(null), 8000);
+      setSendConfirmation({
+        type: 'success',
+        message: `Mailet har skickats till ${recipientEmail}${fromAccount ? ` från ${fromAccount.email}` : ''} och lagts i skickade.`,
+      });
+      setTimeout(() => setSendConfirmation(null), 10000);
     } else {
-      setSendConfirmation('Fel: Mailet kunde inte skickas. Försök igen.');
-      setTimeout(() => setSendConfirmation(null), 8000);
+      setSendConfirmation({
+        type: 'error',
+        message: 'Fel: Mailet kunde inte skickas. Försök igen.',
+      });
+      setTimeout(() => setSendConfirmation(null), 10000);
     }
+  };
+
+  const handleAssign = (agent: string) => {
+    // Empty string means "unassign"
+    onUpdate(ticket.id, { assignedTo: agent || null } as any);
   };
 
   const handleStatusChange = (status: string) => {
@@ -341,16 +379,30 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <UserCircle2 className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              <select
+                value={ticket.assignedTo || ''}
+                onChange={(e) => handleAssign(e.target.value)}
+                className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                title="Tilldela ärende"
+              >
+                <option value="">Tilldela…</option>
+                {AGENTS.map((agent) => (
+                  <option key={agent} value={agent}>{agent}</option>
+                ))}
+              </select>
+            </div>
             <select
               value={ticket.status}
               onChange={(e) => handleStatusChange(e.target.value)}
               className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
             >
-              <option value="new">New</option>
-              <option value="in_progress">In Progress</option>
-              <option value="review">Review</option>
-              <option value="sent">Sent</option>
-              <option value="closed">Closed</option>
+              <option value="new">{statusLabelSv('new')}</option>
+              <option value="in_progress">{statusLabelSv('in_progress')}</option>
+              <option value="review">{statusLabelSv('review')}</option>
+              <option value="sent">{statusLabelSv('sent')}</option>
+              <option value="closed">{statusLabelSv('closed')}</option>
             </select>
             {onSpam && (
               <button
@@ -376,7 +428,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
         <div>
-          <h3 className="text-sm font-semibold mb-2 text-slate-700 dark:text-slate-300">Original Message</h3>
+          <h3 className="text-sm font-semibold mb-2 text-slate-700 dark:text-slate-300">Ursprungligt meddelande</h3>
           <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 text-sm whitespace-pre-wrap text-slate-900 dark:text-slate-100">
             {ticket.originalMessage}
           </div>
@@ -386,12 +438,18 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               <div className="flex flex-wrap gap-3">
                 {ticket.contextData.attachments.map((att: any, idx: number) => (
                   <div key={idx} className="relative group">
-                    <img
-                      src={att.dataUrl}
-                      alt={att.filename}
-                      className="max-w-[200px] max-h-[200px] rounded-lg border border-slate-200 dark:border-slate-700 object-cover cursor-pointer hover:shadow-lg transition-shadow"
-                      onClick={() => window.open(att.dataUrl, '_blank')}
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setLightboxImage({ src: att.dataUrl, alt: att.filename })}
+                      className="block focus:outline-none focus:ring-2 focus:ring-[#7C5CFF] rounded-lg"
+                      aria-label={`Öppna bild ${att.filename}`}
+                    >
+                      <img
+                        src={att.dataUrl}
+                        alt={att.filename}
+                        className="max-w-[200px] max-h-[200px] rounded-lg border border-slate-200 dark:border-slate-700 object-cover cursor-zoom-in hover:shadow-lg hover:border-[#7C5CFF]/40 transition-all"
+                      />
+                    </button>
                     <p className="text-[10px] text-slate-400 mt-1 truncate max-w-[200px]">{att.filename}</p>
                   </div>
                 ))}
@@ -476,11 +534,11 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
           )}
         </div>
 
-        {ticket.contextData && (
+        {(ticket.contextData || hasBillectaIntegration) && (
           <div>
-            <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">Customer Context</h3>
+            <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">Kundinformation</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {ticket.contextData.stripe && (
+              {ticket.contextData?.stripe && (
                 <div
                   onClick={() => setStripeModalOpen(true)}
                   className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 rounded-lg p-4 border border-blue-200 dark:border-blue-800 cursor-pointer hover:shadow-md hover:border-blue-400 dark:hover:border-blue-600 transition-all"
@@ -509,7 +567,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-2">Klicka för detaljer</p>
                 </div>
               )}
-              {(ticket.contextData?.billecta || customerHistory?.billecta) && (() => {
+              {(ticket.contextData?.billecta || customerHistory?.billecta || hasBillectaIntegration) && (() => {
                 const bc = ticket.contextData?.billecta;
                 const hb = customerHistory?.billecta;
                 const invoices = bc?.invoices || hb?.invoicesPreview || [];
@@ -517,6 +575,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 const unpaidCount = hb?.unpaidInvoices ?? invoices.filter((i: any) => !i.isPaid).length;
                 const debtorName = bc?.debtorName || null;
                 const debtorStatus = bc?.debtorStatus || null;
+                const hasAnyData = Boolean(bc || hb);
 
                 return (
                   <div
@@ -539,17 +598,25 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                         {bc?.debtorClosedDate ? ` (${new Date(bc.debtorClosedDate).toLocaleDateString('sv-SE')})` : ''}
                       </div>
                     )}
-                    <div className="flex gap-4 text-xs text-green-800 dark:text-green-200">
-                      <span>📋 {totalInvoices} fakturor</span>
-                      {unpaidCount > 0 && (
-                        <span className="text-amber-700 dark:text-amber-400">⚠ {unpaidCount} obetalda</span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-green-600 dark:text-green-400 mt-2">Klicka för fakturor & sök</p>
+                    {hasAnyData ? (
+                      <div className="flex gap-4 text-xs text-green-800 dark:text-green-200">
+                        <span>📋 {totalInvoices} fakturor</span>
+                        {unpaidCount > 0 && (
+                          <span className="text-amber-700 dark:text-amber-400">⚠ {unpaidCount} obetalda</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-green-800 dark:text-green-200">
+                        <p>Ingen automatisk träff på kundens e-post.</p>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-green-600 dark:text-green-400 mt-2">
+                      {hasAnyData ? 'Klicka för fakturor & sök' : 'Klicka för att söka manuellt'}
+                    </p>
                   </div>
                 );
               })()}
-              {ticket.contextData.resend && (
+              {ticket.contextData?.resend && (
                 <div
                   onClick={() => setResendModalOpen(true)}
                   className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 rounded-lg p-4 border border-purple-200 dark:border-purple-800 cursor-pointer hover:shadow-md hover:border-purple-400 dark:hover:border-purple-600 transition-all"
@@ -559,7 +626,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                       <span className="text-white text-xs font-bold">R</span>
                     </div>
                     <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">Resend</p>
-                    <ChevronDown className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 ml-auto" />
+                    <span className="text-[9px] text-purple-600 dark:text-purple-400 ml-auto">senaste 7d</span>
                   </div>
                   <div className="space-y-1 text-xs text-purple-800 dark:text-purple-200">
                     <p>📧 {ticket.contextData.resend.emailsSent || 0} skickade mail</p>
@@ -568,7 +635,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   <p className="text-[10px] text-purple-600 dark:text-purple-400 mt-2">Klicka för detaljer</p>
                 </div>
               )}
-              {ticket.contextData.retool && (
+              {ticket.contextData?.retool && (
                 <div
                   onClick={() => setRetoolModalOpen(true)}
                   className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900 rounded-lg p-4 border border-orange-200 dark:border-orange-800 cursor-pointer hover:shadow-md hover:border-orange-400 dark:hover:border-orange-600 transition-all"
@@ -586,7 +653,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-2">Klicka för detaljer</p>
                 </div>
               )}
-              {ticket.contextData.gmail && (
+              {ticket.contextData?.gmail && (
                 <div
                   onClick={() => setGmailModalOpen(true)}
                   className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950 dark:to-red-900 rounded-lg p-4 border border-red-200 dark:border-red-800 cursor-pointer hover:shadow-md hover:border-red-400 dark:hover:border-red-600 transition-all"
@@ -617,7 +684,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 <div className="w-6 h-6 rounded-full bg-gradient-to-r from-[#7C5CFF] to-[#9F7BFF] flex items-center justify-center">
                   <span className="text-white text-xs">✨</span>
                 </div>
-                <p className="text-sm font-semibold text-[#7C5CFF] dark:text-[#9F7BFF]">AI Suggested Response</p>
+                <p className="text-sm font-semibold text-[#7C5CFF] dark:text-[#9F7BFF]">AI-förslag till svar</p>
               </div>
               <div className="flex gap-1">
                 <button
@@ -642,14 +709,14 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 onClick={() => setResponse(aiSuggestion)}
                 className="px-3 py-1 text-xs bg-[#7C5CFF] text-white rounded-md hover:bg-[#6B4FE0]"
               >
-                Use this response
+                Använd detta svar
               </button>
               <button
                 onClick={handleGenerateAI}
                 disabled={isGenerating}
                 className="px-3 py-1 text-xs border border-[#7C5CFF] text-[#7C5CFF] rounded-md hover:bg-[#7C5CFF]/10"
               >
-                {isGenerating ? 'Regenerating...' : 'Regenerate'}
+                {isGenerating ? 'Genererar om…' : 'Generera om'}
               </button>
             </div>
           </div>
@@ -657,14 +724,14 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Response</h3>
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Svar</h3>
             {!aiSuggestion && (
               <button
                 onClick={handleGenerateAI}
                 disabled={isGenerating}
                 className="px-3 py-1 text-sm bg-gradient-to-r from-[#7C5CFF] to-[#9F7BFF] text-white rounded-md hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(124,92,255,0.4)]"
               >
-                {isGenerating ? 'Generating...' : '✨ Generate AI Response'}
+                {isGenerating ? 'Genererar…' : '✨ Generera AI-svar'}
               </button>
             )}
           </div>
@@ -672,7 +739,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             value={response}
             onChange={(e) => setResponse(e.target.value)}
             className="w-full h-64 p-4 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
-            placeholder="Type your response or generate one with AI..."
+            placeholder="Skriv ditt svar eller generera ett med AI…"
           />
           <div className="mt-2 flex items-center gap-2">
             <label className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer transition-colors">
@@ -758,8 +825,30 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
           </div>
         )}
         {sendConfirmation && (
-          <div className={`mb-3 p-3 rounded-md text-sm font-medium ${sendConfirmation.startsWith('Fel') ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-700' : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border border-green-300 dark:border-green-700'}`}>
-            {sendConfirmation}
+          <div
+            role="status"
+            aria-live="polite"
+            className={`mb-3 p-4 rounded-lg text-sm font-semibold flex items-start gap-3 shadow-md ${
+              sendConfirmation.type === 'error'
+                ? 'bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-2 border-red-400 dark:border-red-700'
+                : 'bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-2 border-green-400 dark:border-green-700'
+            }`}
+          >
+            {sendConfirmation.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-green-600 dark:text-green-400" />
+            ) : (
+              <AlertOctagon className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+            )}
+            <div className="flex-1">
+              <p className="text-sm">{sendConfirmation.message}</p>
+            </div>
+            <button
+              onClick={() => setSendConfirmation(null)}
+              className="flex-shrink-0 p-1 rounded hover:bg-black/5 dark:hover:bg-white/10"
+              aria-label="Stäng bekräftelse"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
         <div className="flex gap-3">
@@ -768,7 +857,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             disabled={!response || isSending}
             className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
-            {isSending ? 'Skickar...' : `Skicka svar${emailAccounts.length > 0 && selectedFromAccount ? ` (${emailAccounts.find(a => a.id === selectedFromAccount)?.email || ''})` : ''}`}
+            {isSending ? 'Skickar…' : `Skicka svar${emailAccounts.length > 0 && selectedFromAccount ? ` (${emailAccounts.find(a => a.id === selectedFromAccount)?.email || ''})` : ''}`}
           </button>
           <button
             onClick={handleClose}
@@ -1335,6 +1424,35 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
           </div>
         </div>
       )}
+      {/* Image Lightbox Modal — replaces window.open which is blocked for data URIs */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxImage(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Bildvisare"
+        >
+          <button
+            onClick={() => setLightboxImage(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+            aria-label="Stäng bildvisare"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img
+            src={lightboxImage.src}
+            alt={lightboxImage.alt}
+            className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          {lightboxImage.alt && (
+            <p className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-black/60 text-white text-xs max-w-[90vw] truncate">
+              {lightboxImage.alt}
+            </p>
+          )}
+        </div>
+      )}
       {popoutTicket && !popoutLoading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setPopoutTicket(null)}>
           <div
@@ -1357,7 +1475,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                       ? 'border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
                       : 'border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
                   }`}>
-                    {popoutTicket.status}
+                    {statusLabelSv(popoutTicket.status)}
                   </span>
                 </div>
               </div>
@@ -1398,13 +1516,19 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">Bifogade bilder</p>
                   <div className="flex flex-wrap gap-3">
                     {popoutTicket.contextData.attachments.map((att: any, idx: number) => (
-                      <img
+                      <button
                         key={idx}
-                        src={att.dataUrl}
-                        alt={att.filename}
-                        className="max-w-[180px] max-h-[180px] rounded-lg border border-slate-200 dark:border-slate-700 object-cover cursor-pointer hover:shadow-lg"
-                        onClick={() => window.open(att.dataUrl, '_blank')}
-                      />
+                        type="button"
+                        onClick={() => setLightboxImage({ src: att.dataUrl, alt: att.filename })}
+                        className="block focus:outline-none focus:ring-2 focus:ring-[#7C5CFF] rounded-lg"
+                        aria-label={`Öppna bild ${att.filename}`}
+                      >
+                        <img
+                          src={att.dataUrl}
+                          alt={att.filename}
+                          className="max-w-[180px] max-h-[180px] rounded-lg border border-slate-200 dark:border-slate-700 object-cover cursor-zoom-in hover:shadow-lg hover:border-[#7C5CFF]/40 transition-all"
+                        />
+                      </button>
                     ))}
                   </div>
                 </div>

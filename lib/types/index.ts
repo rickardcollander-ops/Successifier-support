@@ -19,6 +19,8 @@ export interface Ticket {
   aiConfidence?: number;
   finalResponse?: string;
   contextData?: TicketContext;
+  assignedTo?: string | null;
+  sentBy?: string | null;
   sentAt?: Date;
   createdAt: Date;
   updatedAt: Date;
