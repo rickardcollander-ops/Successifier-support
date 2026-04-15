@@ -129,6 +129,33 @@ export async function POST(
 
         const contextData = await contextAggregator.gatherContext(customerEmail, integrations as any);
 
+        // Detect customer replies so they land in Öppna (in_progress)
+        // instead of Nytt. Also reopens the matching prior ticket if one
+        // exists so the conversation stays visible in Öppna.
+        const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
+        const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
+        if (isReply) {
+          const priorTicket = await prisma.ticket.findFirst({
+            where: {
+              tenantId: tenant.id,
+              customerEmail,
+              status: { notIn: ['duplicate', 'archived'] },
+              subject: {
+                contains: subjectNormalized.substring(0, 50),
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (priorTicket && priorTicket.status !== 'in_progress') {
+            await prisma.ticket.update({
+              where: { id: priorTicket.id },
+              data: { status: 'in_progress' },
+            });
+            console.log(`[Email Sync] Customer reply detected, reopened ticket ${priorTicket.id} to Öppna`);
+          }
+        }
+
         // Create ticket
         const ticket = await prisma.ticket.create({
           data: {
@@ -137,7 +164,7 @@ export async function POST(
             customerName,
             subject,
             originalMessage: body || 'No content',
-            status: 'new',
+            status: isReply ? 'in_progress' : 'new',
             priority: 'normal',
             contextData,
           },

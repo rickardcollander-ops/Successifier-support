@@ -188,32 +188,33 @@ async function syncSingleAccount(account: {
 
       const isDuplicate = !!recentDuplicate;
 
-      // Check if this is a customer reply to a previously sent ticket
-      // If subject starts with Re:/Sv: and there's a sent ticket from same customer, reopen it
+      // Check if this is a customer reply. If the subject starts with
+      // Re:/Sv:/Fwd:/Fw: we treat it as a reply — the new ticket lands in
+      // Öppna (in_progress) instead of Nytt. We also try to find and
+      // reopen any matching prior ticket from the same customer so the
+      // conversation thread stays linked.
       const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
       const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
-      let isCustomerReply = false;
       if (isReply && !isDuplicate) {
-        const sentTicket = await prisma.ticket.findFirst({
+        const priorTicket = await prisma.ticket.findFirst({
           where: {
             tenantId: tenant.id,
             customerEmail,
-            status: 'sent',
+            status: { notIn: ['duplicate', 'archived'] },
             subject: {
               contains: subjectNormalized.substring(0, 50),
             },
           },
-          orderBy: { sentAt: 'desc' },
+          orderBy: { createdAt: 'desc' },
         });
 
-        if (sentTicket) {
+        if (priorTicket && priorTicket.status !== 'in_progress') {
           // Reopen the original ticket by setting it to in_progress (Öppna)
           await prisma.ticket.update({
-            where: { id: sentTicket.id },
+            where: { id: priorTicket.id },
             data: { status: 'in_progress' },
           });
-          isCustomerReply = true;
-          console.log(`[Email Sync] Customer reply detected, reopened ticket ${sentTicket.id} to Öppna`);
+          console.log(`[Email Sync] Customer reply detected, reopened ticket ${priorTicket.id} to Öppna`);
         }
       }
 
@@ -229,7 +230,7 @@ async function syncSingleAccount(account: {
           customerName,
           subject,
           originalMessage: `[Gmail ID: ${message.id}]\n[Inbox account: ${account.email}]\n\n${body || 'No content'}`,
-          status: isDuplicate ? 'duplicate' : isCustomerReply ? 'in_progress' : 'new',
+          status: isDuplicate ? 'duplicate' : isReply ? 'in_progress' : 'new',
           priority: 'normal',
           contextData,
         },
