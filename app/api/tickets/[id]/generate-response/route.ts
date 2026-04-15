@@ -47,13 +47,14 @@ export async function POST(
 
     step = 'openai-generate';
     // Use the unified AI generator which includes KB, learning examples, and previous tickets
-    const { response: aiResponse, confidence } = await generateAIResponse(
+    const { response: aiResponse, confidence, knowledgeUsed } = await generateAIResponse(
       ticket.subject,
       ticket.originalMessage,
       context,
       ticket.tenantId,
       ticket.id,
-      ticket.customerEmail
+      ticket.customerEmail,
+      ticket.customerName ?? undefined
     );
 
     step = 'save-to-db';
