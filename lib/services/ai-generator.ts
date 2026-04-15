@@ -97,8 +97,8 @@ async function findRelevantKnowledge(
       .sort((a: { kb: KnowledgeBase; score: number }, b: { kb: KnowledgeBase; score: number }) => b.score - a.score);
 
     const candidates: { kb: KnowledgeBase; score: number }[] = knowledgeBase.length <= 8
-      ? scored
-      : scored.filter(({ score }: { kb: KnowledgeBase; score: number }) => score > 0).slice(0, 12);
+      ? scored.filter(({ score }: { kb: KnowledgeBase; score: number }) => score > 2)
+      : scored.filter(({ score }: { kb: KnowledgeBase; score: number }) => score > 2).slice(0, 12);
 
     if (candidates.length === 0) return { formatted: '', citedIds: [] };
 
@@ -195,18 +195,17 @@ async function findLearningExamples(tenantId: string, subject: string, message: 
 
     if (searchTerms.length === 0) return '';
 
-    // Collect approved examples: explicitly rated positive OR actually sent/closed
+    // Only use explicitly positive-rated feedback as learning examples.
+    // Legacy / unrated rows are excluded — they may contain stale data that
+    // should not influence current responses.
     const feedback = await prisma.aIResponseFeedback.findMany({
       where: {
         tenantId,
+        rating: 'positive',
         finalResponse: { not: null },
-        OR: [
-          { rating: 'positive' },
-          { rating: null, wasEdited: false }, // sent without edits = AI was good
-        ],
       },
       orderBy: { createdAt: 'desc' },
-      take: 30,
+      take: 20,
       select: {
         subject: true,
         originalMessage: true,
