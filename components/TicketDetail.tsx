@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Mail, ChevronDown, Search, X, Loader2, Trash2, AlertOctagon, UserCircle2, CheckCircle2 } from 'lucide-react';
 import type { Ticket } from '@/lib/types';
 import { AGENTS, statusLabelSv } from '@/lib/constants';
@@ -182,14 +182,18 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     fetchIntegrations();
   }, []);
 
-  // Reset state when ticket changes
+  // Reset editor state when ticket data changes (e.g. after send updates finalResponse)
   useEffect(() => {
     setResponse(ticket.finalResponse || ticket.aiResponse || '');
     setAiSuggestion(ticket.aiResponse || null);
     setRecipientEmail(ticket.customerEmail);
-    setSendConfirmation(null);
     setInlineImages([]);
   }, [ticket.id, ticket.aiResponse, ticket.finalResponse, ticket.aiConfidence, ticket.customerEmail]);
+
+  // Only clear the send confirmation when switching to a different ticket
+  useEffect(() => {
+    setSendConfirmation(null);
+  }, [ticket.id]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -261,8 +265,11 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     }
   };
 
+  const isSendingRef = useRef(false);
+
   const handleSend = async () => {
-    if (!response) return;
+    if (!response || isSendingRef.current) return;
+    isSendingRef.current = true;
     setIsSending(true);
     setSendConfirmation(null);
 
@@ -296,6 +303,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     }
 
     const success = await onSend(ticket.id, finalResponseContent, selectedFromAccount || undefined, recipientEmail);
+    isSendingRef.current = false;
     setIsSending(false);
 
     if (success) {
