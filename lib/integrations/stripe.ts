@@ -9,12 +9,28 @@ export class StripeService {
     });
   }
 
+  // Retry a Stripe call with exponential backoff. The first request during
+  // a cold start frequently times out or returns nothing, which is why the
+  // Stripe card used to show up only after a second AI regeneration.
+  private async withRetry<T>(label: string, fn: () => Promise<T>, attempts = 3): Promise<T> {
+    let lastError: unknown;
+    for (let i = 0; i < attempts; i += 1) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error;
+        if (i === attempts - 1) break;
+        await new Promise((r) => setTimeout(r, 250 * 2 ** i));
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(`Stripe ${label} failed`);
+  }
+
   async getCustomerByEmail(email: string) {
     try {
-      const customers = await this.stripe.customers.list({
-        email,
-        limit: 1,
-      });
+      const customers = await this.withRetry('customers.list', () =>
+        this.stripe.customers.list({ email, limit: 1 })
+      );
       return customers.data[0] || null;
     } catch (error) {
       console.error('Error fetching Stripe customer:', error);
@@ -28,9 +44,15 @@ export class StripeService {
       if (!customer) return null;
 
       const [subscriptions, invoices, charges] = await Promise.all([
-        this.stripe.subscriptions.list({ customer: customer.id, limit: 10 }),
-        this.stripe.invoices.list({ customer: customer.id, limit: 10 }),
-        this.stripe.charges.list({ customer: customer.id, limit: 10 }),
+        this.withRetry('subscriptions.list', () =>
+          this.stripe.subscriptions.list({ customer: customer.id, limit: 10 })
+        ),
+        this.withRetry('invoices.list', () =>
+          this.stripe.invoices.list({ customer: customer.id, limit: 10 })
+        ),
+        this.withRetry('charges.list', () =>
+          this.stripe.charges.list({ customer: customer.id, limit: 10 })
+        ),
       ]);
 
       const subscriptionsList = subscriptions.data.map(sub => ({

@@ -58,13 +58,17 @@ export async function POST(
     );
 
     step = 'save-to-db';
+    // Only move to "review" on first AI generation (when ticket is still
+    // new). Regenerating on an already-worked ticket must preserve the
+    // current status so tickets don't jump back to Granskning.
+    const shouldMoveToReview = ticket.status === 'new';
     const updatedTicket = await prisma.ticket.update({
       where: { id },
       data: {
         aiResponse,
         aiConfidence: confidence,
         contextData: context,
-        status: 'review',
+        ...(shouldMoveToReview ? { status: 'review' } : {}),
       },
     });
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { GmailService } from '@/lib/integrations/gmail';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
+import { mergeIfDuplicate } from '@/lib/services/deduplicator';
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,20 +46,36 @@ export async function POST(request: NextRequest) {
     const contextAggregator = new ContextAggregator();
 
     for (const email of emails) {
-      // Check if ticket already exists for this email
+      // Merge into a recent ticket from same sender+subject if within the
+      // dedup window; handles burst duplicates within minutes.
+      const merge = await mergeIfDuplicate({
+        tenantId,
+        customerEmail: email.from,
+        subject: email.subject,
+        body: email.body,
+        gmailMessageId: email.id,
+      });
+      if (merge.merged) {
+        await gmailService.markAsRead(email.id);
+        continue;
+      }
+
+      // Beyond the dedup window, still skip near-duplicates from the same
+      // day to avoid flooding support with the same thread. Older repeats
+      // are treated as a fresh conversation.
       const existingTicket = await prisma.ticket.findFirst({
         where: {
           tenantId,
           customerEmail: email.from,
           subject: email.subject,
           createdAt: {
-            gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+            gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
           },
         },
       });
 
       if (existingTicket) {
-        continue; // Skip if ticket already exists
+        continue;
       }
 
       // Gather context for this customer

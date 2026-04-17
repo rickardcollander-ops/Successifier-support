@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Mail, ChevronDown, Search, X, Loader2, Trash2, AlertOctagon, UserCircle2, CheckCircle2 } from 'lucide-react';
 import type { Ticket } from '@/lib/types';
-import { AGENTS, statusLabelSv } from '@/lib/constants';
+import { AGENTS, statusLabelSv, agentColor } from '@/lib/constants';
 
 interface ReplyFromAccount {
   id: string;
@@ -61,7 +61,7 @@ interface TicketDetailProps {
   onSend: (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string) => Promise<boolean>;
   onDelete?: (ticketId: string) => void;
   onSpam?: (ticketId: string) => void;
-  onSelectTicket?: (ticket: Ticket) => void;
+  onSelectTicket?: (ticket: Ticket | null) => void;
 }
 
 function sortInvoicesDesc(invoices: any[]): any[] {
@@ -329,6 +329,11 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
 
   const handleStatusChange = (status: string) => {
     onUpdate(ticket.id, { status: status as any });
+    // Closing a ticket from the detail view should also remove it from our
+    // active view so support isn't left staring at a solved ticket.
+    if (status === 'closed') {
+      onSelectTicket?.(null);
+    }
   };
 
   const handleDelete = () => {
@@ -347,6 +352,10 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     if (confirm('Stäng detta ärende? Du kan hitta det senare under fliken "Stängda".')) {
       handleStatusChange('closed');
     }
+  };
+
+  const handleMarkResolved = () => {
+    handleStatusChange('closed');
   };
 
   return (
@@ -388,17 +397,31 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5">
               <UserCircle2 className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-              <select
-                value={ticket.assignedTo || ''}
-                onChange={(e) => handleAssign(e.target.value)}
-                className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
-                title="Tilldela ärende"
-              >
-                <option value="">Tilldela…</option>
-                {AGENTS.map((agent) => (
-                  <option key={agent} value={agent}>{agent}</option>
-                ))}
-              </select>
+              {(() => {
+                const color = ticket.assignedTo ? agentColor(ticket.assignedTo) : null;
+                return (
+                  <select
+                    value={ticket.assignedTo || ''}
+                    onChange={(e) => handleAssign(e.target.value)}
+                    className="px-3 py-1 text-sm rounded-md font-semibold"
+                    style={
+                      color
+                        ? {
+                            backgroundColor: color.bg,
+                            color: color.text,
+                            border: `1px solid ${color.border}`,
+                          }
+                        : undefined
+                    }
+                    title="Tilldela ärende"
+                  >
+                    <option value="">Tilldela…</option>
+                    {AGENTS.map((agent) => (
+                      <option key={agent} value={agent}>{agent}</option>
+                    ))}
+                  </select>
+                );
+              })()}
             </div>
             <select
               value={ticket.status}
@@ -411,6 +434,16 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               <option value="sent">{statusLabelSv('sent')}</option>
               <option value="closed">{statusLabelSv('closed')}</option>
             </select>
+            {ticket.status !== 'closed' && (
+              <button
+                onClick={handleMarkResolved}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors inline-flex items-center gap-1.5"
+                title="Markera som löst och stäng"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Löst
+              </button>
+            )}
             {onSpam && (
               <button
                 onClick={handleSpam}

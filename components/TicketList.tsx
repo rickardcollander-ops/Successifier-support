@@ -1,5 +1,5 @@
 import type { Ticket } from '@/lib/types';
-import { statusLabelSv } from '@/lib/constants';
+import { statusLabelSv, agentColor } from '@/lib/constants';
 
 type PresenceViewer = { name: string; email: string; initials: string };
 type PresenceMap = Record<string, PresenceViewer[]>;
@@ -74,15 +74,19 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
                 </h3>
                 {presence[ticket.id] && presence[ticket.id].length > 0 && (
                   <div className="flex -space-x-1 flex-shrink-0">
-                    {presence[ticket.id].map((viewer, idx) => (
-                      <div
-                        key={idx}
-                        title={`${viewer.name} (${viewer.email})`}
-                        className="w-6 h-6 rounded-full bg-[#7C5CFF] text-white text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-800"
-                      >
-                        {viewer.initials}
-                      </div>
-                    ))}
+                    {presence[ticket.id].map((viewer, idx) => {
+                      const color = agentColor(viewer.name || viewer.email);
+                      return (
+                        <div
+                          key={idx}
+                          title={`${viewer.name} (${viewer.email})`}
+                          style={{ backgroundColor: color.bg, color: color.text }}
+                          className="w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-800"
+                        >
+                          {viewer.initials}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -108,11 +112,21 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
                 <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(ticket.status)}`}>
                   {statusLabelSv(ticket.status)}
                 </span>
-                {ticket.assignedTo && (
-                  <span className="text-xs px-2 py-1 rounded-full border border-[#7C5CFF]/40 text-[#7C5CFF] dark:text-[#B8A6FF]">
-                    {ticket.assignedTo}
-                  </span>
-                )}
+                {ticket.assignedTo && (() => {
+                  const color = agentColor(ticket.assignedTo);
+                  return (
+                    <span
+                      className="text-xs px-2 py-1 rounded-full font-semibold"
+                      style={{
+                        backgroundColor: color.bg,
+                        color: color.text,
+                        border: `1px solid ${color.border}`,
+                      }}
+                    >
+                      {ticket.assignedTo}
+                    </span>
+                  );
+                })()}
                 <span className="text-xs text-slate-500 dark:text-slate-400">
                   {new Date(ticket.createdAt).toLocaleDateString('sv-SE')}
                 </span>

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/client';
 import { google } from 'googleapis';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
+import { mergeIfDuplicate } from '@/lib/services/deduplicator';
 
 async function syncSingleAccount(account: {
   id: string;
@@ -172,21 +173,29 @@ async function syncSingleAccount(account: {
         continue;
       }
 
-      const contextData = await contextAggregator.gatherContext(customerEmail, integrations as any);
-
-      // Check for duplicate: same sender within 60 seconds
-      const sixtySecondsAgo = new Date(Date.now() - 60000);
-      const recentDuplicate = await prisma.ticket.findFirst({
-        where: {
-          tenantId: tenant.id,
-          customerEmail,
-          createdAt: { gte: sixtySecondsAgo },
-          status: { not: 'duplicate' },
-        },
-        orderBy: { createdAt: 'desc' },
+      // Try to merge this email into a recent ticket from the same sender
+      // with the same subject (within the dedup window). If merged, skip
+      // creating a new ticket entirely.
+      const merge = await mergeIfDuplicate({
+        tenantId: tenant.id,
+        customerEmail,
+        subject,
+        body: `[Inbox account: ${account.email}]\n\n${body || 'No content'}`,
+        gmailMessageId: message.id,
       });
 
-      const isDuplicate = !!recentDuplicate;
+      if (merge.merged) {
+        console.log(`[Email Sync] Merged message ${message.id} into ticket ${merge.mergedIntoTicketId}`);
+        // Still mark as read so Gmail stops surfacing it.
+        await gmail.users.messages.modify({
+          userId: 'me',
+          id: message.id!,
+          requestBody: { removeLabelIds: ['UNREAD'] },
+        });
+        continue;
+      }
+
+      const contextData = await contextAggregator.gatherContext(customerEmail, integrations as any);
 
       // Check if this is a customer reply. If the subject starts with
       // Re:/Sv:/Fwd:/Fw: we treat it as a reply — the new ticket lands in
@@ -195,7 +204,7 @@ async function syncSingleAccount(account: {
       // conversation thread stays linked.
       const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
       const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
-      if (isReply && !isDuplicate) {
+      if (isReply) {
         const priorTicket = await prisma.ticket.findFirst({
           where: {
             tenantId: tenant.id,
@@ -230,15 +239,11 @@ async function syncSingleAccount(account: {
           customerName,
           subject,
           originalMessage: `[Gmail ID: ${message.id}]\n[Inbox account: ${account.email}]\n\n${body || 'No content'}`,
-          status: isDuplicate ? 'duplicate' : isReply ? 'in_progress' : 'new',
+          status: isReply ? 'in_progress' : 'new',
           priority: 'normal',
           contextData,
         },
       });
-
-      if (isDuplicate) {
-        console.log(`[Email Sync] Duplicate detected for ${customerEmail} (within 60s of ticket ${recentDuplicate.id}), marking as duplicate`);
-      }
 
       newTickets += 1;
 

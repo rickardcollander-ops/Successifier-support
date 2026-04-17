@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { generateAIResponse } from '@/lib/services/ai-generator';
+import { mergeIfDuplicate } from '@/lib/services/deduplicator';
 
 const ZENDESK_IMPORT_MARKER = '[Zendesk Import Source:';
 
@@ -77,6 +78,17 @@ export async function POST(request: NextRequest) {
         { error: 'Tenant not found' },
         { status: 404 }
       );
+    }
+
+    const merge = await mergeIfDuplicate({
+      tenantId: tenant.id,
+      customerEmail,
+      subject,
+      body: originalMessage,
+    });
+    if (merge.merged) {
+      const merged = await prisma.ticket.findUnique({ where: { id: merge.mergedIntoTicketId! } });
+      return NextResponse.json(merged);
     }
 
     const ticket = await prisma.ticket.create({
