@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/client';
 import { google } from 'googleapis';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
+import { mergeIfDuplicate } from '@/lib/services/deduplicator';
 
 export async function POST(
   request: NextRequest,
@@ -127,6 +128,35 @@ export async function POST(
           }
         }
 
+        // Skip if this exact Gmail message is already a ticket.
+        const existingTicket = await prisma.ticket.findFirst({
+          where: {
+            tenantId: tenant.id,
+            originalMessage: { contains: `[Gmail ID: ${message.id}]` },
+          },
+        });
+        if (existingTicket) {
+          continue;
+        }
+
+        // Merge into a recent ticket from same sender+subject if within
+        // the dedup window.
+        const merge = await mergeIfDuplicate({
+          tenantId: tenant.id,
+          customerEmail,
+          subject,
+          body: body || 'No content',
+          gmailMessageId: message.id,
+        });
+        if (merge.merged) {
+          await gmail.users.messages.modify({
+            userId: 'me',
+            id: message.id!,
+            requestBody: { removeLabelIds: ['UNREAD'] },
+          });
+          continue;
+        }
+
         const contextData = await contextAggregator.gatherContext(customerEmail, integrations as any);
 
         // Detect customer replies so they land in Öppna (in_progress)
@@ -163,7 +193,7 @@ export async function POST(
             customerEmail,
             customerName,
             subject,
-            originalMessage: body || 'No content',
+            originalMessage: `[Gmail ID: ${message.id}]\n\n${body || 'No content'}`,
             status: isReply ? 'in_progress' : 'new',
             priority: 'normal',
             contextData,

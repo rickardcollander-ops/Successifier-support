@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import TicketList from '@/components/TicketList';
 import TicketDetail from '@/components/TicketDetail';
 import type { Ticket } from '@/lib/types';
@@ -85,8 +85,16 @@ export default function TicketsPage() {
     } catch {}
   };
 
+  // Track the currently-selected ticket in a ref so the heartbeat interval
+  // (which is set up once on mount) always reads the latest value instead
+  // of a stale closure capture. Without this, presence stops updating after
+  // the ticket the user opened first is replaced — which caused Ida to
+  // disappear from Malin's view and vice versa.
+  const selectedTicketIdRef = useRef<string | null>(null);
+
   // Report presence when selected ticket changes
   useEffect(() => {
+    selectedTicketIdRef.current = selectedTicket?.id || null;
     reportPresence(selectedTicket?.id || null);
   }, [selectedTicket?.id]);
 
@@ -106,11 +114,11 @@ export default function TicketsPage() {
       triggerEmailSync();
     }, 60000);
 
-    // Presence heartbeat every 5 seconds
+    // Presence heartbeat — read from the ref so we always report the
+    // currently-selected ticket, not the one selected at mount time.
     const presenceInterval = setInterval(() => {
-      if (selectedTicket) {
-        reportPresence(selectedTicket.id);
-      }
+      const id = selectedTicketIdRef.current;
+      if (id) reportPresence(id);
     }, 5000);
 
     return () => {

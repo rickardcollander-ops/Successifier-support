@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
+import { mergeIfDuplicate } from '@/lib/services/deduplicator';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +16,22 @@ export async function POST(request: NextRequest) {
     }
 
     const tenantId = 'doldadress';
+
+    // Merge into a recent ticket from same sender+subject if within the
+    // dedup window; prevents duplicate tickets from burst submissions.
+    const merge = await mergeIfDuplicate({
+      tenantId,
+      customerEmail: email,
+      subject,
+      body: message,
+    });
+    if (merge.merged) {
+      return NextResponse.json({
+        success: true,
+        ticketId: merge.mergedIntoTicketId,
+        merged: true,
+      });
+    }
 
     const integrations = await prisma.integration.findMany({
       where: {
