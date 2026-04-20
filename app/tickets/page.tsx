@@ -33,6 +33,30 @@ export default function TicketsPage() {
     syncedAccounts: 0,
     error: null,
   });
+  const [dedupeRunning, setDedupeRunning] = useState(false);
+  const [dedupeResult, setDedupeResult] = useState<string | null>(null);
+
+  const runDedupeExisting = async () => {
+    if (dedupeRunning) return;
+    if (!confirm('Scanna igenom alla ärenden och flytta dubletter (samma avsändare + ämne inom 5 min) till fliken Dubletter?')) return;
+    setDedupeRunning(true);
+    setDedupeResult(null);
+    try {
+      const res = await fetch('/api/admin/dedupe-existing', { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setDedupeResult(`Fel: ${err.error || res.status}`);
+        return;
+      }
+      const data = await res.json();
+      setDedupeResult(`Flyttade ${data.markedAsDuplicate} ärenden i ${data.groups} grupper till Dubletter.`);
+      await fetchTickets();
+    } catch (error) {
+      setDedupeResult('Nätverksfel vid rensning');
+    } finally {
+      setDedupeRunning(false);
+    }
+  };
 
   const triggerEmailSync = async () => {
     try {
@@ -482,21 +506,34 @@ export default function TicketsPage() {
             </button>
           ))}
           </div>
-          {/* Email Sync Status - Moved to top right */}
-          <div className={`text-xs px-3 py-1.5 rounded-md border whitespace-nowrap ${
-            emailSyncStatus.error
-              ? 'bg-white border-red-200 text-red-700 dark:bg-slate-800 dark:border-red-800 dark:text-red-300'
-              : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
-          }`}>
-            {emailSyncStatus.error ? (
-              <span>{emailSyncStatus.error}</span>
-            ) : (
-              <span>
-                Synk: {emailSyncStatus.lastSyncAt ? emailSyncStatus.lastSyncAt.toLocaleTimeString('sv-SE') : 'inte körd'}
-                {' '}• {emailSyncStatus.totalNewTickets} nya
-                {' '}• {emailSyncStatus.syncedAccounts} konton
-              </span>
+          {/* Dedupe button + Email Sync Status */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={runDedupeExisting}
+              disabled={dedupeRunning}
+              className="text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 whitespace-nowrap"
+              title="Scanna befintliga ärenden och flytta dubletter till fliken Dubletter"
+            >
+              {dedupeRunning ? 'Rensar…' : 'Rensa dubletter'}
+            </button>
+            {dedupeResult && (
+              <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{dedupeResult}</span>
             )}
+            <div className={`text-xs px-3 py-1.5 rounded-md border whitespace-nowrap ${
+              emailSyncStatus.error
+                ? 'bg-white border-red-200 text-red-700 dark:bg-slate-800 dark:border-red-800 dark:text-red-300'
+                : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
+            }`}>
+              {emailSyncStatus.error ? (
+                <span>{emailSyncStatus.error}</span>
+              ) : (
+                <span>
+                  Synk: {emailSyncStatus.lastSyncAt ? emailSyncStatus.lastSyncAt.toLocaleTimeString('sv-SE') : 'inte körd'}
+                  {' '}• {emailSyncStatus.totalNewTickets} nya
+                  {' '}• {emailSyncStatus.syncedAccounts} konton
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
