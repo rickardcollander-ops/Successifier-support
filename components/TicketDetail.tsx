@@ -227,6 +227,27 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
 
     fetchCustomerHistory();
 
+    // Refresh customer integrations (Stripe/Billecta/Resend/Retool) when
+    // a ticket is opened so support sees current state without having to
+    // regenerate the AI reply first. Runs in the background — if it
+    // fails we just keep whatever contextData we already had.
+    const refreshContext = async () => {
+      try {
+        const res = await fetch(`/api/tickets/${ticket.id}/refresh-context`, {
+          method: 'POST',
+        });
+        if (!res.ok || isCancelled) return;
+        const updated = await res.json();
+        if (!isCancelled) {
+          onUpdate(ticket.id, { contextData: updated.contextData } as any);
+        }
+      } catch (error) {
+        console.error('Error refreshing ticket context:', error);
+      }
+    };
+
+    refreshContext();
+
     return () => {
       isCancelled = true;
     };

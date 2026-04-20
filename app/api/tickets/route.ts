@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { generateAIResponse } from '@/lib/services/ai-generator';
-import { mergeIfDuplicate } from '@/lib/services/deduplicator';
+import { upsertTicket } from '@/lib/services/deduplicator';
 
 const ZENDESK_IMPORT_MARKER = '[Zendesk Import Source:';
 
@@ -80,44 +80,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const merge = await mergeIfDuplicate({
+    const { ticket, created } = await upsertTicket({
       tenantId: tenant.id,
       customerEmail,
+      customerName,
       subject,
-      body: originalMessage,
-    });
-    if (merge.merged) {
-      const merged = await prisma.ticket.findUnique({ where: { id: merge.mergedIntoTicketId! } });
-      return NextResponse.json(merged);
-    }
-
-    const ticket = await prisma.ticket.create({
-      data: {
-        tenantId: tenant.id,
-        customerEmail,
-        customerName,
-        subject,
-        originalMessage,
-        priority: priority || 'normal',
-        status: 'new',
-      },
+      originalMessage,
+      priority: priority || 'normal',
+      status: 'new',
     });
 
-    // Generate AI response immediately in background
-    generateAIResponse(subject, originalMessage, null, tenant.id, ticket.id, customerEmail, customerName || undefined)
-      .then(async ({ response, confidence }) => {
-        await prisma.ticket.update({
-          where: { id: ticket.id },
-          data: {
-            aiResponse: response,
-            aiConfidence: confidence,
-          },
+    if (created) {
+      generateAIResponse(subject, originalMessage, null, tenant.id, ticket.id, customerEmail, customerName || undefined)
+        .then(async ({ response, confidence }) => {
+          await prisma.ticket.update({
+            where: { id: ticket.id },
+            data: {
+              aiResponse: response,
+              aiConfidence: confidence,
+            },
+          });
+          console.log(`AI response generated for ticket ${ticket.id} with ${Math.round(confidence * 100)}% confidence`);
+        })
+        .catch((error) => {
+          console.error(`Failed to generate AI response for ticket ${ticket.id}:`, error);
         });
-        console.log(`AI response generated for ticket ${ticket.id} with ${Math.round(confidence * 100)}% confidence`);
-      })
-      .catch((error) => {
-        console.error(`Failed to generate AI response for ticket ${ticket.id}:`, error);
-      });
+    }
 
     return NextResponse.json(ticket);
   } catch (error) {

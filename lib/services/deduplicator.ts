@@ -1,69 +1,108 @@
 import { prisma } from '@/lib/db/client';
+import type { Prisma } from '@prisma/client';
 
-// Window used to detect duplicates. Two messages from the same sender within
-// this span are treated as the same conversation. Extended from 60s to 5 min
-// after support saw bursts of duplicates landing just outside the old window.
+// Window used to detect duplicates. Two messages from the same sender with
+// the same normalized subject within this span are treated as the same
+// conversation and merged into the same ticket.
 export const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
 
 function normalizeSubject(subject: string): string {
   return subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim().toLowerCase();
 }
 
-interface MergeArgs {
+export interface UpsertTicketInput {
   tenantId: string;
   customerEmail: string;
+  customerName?: string | null;
   subject: string;
-  body: string;
+  originalMessage: string;
+  status?: string;
+  priority?: string;
+  contextData?: any;
   gmailMessageId?: string | null;
 }
 
-interface MergeResult {
-  merged: boolean;
-  mergedIntoTicketId?: string;
+export interface UpsertTicketResult {
+  ticket: any;
+  created: boolean;
 }
 
-// Look for a recent ticket from the same sender with the same (normalized)
-// subject. If found, append this message to it and return merged=true so the
-// caller skips creating a new ticket. Archived/duplicate tickets are
-// excluded — we don't want to resurrect them.
-export async function mergeIfDuplicate(args: MergeArgs): Promise<MergeResult> {
-  const { tenantId, customerEmail, subject, body, gmailMessageId } = args;
+// Atomically create a ticket or merge into an existing one. A Postgres
+// advisory lock keyed on (tenantId, customerEmail, normalizedSubject)
+// serializes concurrent attempts so two parallel email syncs cannot both
+// insert a fresh ticket for the same inbound message — which is what
+// previously let bursts of duplicates through even inside the merge window.
+export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTicketResult> {
+  const normalized = normalizeSubject(input.subject);
+  const lockKey = `ticket-dedup:${input.tenantId}:${input.customerEmail.toLowerCase()}:${normalized}`;
   const since = new Date(Date.now() - DUPLICATE_WINDOW_MS);
-  const normalized = normalizeSubject(subject);
 
-  const candidates = await prisma.ticket.findMany({
-    where: {
-      tenantId,
-      customerEmail,
-      createdAt: { gte: since },
-      status: { notIn: ['archived', 'duplicate'] },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
+  return await prisma.$transaction(async (tx) => {
+    // Serialize all concurrent inserts with the same sender+subject for
+    // this tenant. The lock is automatically released at the end of the
+    // transaction regardless of outcome.
+    await tx.$executeRawUnsafe(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      lockKey
+    );
+
+    const candidates = await tx.ticket.findMany({
+      where: {
+        tenantId: input.tenantId,
+        customerEmail: input.customerEmail,
+        createdAt: { gte: since },
+        status: { notIn: ['archived', 'duplicate'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+
+    const match = candidates.find(
+      (c) => normalizeSubject(c.subject) === normalized
+    );
+
+    if (match) {
+      // Guard against re-appending the exact same Gmail message (possible
+      // when the Gmail "mark as read" call didn't complete before the next
+      // sync picked up the same message).
+      if (
+        input.gmailMessageId &&
+        match.originalMessage.includes(`[Gmail ID: ${input.gmailMessageId}]`)
+      ) {
+        return { ticket: match, created: false };
+      }
+
+      const separator = `\n\n---\n[Följdmail ${new Date().toLocaleString('sv-SE')}]\n`;
+      const appendedBody = input.gmailMessageId
+        ? `[Gmail ID: ${input.gmailMessageId}]\n${input.originalMessage}`
+        : input.originalMessage;
+
+      const updated = await tx.ticket.update({
+        where: { id: match.id },
+        data: {
+          originalMessage: `${match.originalMessage}${separator}${appendedBody}`,
+          // Bring the ticket back to Öppna when a follow-up lands while it
+          // was sitting in Nytt with no agent action — but don't override
+          // an already-worked status (review, sent, closed).
+          ...(match.status === 'new' ? {} : {}),
+        },
+      });
+      return { ticket: updated, created: false };
+    }
+
+    const created = await tx.ticket.create({
+      data: {
+        tenantId: input.tenantId,
+        customerEmail: input.customerEmail,
+        customerName: input.customerName ?? null,
+        subject: input.subject,
+        originalMessage: input.originalMessage,
+        status: input.status ?? 'new',
+        priority: input.priority ?? 'normal',
+        contextData: (input.contextData ?? undefined) as Prisma.InputJsonValue | undefined,
+      },
+    });
+
+    return { ticket: created, created: true };
   });
-
-  const match = candidates.find((c) => normalizeSubject(c.subject) === normalized);
-  if (!match) {
-    return { merged: false };
-  }
-
-  // Guard against re-appending the same Gmail message (can happen when the
-  // sync runs twice before the message is marked read).
-  if (gmailMessageId && match.originalMessage.includes(`[Gmail ID: ${gmailMessageId}]`)) {
-    return { merged: true, mergedIntoTicketId: match.id };
-  }
-
-  const separator = `\n\n---\n[Följdmail ${new Date().toLocaleString('sv-SE')}]\n`;
-  const appendedBody = gmailMessageId ? `[Gmail ID: ${gmailMessageId}]\n${body}` : body;
-
-  await prisma.ticket.update({
-    where: { id: match.id },
-    data: {
-      originalMessage: `${match.originalMessage}${separator}${appendedBody}`,
-      status: match.status === 'new' ? 'new' : 'in_progress',
-      updatedAt: new Date(),
-    },
-  });
-
-  return { merged: true, mergedIntoTicketId: match.id };
 }

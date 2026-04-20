@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
-import { mergeIfDuplicate } from '@/lib/services/deduplicator';
+import { upsertTicket } from '@/lib/services/deduplicator';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,22 +17,6 @@ export async function POST(request: NextRequest) {
 
     const tenantId = 'doldadress';
 
-    // Merge into a recent ticket from same sender+subject if within the
-    // dedup window; prevents duplicate tickets from burst submissions.
-    const merge = await mergeIfDuplicate({
-      tenantId,
-      customerEmail: email,
-      subject,
-      body: message,
-    });
-    if (merge.merged) {
-      return NextResponse.json({
-        success: true,
-        ticketId: merge.mergedIntoTicketId,
-        merged: true,
-      });
-    }
-
     const integrations = await prisma.integration.findMany({
       where: {
         tenantId,
@@ -43,7 +27,6 @@ export async function POST(request: NextRequest) {
     const contextAggregator = new ContextAggregator();
     const context = await contextAggregator.gatherContext(email, integrations as any);
 
-    // Detect replies so they land in Öppna (in_progress) instead of Nytt.
     const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
     const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
     if (isReply) {
@@ -66,22 +49,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const ticket = await prisma.ticket.create({
-      data: {
-        tenantId,
-        customerEmail: email,
-        customerName: name,
-        subject,
-        originalMessage: message,
-        priority: priority || 'normal',
-        status: isReply ? 'in_progress' : 'new',
-        contextData: context,
-      },
+    const { ticket, created } = await upsertTicket({
+      tenantId,
+      customerEmail: email,
+      customerName: name,
+      subject,
+      originalMessage: message,
+      priority: priority || 'normal',
+      status: isReply ? 'in_progress' : 'new',
+      contextData: context,
     });
 
     return NextResponse.json({
       success: true,
       ticketId: ticket.id,
+      merged: !created,
     });
   } catch (error) {
     console.error('Error creating ticket from webhook:', error);

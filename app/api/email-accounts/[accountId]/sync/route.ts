@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/client';
 import { google } from 'googleapis';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
-import { mergeIfDuplicate } from '@/lib/services/deduplicator';
+import { upsertTicket } from '@/lib/services/deduplicator';
 
 export async function POST(
   request: NextRequest,
@@ -128,7 +128,8 @@ export async function POST(
           }
         }
 
-        // Skip if this exact Gmail message is already a ticket.
+        // Skip if this exact Gmail message is already a ticket (pre-check
+        // before fetching context; upsertTicket also handles this race).
         const existingTicket = await prisma.ticket.findFirst({
           where: {
             tenantId: tenant.id,
@@ -139,29 +140,8 @@ export async function POST(
           continue;
         }
 
-        // Merge into a recent ticket from same sender+subject if within
-        // the dedup window.
-        const merge = await mergeIfDuplicate({
-          tenantId: tenant.id,
-          customerEmail,
-          subject,
-          body: body || 'No content',
-          gmailMessageId: message.id,
-        });
-        if (merge.merged) {
-          await gmail.users.messages.modify({
-            userId: 'me',
-            id: message.id!,
-            requestBody: { removeLabelIds: ['UNREAD'] },
-          });
-          continue;
-        }
-
         const contextData = await contextAggregator.gatherContext(customerEmail, integrations as any);
 
-        // Detect customer replies so they land in Öppna (in_progress)
-        // instead of Nytt. Also reopens the matching prior ticket if one
-        // exists so the conversation stays visible in Öppna.
         const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
         const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
         if (isReply) {
@@ -186,36 +166,34 @@ export async function POST(
           }
         }
 
-        // Create ticket
-        const ticket = await prisma.ticket.create({
-          data: {
-            tenantId: tenant.id,
-            customerEmail,
-            customerName,
-            subject,
-            originalMessage: `[Gmail ID: ${message.id}]\n\n${body || 'No content'}`,
-            status: isReply ? 'in_progress' : 'new',
-            priority: 'normal',
-            contextData,
-          },
+        const { ticket, created } = await upsertTicket({
+          tenantId: tenant.id,
+          customerEmail,
+          customerName,
+          subject,
+          originalMessage: `[Gmail ID: ${message.id}]\n\n${body || 'No content'}`,
+          status: isReply ? 'in_progress' : 'new',
+          priority: 'normal',
+          contextData,
+          gmailMessageId: message.id,
         });
 
-        newTickets++;
+        if (created) {
+          newTickets++;
 
-        // Generate AI response in background
-        generateAIResponse(subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined)
-          .then(async ({ response, confidence }) => {
-            await prisma.ticket.update({
-              where: { id: ticket.id },
-              data: {
-                aiResponse: response,
-                aiConfidence: confidence,
-              },
-            });
-          })
-          .catch(console.error);
+          generateAIResponse(subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined)
+            .then(async ({ response, confidence }) => {
+              await prisma.ticket.update({
+                where: { id: ticket.id },
+                data: {
+                  aiResponse: response,
+                  aiConfidence: confidence,
+                },
+              });
+            })
+            .catch(console.error);
+        }
 
-        // Mark as read
         await gmail.users.messages.modify({
           userId: 'me',
           id: message.id!,
