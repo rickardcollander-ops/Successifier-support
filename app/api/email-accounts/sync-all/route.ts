@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/client';
 import { google } from 'googleapis';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
-import { mergeIfDuplicate } from '@/lib/services/deduplicator';
+import { upsertTicket } from '@/lib/services/deduplicator';
 
 async function syncSingleAccount(account: {
   id: string;
@@ -158,7 +158,9 @@ async function syncSingleAccount(account: {
         }
       }
 
-      // Check if ticket already exists for this Gmail message ID
+      // Check if ticket already exists for this Gmail message ID. Atomic
+      // dedup below also handles this, but a quick pre-check avoids
+      // fetching context & attachments for messages we've already seen.
       const existingTicket = await prisma.ticket.findFirst({
         where: {
           tenantId: tenant.id,
@@ -173,35 +175,11 @@ async function syncSingleAccount(account: {
         continue;
       }
 
-      // Try to merge this email into a recent ticket from the same sender
-      // with the same subject (within the dedup window). If merged, skip
-      // creating a new ticket entirely.
-      const merge = await mergeIfDuplicate({
-        tenantId: tenant.id,
-        customerEmail,
-        subject,
-        body: `[Inbox account: ${account.email}]\n\n${body || 'No content'}`,
-        gmailMessageId: message.id,
-      });
-
-      if (merge.merged) {
-        console.log(`[Email Sync] Merged message ${message.id} into ticket ${merge.mergedIntoTicketId}`);
-        // Still mark as read so Gmail stops surfacing it.
-        await gmail.users.messages.modify({
-          userId: 'me',
-          id: message.id!,
-          requestBody: { removeLabelIds: ['UNREAD'] },
-        });
-        continue;
-      }
-
       const contextData = await contextAggregator.gatherContext(customerEmail, integrations as any);
 
-      // Check if this is a customer reply. If the subject starts with
-      // Re:/Sv:/Fwd:/Fw: we treat it as a reply — the new ticket lands in
-      // Öppna (in_progress) instead of Nytt. We also try to find and
-      // reopen any matching prior ticket from the same customer so the
-      // conversation thread stays linked.
+      // Customer replies (Re:/Sv:/Fwd:/Fw:) should land in Öppna instead
+      // of Nytt, and also reopen any matching prior ticket so the
+      // conversation thread stays visible to support.
       const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
       const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
       if (isReply) {
@@ -218,7 +196,6 @@ async function syncSingleAccount(account: {
         });
 
         if (priorTicket && priorTicket.status !== 'in_progress') {
-          // Reopen the original ticket by setting it to in_progress (Öppna)
           await prisma.ticket.update({
             where: { id: priorTicket.id },
             data: { status: 'in_progress' },
@@ -227,37 +204,42 @@ async function syncSingleAccount(account: {
         }
       }
 
-      // Add attachments to context data
       if (attachments.length > 0) {
         contextData.attachments = attachments;
       }
 
-      const ticket = await prisma.ticket.create({
-        data: {
-          tenantId: tenant.id,
-          customerEmail,
-          customerName,
-          subject,
-          originalMessage: `[Gmail ID: ${message.id}]\n[Inbox account: ${account.email}]\n\n${body || 'No content'}`,
-          status: isReply ? 'in_progress' : 'new',
-          priority: 'normal',
-          contextData,
-        },
+      // Atomic create-or-merge under a Postgres advisory lock so two
+      // parallel syncs can't both insert a fresh ticket for the same
+      // inbound message.
+      const { ticket, created } = await upsertTicket({
+        tenantId: tenant.id,
+        customerEmail,
+        customerName,
+        subject,
+        originalMessage: `[Gmail ID: ${message.id}]\n[Inbox account: ${account.email}]\n\n${body || 'No content'}`,
+        status: isReply ? 'in_progress' : 'new',
+        priority: 'normal',
+        contextData,
+        gmailMessageId: message.id,
       });
 
-      newTickets += 1;
+      if (created) {
+        newTickets += 1;
 
-      generateAIResponse(subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined)
-        .then(async ({ response: aiResponse, confidence }) => {
-          await prisma.ticket.update({
-            where: { id: ticket.id },
-            data: {
-              aiResponse,
-              aiConfidence: confidence,
-            },
-          });
-        })
-        .catch(console.error);
+        generateAIResponse(subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined)
+          .then(async ({ response: aiResponse, confidence }) => {
+            await prisma.ticket.update({
+              where: { id: ticket.id },
+              data: {
+                aiResponse,
+                aiConfidence: confidence,
+              },
+            });
+          })
+          .catch(console.error);
+      } else {
+        console.log(`[Email Sync] Merged message ${message.id} into ticket ${ticket.id}`);
+      }
 
       await gmail.users.messages.modify({
         userId: 'me',
