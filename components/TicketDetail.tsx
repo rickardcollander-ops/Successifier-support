@@ -182,13 +182,18 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     fetchIntegrations();
   }, []);
 
-  // Reset editor state when ticket data changes (e.g. after send updates finalResponse)
+  // Reset editor state only when switching to a different ticket. Earlier the
+  // dependency array included ticket.aiResponse / finalResponse / customerEmail,
+  // which meant the background poll (every 3s) or a newly-arrived AI response
+  // would overwrite whatever the agent was typing. Keying solely on ticket.id
+  // preserves in-flight drafts while still resetting when the user opens a
+  // different ticket.
   useEffect(() => {
     setResponse(ticket.finalResponse || ticket.aiResponse || '');
     setAiSuggestion(ticket.aiResponse || null);
     setRecipientEmail(ticket.customerEmail);
     setInlineImages([]);
-  }, [ticket.id, ticket.aiResponse, ticket.finalResponse, ticket.aiConfidence, ticket.customerEmail]);
+  }, [ticket.id]);
 
   // Only clear the send confirmation when switching to a different ticket
   useEffect(() => {

@@ -274,26 +274,51 @@ export default function ReportsPage() {
       {/* Recent Activity */}
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Senaste aktivitet</h3>
-        <div className="flex items-end justify-between h-64 gap-2">
-          {data.recentActivity.map((day, index) => {
-            const maxCount = Math.max(...data.recentActivity.map(d => d.count));
-            const height = maxCount > 0 ? (day.count / maxCount) * 100 : 0;
+        {(() => {
+          const activity = data.recentActivity || [];
+          const maxCount = activity.reduce((m, d) => Math.max(m, d.count), 0);
+          const totalInRange = activity.reduce((s, d) => s + d.count, 0);
+
+          if (activity.length === 0 || totalInRange === 0) {
             return (
-              <div key={index} className="flex-1 flex flex-col items-center">
-                <div className="w-full flex items-end justify-center h-full">
-                  <div
-                    className="w-full bg-gradient-to-t from-[#7C5CFF] to-[#9F7BFF] rounded-t-lg transition-all hover:brightness-110"
-                    style={{ height: `${height}%` }}
-                    title={`${day.count} ärenden`}
-                  />
-                </div>
-                <span className="text-xs text-slate-600 dark:text-slate-400 mt-2">
-                  {new Date(day.date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })}
-                </span>
-              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Ingen aktivitet i vald tidsperiod.
+              </p>
             );
-          })}
-        </div>
+          }
+
+          return (
+            <div className="flex items-end justify-between h-64 gap-2">
+              {activity.map((day, index) => {
+                // Baseline of 2% so bars are still visible on zero-count days
+                // (makes it clear the chart rendered and isn't just broken).
+                const ratio = day.count / maxCount;
+                const height = day.count === 0 ? 2 : Math.max(ratio * 100, 4);
+                return (
+                  <div key={index} className="flex-1 flex flex-col items-center">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
+                      {day.count}
+                    </span>
+                    <div className="w-full flex items-end justify-center h-full">
+                      <div
+                        className={`w-full rounded-t-lg transition-all hover:brightness-110 ${
+                          day.count === 0
+                            ? 'bg-slate-200 dark:bg-slate-700'
+                            : 'bg-gradient-to-t from-[#7C5CFF] to-[#9F7BFF]'
+                        }`}
+                        style={{ height: `${height}%` }}
+                        title={`${day.count} ärenden`}
+                      />
+                    </div>
+                    <span className="text-xs text-slate-600 dark:text-slate-400 mt-2">
+                      {new Date(day.date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

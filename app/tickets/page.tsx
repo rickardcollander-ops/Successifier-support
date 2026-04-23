@@ -35,6 +35,41 @@ export default function TicketsPage() {
   });
   const [dedupeRunning, setDedupeRunning] = useState(false);
   const [dedupeResult, setDedupeResult] = useState<string | null>(null);
+  const [emptyingFolder, setEmptyingFolder] = useState(false);
+
+  const emptyCurrentFolder = async () => {
+    if (emptyingFolder) return;
+    const folderLabels: Record<string, string> = {
+      billecta: 'Billecta',
+      duplicate: 'Dubletter',
+    };
+    const label = folderLabels[activeStatus];
+    if (!label) return;
+    if (!confirm(`Är du säker på att du vill tömma hela ${label}-inkorgen? Alla ärenden i mappen kommer att raderas permanent och detta kan inte ångras.`)) return;
+    setEmptyingFolder(true);
+    try {
+      const res = await fetch('/api/tickets/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: activeStatus }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(`Fel vid tömning: ${err.error || res.status}`);
+        return;
+      }
+      if (selectedTicket) {
+        const stillExists = (activeStatus === 'billecta' && selectedTicket.customerEmail.toLowerCase() !== 'no-reply@billecta.com')
+          || (activeStatus === 'duplicate' && selectedTicket.status !== 'duplicate');
+        if (!stillExists) setSelectedTicket(null);
+      }
+      await fetchTickets();
+    } catch (error) {
+      alert('Nätverksfel vid tömning av mapp');
+    } finally {
+      setEmptyingFolder(false);
+    }
+  };
 
   const runDedupeExisting = async () => {
     if (dedupeRunning) return;
@@ -373,16 +408,14 @@ export default function TicketsPage() {
   };
 
   const billectaTickets = tickets.filter(t => t.customerEmail.toLowerCase() === 'no-reply@billecta.com');
-  const billectaKivraTickets = billectaTickets.filter(t => t.subject.toLowerCase().includes('kivrameddelandet för faktura'));
-  const billectaOtherTickets = billectaTickets.filter(t => !t.subject.toLowerCase().includes('kivrameddelandet för faktura'));
-  
-  // Filter by status
+
+  // Filter by status. Billecta and Kivra-notifications from Billecta used to
+  // live in two separate tabs; they're now merged into a single "Billecta"
+  // folder per user request.
   let statusFilteredTickets = activeStatus === 'all'
     ? tickets.filter(t => t.customerEmail.toLowerCase() !== 'no-reply@billecta.com' && t.status !== 'duplicate')
     : activeStatus === 'billecta'
-    ? billectaOtherTickets
-    : activeStatus === 'billecta-kivra'
-    ? billectaKivraTickets
+    ? billectaTickets
     : activeStatus === 'duplicate'
     ? tickets.filter(t => t.status === 'duplicate')
     : tickets.filter(t => t.status === activeStatus && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com');
@@ -426,8 +459,7 @@ export default function TicketsPage() {
 
   const statusCounts = {
     all: tickets.filter(t => t.customerEmail.toLowerCase() !== 'no-reply@billecta.com' && t.status !== 'duplicate').length,
-    billecta: billectaOtherTickets.length,
-    billectaKivra: billectaKivraTickets.length,
+    billecta: billectaTickets.length,
     new: tickets.filter(t => t.status === 'new' && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
     in_progress: tickets.filter(t => t.status === 'in_progress' && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
     review: tickets.filter(t => t.status === 'review' && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
@@ -444,7 +476,6 @@ export default function TicketsPage() {
     { id: 'closed', label: 'Stängda', count: statusCounts.closed },
     { id: 'all', label: 'Alla', count: statusCounts.all },
     { id: 'billecta', label: 'Billecta', count: statusCounts.billecta },
-    { id: 'billecta-kivra', label: 'Billecta Kivra', count: statusCounts.billectaKivra },
     { id: 'duplicate', label: 'Dubletter', count: statusCounts.duplicate },
     { id: 'archived', label: 'Arkiverade', count: archivedTickets.length || '...' },
   ];
@@ -508,6 +539,16 @@ export default function TicketsPage() {
           </div>
           {/* Dedupe button + Email Sync Status */}
           <div className="flex items-center gap-2">
+            {(activeStatus === 'billecta' || activeStatus === 'duplicate') && (
+              <button
+                onClick={emptyCurrentFolder}
+                disabled={emptyingFolder || filteredTickets.length === 0}
+                className="text-xs px-3 py-1.5 rounded-md border border-red-300 dark:border-red-700 bg-white dark:bg-slate-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50 whitespace-nowrap"
+                title={`Radera alla ärenden i ${activeStatus === 'billecta' ? 'Billecta' : 'Dubletter'}-mappen`}
+              >
+                {emptyingFolder ? 'Tömmer…' : `Töm ${activeStatus === 'billecta' ? 'Billecta' : 'Dubletter'}`}
+              </button>
+            )}
             <button
               onClick={runDedupeExisting}
               disabled={dedupeRunning}

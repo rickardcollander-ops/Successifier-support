@@ -22,10 +22,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
-    // Calculate date range
+    // Calculate date range. We align startDate to midnight so the activity
+    // chart buckets (one per calendar day) stay consistent with the ticket
+    // filter — otherwise tickets created between midnight and the current
+    // time on the oldest day would be counted in totalTickets but missing
+    // from the chart, which made the chart look broken.
     const now = new Date();
     const daysAgo = range === '7d' ? 7 : range === '30d' ? 30 : 90;
-    const startDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startDate = new Date(todayStart.getTime() - (daysAgo - 1) * 24 * 60 * 60 * 1000);
 
     // Get all tickets in range
     const tickets = await prisma.ticket.findMany({
@@ -56,9 +61,8 @@ export async function GET(request: NextRequest) {
     }, {} as Record<string, number>);
 
     // Resolved today
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const resolvedToday = tickets.filter(
-      (t) => (t.status === 'sent' || t.status === 'closed') && 
+      (t) => (t.status === 'sent' || t.status === 'closed') &&
       new Date(t.updatedAt) >= todayStart
     ).length;
 
@@ -77,11 +81,11 @@ export async function GET(request: NextRequest) {
         }, 0) / respondedTickets.length
       : 0;
 
-    // Recent activity (tickets per day)
+    // Recent activity (tickets per day). Using calendar-day buckets anchored
+    // on todayStart so every ticket in totalTickets maps to exactly one bar.
     const recentActivity = [];
     for (let i = daysAgo - 1; i >= 0; i--) {
-      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const dayStart = new Date(todayStart.getTime() - i * 24 * 60 * 60 * 1000);
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
       const count = tickets.filter(
