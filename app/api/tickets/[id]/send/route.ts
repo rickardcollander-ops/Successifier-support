@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/client';
 import { ResendService } from '@/lib/integrations/resend';
 import { google } from 'googleapis';
 import { auth } from '@/lib/auth';
+import { applyAgentSignature } from '@/lib/constants';
 
 export async function POST(
   request: NextRequest,
@@ -11,9 +12,9 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { response, fromAccountId, recipientEmail } = body;
+    const { response: rawResponse, fromAccountId, recipientEmail } = body;
 
-    if (!response) {
+    if (!rawResponse) {
       return NextResponse.json(
         { error: 'Response text is required' },
         { status: 400 }
@@ -29,6 +30,17 @@ export async function POST(
     } catch {
       sentBy = null;
     }
+
+    // Inline images get appended after [INLINE_IMAGES] in the request
+    // body — apply the agent signature only to the text portion so we
+    // don't insert the sign-off in the middle of the HTML img markup.
+    const hasInlineImages = rawResponse.includes('[INLINE_IMAGES]');
+    const responseTextPart = hasInlineImages ? rawResponse.split('[INLINE_IMAGES]')[0] : rawResponse;
+    const responseImagePart = hasInlineImages ? rawResponse.split('[INLINE_IMAGES]')[1] : '';
+    const responseTextWithSig = applyAgentSignature(responseTextPart, sentBy);
+    const response = hasInlineImages
+      ? `${responseTextWithSig}[INLINE_IMAGES]${responseImagePart}`
+      : responseTextWithSig;
 
     const ticket = await prisma.ticket.findUnique({
       where: { id },

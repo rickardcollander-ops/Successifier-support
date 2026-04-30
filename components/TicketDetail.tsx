@@ -1215,16 +1215,16 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                         </div>
                         <div className="flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-300">
                           {sub.currentPeriodEnd && (
-                            <span>Period slutar: {new Date(sub.currentPeriodEnd * 1000).toLocaleDateString('sv-SE')}</span>
+                            <span>Nuvarande period slutar: {new Date(sub.currentPeriodEnd * 1000).toISOString().split('T')[0]}</span>
                           )}
                           {sub.canceledAt && (
-                            <span className="text-red-600 dark:text-red-400">Avslutad: {new Date(sub.canceledAt * 1000).toLocaleDateString('sv-SE')}</span>
+                            <span className="text-red-600 dark:text-red-400">Uppsagd den: {new Date(sub.canceledAt * 1000).toISOString().split('T')[0]}</span>
                           )}
                           {sub.endedAt && (
-                            <span className="text-red-600 dark:text-red-400">Upphörd: {new Date(sub.endedAt * 1000).toLocaleDateString('sv-SE')}</span>
+                            <span className="text-red-600 dark:text-red-400">Upphörd: {new Date(sub.endedAt * 1000).toISOString().split('T')[0]}</span>
                           )}
                           {sub.cancelAt && !sub.canceledAt && (
-                            <span className="text-amber-600 dark:text-amber-400">Avslutas: {new Date(sub.cancelAt * 1000).toLocaleDateString('sv-SE')}</span>
+                            <span className="text-amber-600 dark:text-amber-400 font-semibold">Slutdatum: {new Date(sub.cancelAt * 1000).toISOString().split('T')[0]}</span>
                           )}
                           {sub.items?.map((item: any, i: number) => (
                             <span key={i}>Pris: {item.price ? `${(item.price / 100).toFixed(2)} kr` : '-'}</span>

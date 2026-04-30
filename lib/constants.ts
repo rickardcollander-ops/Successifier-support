@@ -11,6 +11,47 @@ export const AGENTS: readonly string[] = [
   'Malin Sundberg',
 ] as const;
 
+// Per-agent email sign-off. When an agent sends a reply we automatically
+// swap the AI's generic "Doldadress Kundtjänst" sign-off for the agent's
+// personal one so the customer sees who actually answered. The matching
+// is loose (first name) so a Google account showing "Ida Test Rosell" or
+// "ida@doldadress.se" still resolves to Ida's signature.
+export const AGENT_SIGNATURES: Record<string, string> = {
+  'Ida Rosell': 'Vänliga hälsningar,\nIda\nSupportteamet Doldadress.se',
+  'Malin Sundberg': 'Vänliga hälsningar,\nMalin\nSupportteamet Doldadress.se',
+};
+
+const DEFAULT_SIGNATURE = 'Vänliga hälsningar,\nDoldadress Kundtjänst';
+
+export function signatureFor(nameOrEmail: string | null | undefined): string {
+  if (!nameOrEmail) return DEFAULT_SIGNATURE;
+  const direct = AGENT_SIGNATURES[nameOrEmail];
+  if (direct) return direct;
+  const lower = nameOrEmail.toLowerCase();
+  for (const [agent, sig] of Object.entries(AGENT_SIGNATURES)) {
+    const first = agent.split(' ')[0].toLowerCase();
+    if (lower.includes(first)) return sig;
+  }
+  return DEFAULT_SIGNATURE;
+}
+
+// Match the generic AI sign-off so we can replace it. The AI is told to
+// always end its replies with this exact pattern (see ai-generator.ts).
+const GENERIC_SIGNOFF_PATTERN = /(?:Vänliga hälsningar,\s*\n\s*Doldadress Kundtjänst|Med vänlig hälsning,\s*\n\s*Doldadress Kundtjänst|Doldadress Kundtjänst)\s*$/i;
+
+export function applyAgentSignature(body: string, nameOrEmail: string | null | undefined): string {
+  if (!body) return body;
+  const sig = signatureFor(nameOrEmail);
+  if (sig === DEFAULT_SIGNATURE) return body;
+  const trimmed = body.replace(/\s+$/, '');
+  if (GENERIC_SIGNOFF_PATTERN.test(trimmed)) {
+    return trimmed.replace(GENERIC_SIGNOFF_PATTERN, sig);
+  }
+  // No generic sign-off found — append the agent signature so the
+  // customer still sees who answered.
+  return `${trimmed}\n\n${sig}`;
+}
+
 // Distinct "sharp" colors per agent so it's obvious at a glance who is
 // looking at — or assigned to — a ticket when support is working in
 // parallel. Tailwind hex values rather than classes to keep the color

@@ -26,11 +26,19 @@ export async function GET(request: NextRequest) {
     // chart buckets (one per calendar day) stay consistent with the ticket
     // filter — otherwise tickets created between midnight and the current
     // time on the oldest day would be counted in totalTickets but missing
-    // from the chart, which made the chart look broken.
+    // from the chart, which made the chart look broken. The "1d" range
+    // is special-cased to a rolling-24h window: a single bar wouldn't
+    // tell anyone anything, so the chart hides for that range.
     const now = new Date();
-    const daysAgo = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+    const daysAgo =
+      range === '1d' ? 1 :
+      range === '7d' ? 7 :
+      range === '30d' ? 30 :
+      90;
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startDate = new Date(todayStart.getTime() - (daysAgo - 1) * 24 * 60 * 60 * 1000);
+    const startDate = range === '1d'
+      ? new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      : new Date(todayStart.getTime() - (daysAgo - 1) * 24 * 60 * 60 * 1000);
 
     // Get all tickets in range
     const tickets = await prisma.ticket.findMany({
