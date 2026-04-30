@@ -24,7 +24,7 @@ export default function TicketsPage() {
   const [activeStatus, setActiveStatus] = useState<string>('all');
   const [archivedSearch, setArchivedSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'date' | 'priority' | 'status'>('date');
+  const [sortBy, setSortBy] = useState<'date' | 'priority' | 'status' | 'email'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [ticketPresence, setTicketPresence] = useState<PresenceMap>({});
   const [emailSyncStatus, setEmailSyncStatus] = useState<EmailSyncStatus>({
@@ -73,7 +73,7 @@ export default function TicketsPage() {
 
   const runDedupeExisting = async () => {
     if (dedupeRunning) return;
-    if (!confirm('Scanna igenom alla ärenden och flytta dubletter (samma avsändare + ämne inom 5 min) till fliken Dubletter?')) return;
+    if (!confirm('Scanna igenom alla ärenden och flytta dubletter (samma avsändare + ämne inom 10 min) till fliken Dubletter?')) return;
     setDedupeRunning(true);
     setDedupeResult(null);
     try {
@@ -151,6 +151,13 @@ export default function TicketsPage() {
   // disappear from Malin's view and vice versa.
   const selectedTicketIdRef = useRef<string | null>(null);
 
+  // Tombstones for tickets the user just deleted. A poll request that
+  // started before the DELETE landed will still see the ticket and, if
+  // we don't filter it out, the merge would resurrect it for the next
+  // 3 seconds — making "Radera"/"Markera som löst" feel broken.
+  const recentlyDeletedRef = useRef<Map<string, number>>(new Map());
+  const TOMBSTONE_TTL_MS = 30_000;
+
   // Report presence when selected ticket changes
   useEffect(() => {
     selectedTicketIdRef.current = selectedTicket?.id || null;
@@ -193,13 +200,69 @@ export default function TicketsPage() {
       const response = await fetch('/api/tickets');
       if (response.ok) {
         const data = await response.json();
-        setTickets(data.tickets);
-        
-        // Update selected ticket if it exists in the new data
+        let incoming: Ticket[] = data.tickets || [];
+
+        // Drop tombstoned tickets — anything we deleted in the last
+        // ~30s. Without this, an in-flight poll from before the DELETE
+        // would resurrect the row for the next cycle. Also drop
+        // expired tombstones so the map doesn't grow forever.
+        const now = Date.now();
+        for (const [id, ts] of recentlyDeletedRef.current.entries()) {
+          if (now - ts > TOMBSTONE_TTL_MS) {
+            recentlyDeletedRef.current.delete(id);
+          }
+        }
+        if (recentlyDeletedRef.current.size > 0) {
+          incoming = incoming.filter((t) => !recentlyDeletedRef.current.has(t.id));
+        }
+
+        // Merge against the live state instead of replacing wholesale.
+        // The 3-second poll otherwise raced with PATCH: a poll request
+        // that started before the user closed/marked-as-resolved a
+        // ticket would return the stale version a moment later and
+        // revert the local update — making the ticket "stay" in its
+        // old folder. We keep whichever copy has the newer updatedAt.
+        setTickets((prev) => {
+          const incomingMap = new Map(incoming.map((t) => [t.id, t]));
+          const merged: Ticket[] = [];
+          const seen = new Set<string>();
+
+          for (const local of prev) {
+            const fresh = incomingMap.get(local.id);
+            if (!fresh) {
+              // Not in server response. If our local copy is very
+              // recent (likely an in-flight create) keep it; otherwise
+              // it's gone (deleted elsewhere) so drop it.
+              const localTs = new Date(local.updatedAt).getTime();
+              if (Date.now() - localTs < 30_000) {
+                merged.push(local);
+                seen.add(local.id);
+              }
+              continue;
+            }
+            const localTs = new Date(local.updatedAt).getTime();
+            const freshTs = new Date(fresh.updatedAt).getTime();
+            merged.push(freshTs >= localTs ? fresh : local);
+            seen.add(local.id);
+          }
+
+          for (const fresh of incoming) {
+            if (!seen.has(fresh.id)) merged.push(fresh);
+          }
+          return merged;
+        });
+
+        // Refresh the selected ticket only when the server has a newer
+        // copy than what we're showing — same reasoning as above so the
+        // detail pane doesn't snap back to a pre-close state.
         if (selectedTicket) {
-          const updatedSelected = data.tickets.find((t: Ticket) => t.id === selectedTicket.id);
+          const updatedSelected = incoming.find((t: Ticket) => t.id === selectedTicket.id);
           if (updatedSelected) {
-            setSelectedTicket(updatedSelected);
+            const localTs = new Date(selectedTicket.updatedAt).getTime();
+            const freshTs = new Date(updatedSelected.updatedAt).getTime();
+            if (freshTs >= localTs) {
+              setSelectedTicket(updatedSelected);
+            }
           }
         }
       } else {
@@ -293,7 +356,9 @@ export default function TicketsPage() {
 
       if (response.ok) {
         const updatedTicket = await response.json();
-        setTickets(tickets.map(t => t.id === ticketId ? updatedTicket : t));
+        // Functional setState so concurrent polls/updates don't clobber
+        // the local update (e.g. a stale poll arriving after this PATCH).
+        setTickets((prev) => prev.map(t => t.id === ticketId ? updatedTicket : t));
         if (selectedTicket?.id === ticketId) {
           setSelectedTicket(updatedTicket);
         }
@@ -311,7 +376,7 @@ export default function TicketsPage() {
 
       if (response.ok) {
         const updatedTicket = await response.json();
-        setTickets(tickets.map(t => t.id === ticketId ? updatedTicket : t));
+        setTickets((prev) => prev.map(t => t.id === ticketId ? updatedTicket : t));
         if (selectedTicket?.id === ticketId) {
           setSelectedTicket(updatedTicket);
         }
@@ -334,7 +399,7 @@ export default function TicketsPage() {
 
       if (res.ok) {
         const updatedTicket = await res.json();
-        setTickets(tickets.map(t => t.id === ticketId ? updatedTicket : t));
+        setTickets((prev) => prev.map(t => t.id === ticketId ? updatedTicket : t));
         if (selectedTicket?.id === ticketId) {
           setSelectedTicket(updatedTicket);
         }
@@ -354,8 +419,9 @@ export default function TicketsPage() {
       });
 
       if (res.ok) {
-        setTickets(tickets.filter(t => t.id !== ticketId));
-        setArchivedTickets(archivedTickets.filter(t => t.id !== ticketId));
+        recentlyDeletedRef.current.set(ticketId, Date.now());
+        setTickets((prev) => prev.filter(t => t.id !== ticketId));
+        setArchivedTickets((prev) => prev.filter(t => t.id !== ticketId));
         if (selectedTicket?.id === ticketId) {
           setSelectedTicket(null);
         }
@@ -373,7 +439,7 @@ export default function TicketsPage() {
 
       if (res.ok) {
         const updatedTicket = await res.json();
-        setTickets(tickets.map(t => t.id === ticketId ? updatedTicket : t));
+        setTickets((prev) => prev.map(t => t.id === ticketId ? updatedTicket : t));
         if (selectedTicket?.id === ticketId) {
           setSelectedTicket(updatedTicket);
         }
@@ -442,6 +508,14 @@ export default function TicketsPage() {
     } else if (sortBy === 'status') {
       const statusOrder: Record<string, number> = { new: 0, in_progress: 1, waiting_ai: 1, review: 2, sent: 3, closed: 4, archived: 5 };
       comparison = (statusOrder[a.status] || 999) - (statusOrder[b.status] || 999);
+    } else if (sortBy === 'email') {
+      // Group tickets from the same customer together. Tiebreak on
+      // createdAt so multiple tickets per customer stay chronological
+      // within the cluster.
+      const emailCmp = a.customerEmail.toLowerCase().localeCompare(b.customerEmail.toLowerCase());
+      comparison = emailCmp !== 0
+        ? emailCmp
+        : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     }
     
     return sortOrder === 'asc' ? comparison : -comparison;
@@ -493,12 +567,13 @@ export default function TicketsPage() {
         />
         <select
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as 'date' | 'priority' | 'status')}
+          onChange={(e) => setSortBy(e.target.value as 'date' | 'priority' | 'status' | 'email')}
           className="px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
         >
           <option value="date">Sortera: Datum</option>
           <option value="priority">Sortera: Prioritet</option>
           <option value="status">Sortera: Status</option>
+          <option value="email">Sortera: E-post</option>
         </select>
         <button
           onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}

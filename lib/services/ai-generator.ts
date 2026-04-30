@@ -367,13 +367,27 @@ function formatContextForPrompt(contextData: any): string {
     const subs = contextData.stripe.subscriptions || [];
     if (subs.length > 0) {
       formatted += `Prenumerationer (${subs.length}):\n`;
+      // Format dates as ISO YYYY-MM-DD so the year is unambiguous. The AI
+      // previously confused "currentPeriodEnd" (next renewal) with the
+      // actual cancellation date, which made it answer "ends 2026" when
+      // the customer's subscription is scheduled to end in 2027. The
+      // EFFEKTIVT SLUTDATUM line below tells the AI exactly which date
+      // the customer cares about.
+      const fmtIso = (unix: number) => new Date(unix * 1000).toISOString().split('T')[0];
       subs.forEach((sub: any) => {
         formatted += `  - ${sub.id}: status=${sub.status}`;
-        if (sub.currentPeriodEnd) formatted += `, period slutar ${new Date(sub.currentPeriodEnd * 1000).toLocaleDateString('sv-SE')}`;
-        if (sub.canceledAt) formatted += `, avslutad ${new Date(sub.canceledAt * 1000).toLocaleDateString('sv-SE')}`;
-        if (sub.endedAt) formatted += `, upphörd ${new Date(sub.endedAt * 1000).toLocaleDateString('sv-SE')}`;
-        if (sub.cancelAt && !sub.canceledAt) formatted += `, avslutas ${new Date(sub.cancelAt * 1000).toLocaleDateString('sv-SE')}`;
+        if (sub.currentPeriodEnd) formatted += `, nuvarande period slutar ${fmtIso(sub.currentPeriodEnd)}`;
+        if (sub.canceledAt) formatted += `, uppsagd den ${fmtIso(sub.canceledAt)}`;
+        if (sub.endedAt) formatted += `, upphörd ${fmtIso(sub.endedAt)}`;
+        if (sub.cancelAt && !sub.canceledAt) formatted += `, planerat slutdatum ${fmtIso(sub.cancelAt)}`;
         if (sub.items?.[0]?.price) formatted += `, pris=${(sub.items[0].price / 100).toFixed(0)} kr`;
+        // Decide which date counts as "when does the subscription end?".
+        // cancelAt > endedAt > currentPeriodEnd. Always print the year.
+        const effectiveEnd = sub.endedAt || sub.cancelAt || sub.currentPeriodEnd;
+        if (effectiveEnd) {
+          const d = new Date(effectiveEnd * 1000);
+          formatted += `\n    EFFEKTIVT SLUTDATUM (använd detta i svar till kund): ${fmtIso(effectiveEnd)} (år ${d.getUTCFullYear()})`;
+        }
         formatted += '\n';
       });
     }

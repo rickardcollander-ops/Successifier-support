@@ -5,6 +5,7 @@ import { google } from 'googleapis';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
+import { sendConfirmationEmail } from '@/lib/services/confirmation-email';
 
 async function syncSingleAccount(account: {
   id: string;
@@ -177,12 +178,16 @@ async function syncSingleAccount(account: {
 
       const contextData = await contextAggregator.gatherContext(customerEmail, integrations as any);
 
-      // Customer replies (Re:/Sv:/Fwd:/Fw:) should land in Öppna instead
-      // of Nytt, and also reopen any matching prior ticket so the
-      // conversation thread stays visible to support.
+      // Customer replies (Re:/Sv:/Fwd:/Fw:) should be appended to the
+      // existing thread so a single conversation lives in one ticket.
+      // We look up the prior ticket regardless of how old it is —
+      // earlier we only matched within the dedup window, which caused
+      // every reply more than 5 minutes after the original to spawn a
+      // duplicate ticket.
       const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
       const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
-      if (isReply) {
+      let threadParentId: string | null = null;
+      if (isReply && subjectNormalized) {
         const priorTicket = await prisma.ticket.findFirst({
           where: {
             tenantId: tenant.id,
@@ -195,12 +200,22 @@ async function syncSingleAccount(account: {
           orderBy: { createdAt: 'desc' },
         });
 
-        if (priorTicket && priorTicket.status !== 'in_progress') {
-          await prisma.ticket.update({
-            where: { id: priorTicket.id },
-            data: { status: 'in_progress' },
-          });
-          console.log(`[Email Sync] Customer reply detected, reopened ticket ${priorTicket.id} to Öppna`);
+        if (priorTicket) {
+          threadParentId = priorTicket.id;
+          // Move "new" tickets that the agent hasn't picked up yet into
+          // Öppna so it's clear there's been customer activity. Don't
+          // ever flip closed/sent/review tickets back open — those
+          // statuses represent agent decisions; the new reply gets
+          // appended to the thread but the resolved status stays put.
+          if (priorTicket.status === 'new') {
+            await prisma.ticket.update({
+              where: { id: priorTicket.id },
+              data: { status: 'in_progress' },
+            });
+            console.log(`[Email Sync] Customer reply detected, moved ticket ${priorTicket.id} from Nytt to Öppna`);
+          } else {
+            console.log(`[Email Sync] Customer reply appended to ticket ${priorTicket.id} (status preserved: ${priorTicket.status})`);
+          }
         }
       }
 
@@ -210,7 +225,9 @@ async function syncSingleAccount(account: {
 
       // Atomic create-or-merge under a Postgres advisory lock so two
       // parallel syncs can't both insert a fresh ticket for the same
-      // inbound message.
+      // inbound message. When threadParentId is set we always merge
+      // into that ticket (even outside the dedup window) so follow-up
+      // replies don't create duplicates.
       const { ticket, created } = await upsertTicket({
         tenantId: tenant.id,
         customerEmail,
@@ -221,10 +238,26 @@ async function syncSingleAccount(account: {
         priority: 'normal',
         contextData,
         gmailMessageId: message.id,
+        threadParentTicketId: threadParentId,
       });
 
       if (created) {
         newTickets += 1;
+
+        // Fire-and-forget acknowledgement so the customer knows their
+        // mail landed. Skipped for replies (already an active thread)
+        // and for messages the system itself sent (same domain as the
+        // inbox account) to avoid mail-loops.
+        const inboxDomain = account.email.split('@')[1]?.toLowerCase();
+        const senderDomain = customerEmail.split('@')[1]?.toLowerCase();
+        const isSelfEmail = inboxDomain && senderDomain && inboxDomain === senderDomain;
+        if (!isReply && !isSelfEmail) {
+          sendConfirmationEmail({
+            emailAccountId: account.id,
+            toEmail: customerEmail,
+            originalSubject: subject,
+          }).catch((err) => console.error('[Email Sync] Confirmation send failed:', err));
+        }
 
         generateAIResponse(subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined)
           .then(async ({ response: aiResponse, confidence }) => {

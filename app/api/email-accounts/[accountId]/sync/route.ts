@@ -5,6 +5,7 @@ import { google } from 'googleapis';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
+import { sendConfirmationEmail } from '@/lib/services/confirmation-email';
 
 export async function POST(
   request: NextRequest,
@@ -144,7 +145,8 @@ export async function POST(
 
         const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
         const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
-        if (isReply) {
+        let threadParentId: string | null = null;
+        if (isReply && subjectNormalized) {
           const priorTicket = await prisma.ticket.findFirst({
             where: {
               tenantId: tenant.id,
@@ -157,12 +159,17 @@ export async function POST(
             orderBy: { createdAt: 'desc' },
           });
 
-          if (priorTicket && priorTicket.status !== 'in_progress') {
-            await prisma.ticket.update({
-              where: { id: priorTicket.id },
-              data: { status: 'in_progress' },
-            });
-            console.log(`[Email Sync] Customer reply detected, reopened ticket ${priorTicket.id} to Öppna`);
+          if (priorTicket) {
+            threadParentId = priorTicket.id;
+            if (priorTicket.status === 'new') {
+              await prisma.ticket.update({
+                where: { id: priorTicket.id },
+                data: { status: 'in_progress' },
+              });
+              console.log(`[Email Sync] Customer reply detected, moved ticket ${priorTicket.id} from Nytt to Öppna`);
+            } else {
+              console.log(`[Email Sync] Customer reply appended to ticket ${priorTicket.id} (status preserved: ${priorTicket.status})`);
+            }
           }
         }
 
@@ -176,10 +183,22 @@ export async function POST(
           priority: 'normal',
           contextData,
           gmailMessageId: message.id,
+          threadParentTicketId: threadParentId,
         });
 
         if (created) {
           newTickets++;
+
+          const inboxDomain = emailAccount.email.split('@')[1]?.toLowerCase();
+          const senderDomain = customerEmail.split('@')[1]?.toLowerCase();
+          const isSelfEmail = inboxDomain && senderDomain && inboxDomain === senderDomain;
+          if (!isReply && !isSelfEmail) {
+            sendConfirmationEmail({
+              emailAccountId: emailAccount.id,
+              toEmail: customerEmail,
+              originalSubject: subject,
+            }).catch((err) => console.error('[Email Sync] Confirmation send failed:', err));
+          }
 
           generateAIResponse(subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined)
             .then(async ({ response, confidence }) => {

@@ -27,7 +27,7 @@ interface ReportData {
 export default function ReportsPage() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const [timeRange, setTimeRange] = useState<'1d' | '7d' | '30d' | '90d'>('30d');
 
   useEffect(() => {
     fetchReportData();
@@ -103,6 +103,7 @@ export default function ReportsPage() {
           onChange={(e) => setTimeRange(e.target.value as any)}
           className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
         >
+          <option value="1d">Senaste dygnet</option>
           <option value="7d">Senaste 7 dagarna</option>
           <option value="30d">Senaste 30 dagarna</option>
           <option value="90d">Senaste 90 dagarna</option>

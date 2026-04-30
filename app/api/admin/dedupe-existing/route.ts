@@ -5,7 +5,7 @@ import { auth } from '@/lib/auth';
 // Dedup window for existing cleanup. Matches the window enforced for new
 // tickets in lib/services/deduplicator.ts so the retroactive cleanup uses
 // the same definition of "duplicate" as the runtime guard.
-const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
+const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
 
 function normalizeSubject(subject: string): string {
   return subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim().toLowerCase();
