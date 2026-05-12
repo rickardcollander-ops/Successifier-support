@@ -42,6 +42,7 @@ export default function TicketsPage() {
     const folderLabels: Record<string, string> = {
       billecta: 'Billecta',
       duplicate: 'Dubletter',
+      bounce: 'Studsade',
     };
     const label = folderLabels[activeStatus];
     if (!label) return;
@@ -58,11 +59,7 @@ export default function TicketsPage() {
         alert(`Fel vid tömning: ${err.error || res.status}`);
         return;
       }
-      if (selectedTicket) {
-        const stillExists = (activeStatus === 'billecta' && selectedTicket.customerEmail.toLowerCase() !== 'no-reply@billecta.com')
-          || (activeStatus === 'duplicate' && selectedTicket.status !== 'duplicate');
-        if (!stillExists) setSelectedTicket(null);
-      }
+      if (selectedTicket) setSelectedTicket(null);
       await fetchTickets();
     } catch (error) {
       alert('Nätverksfel vid tömning av mapp');
@@ -475,16 +472,43 @@ export default function TicketsPage() {
 
   const billectaTickets = tickets.filter(t => t.customerEmail.toLowerCase() === 'no-reply@billecta.com');
 
+  // Bounces (mailer-daemon, postmaster, delivery-status-notification…)
+  // get their own folder so they don't clutter the inbox. Match on
+  // sender prefix AND on the standard subject lines that bounce
+  // notifications use, since some bounces come from neutrally-named
+  // addresses but always have a recognizable subject.
+  const isBounceTicket = (t: Ticket) => {
+    const email = t.customerEmail.toLowerCase();
+    if (
+      email.startsWith('mailer-daemon@') ||
+      email.startsWith('postmaster@') ||
+      email.startsWith('mailer-noreply@') ||
+      email.includes('mail-daemon@')
+    ) return true;
+    const subj = t.subject.toLowerCase();
+    return (
+      subj.includes('delivery status notification') ||
+      subj.includes('undeliverable') ||
+      subj.includes('mail delivery failed') ||
+      subj.includes('returned mail') ||
+      subj.startsWith('failure notice')
+    );
+  };
+  const bounceTickets = tickets.filter(isBounceTicket);
+
   // Filter by status. Billecta and Kivra-notifications from Billecta used to
   // live in two separate tabs; they're now merged into a single "Billecta"
-  // folder per user request.
+  // folder per user request. Bounces are excluded from every "normal" tab
+  // and only appear under the "Studsade" tab.
   let statusFilteredTickets = activeStatus === 'all'
-    ? tickets.filter(t => t.customerEmail.toLowerCase() !== 'no-reply@billecta.com' && t.status !== 'duplicate')
+    ? tickets.filter(t => t.customerEmail.toLowerCase() !== 'no-reply@billecta.com' && t.status !== 'duplicate' && !isBounceTicket(t))
     : activeStatus === 'billecta'
     ? billectaTickets
     : activeStatus === 'duplicate'
     ? tickets.filter(t => t.status === 'duplicate')
-    : tickets.filter(t => t.status === activeStatus && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com');
+    : activeStatus === 'bounce'
+    ? bounceTickets
+    : tickets.filter(t => t.status === activeStatus && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com' && !isBounceTicket(t));
 
   // Apply search filter
   const searchFilteredTickets = searchQuery
@@ -531,14 +555,20 @@ export default function TicketsPage() {
     );
   });
 
+  // Excludes Billecta, bounces and dubletter from "normal" counters so
+  // the status tabs stay focused on real customer mail.
+  const isExcludedFromNormal = (t: Ticket) =>
+    t.customerEmail.toLowerCase() === 'no-reply@billecta.com' || isBounceTicket(t);
+
   const statusCounts = {
-    all: tickets.filter(t => t.customerEmail.toLowerCase() !== 'no-reply@billecta.com' && t.status !== 'duplicate').length,
+    all: tickets.filter(t => !isExcludedFromNormal(t) && t.status !== 'duplicate').length,
     billecta: billectaTickets.length,
-    new: tickets.filter(t => t.status === 'new' && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
-    in_progress: tickets.filter(t => t.status === 'in_progress' && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
-    review: tickets.filter(t => t.status === 'review' && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
-    sent: tickets.filter(t => t.status === 'sent' && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
-    closed: tickets.filter(t => t.status === 'closed' && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com').length,
+    bounce: bounceTickets.length,
+    new: tickets.filter(t => t.status === 'new' && !isExcludedFromNormal(t)).length,
+    in_progress: tickets.filter(t => t.status === 'in_progress' && !isExcludedFromNormal(t)).length,
+    review: tickets.filter(t => t.status === 'review' && !isExcludedFromNormal(t)).length,
+    sent: tickets.filter(t => t.status === 'sent' && !isExcludedFromNormal(t)).length,
+    closed: tickets.filter(t => t.status === 'closed' && !isExcludedFromNormal(t)).length,
     duplicate: tickets.filter(t => t.status === 'duplicate').length,
   };
 
@@ -550,6 +580,7 @@ export default function TicketsPage() {
     { id: 'closed', label: 'Stängda', count: statusCounts.closed },
     { id: 'all', label: 'Alla', count: statusCounts.all },
     { id: 'billecta', label: 'Billecta', count: statusCounts.billecta },
+    { id: 'bounce', label: 'Studsade', count: statusCounts.bounce },
     { id: 'duplicate', label: 'Dubletter', count: statusCounts.duplicate },
     { id: 'archived', label: 'Arkiverade', count: archivedTickets.length || '...' },
   ];
@@ -614,16 +645,21 @@ export default function TicketsPage() {
           </div>
           {/* Dedupe button + Email Sync Status */}
           <div className="flex items-center gap-2">
-            {(activeStatus === 'billecta' || activeStatus === 'duplicate') && (
-              <button
-                onClick={emptyCurrentFolder}
-                disabled={emptyingFolder || filteredTickets.length === 0}
-                className="text-xs px-3 py-1.5 rounded-md border border-red-300 dark:border-red-700 bg-white dark:bg-slate-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50 whitespace-nowrap"
-                title={`Radera alla ärenden i ${activeStatus === 'billecta' ? 'Billecta' : 'Dubletter'}-mappen`}
-              >
-                {emptyingFolder ? 'Tömmer…' : `Töm ${activeStatus === 'billecta' ? 'Billecta' : 'Dubletter'}`}
-              </button>
-            )}
+            {(activeStatus === 'billecta' || activeStatus === 'duplicate' || activeStatus === 'bounce') && (() => {
+              const folderName = activeStatus === 'billecta' ? 'Billecta'
+                : activeStatus === 'duplicate' ? 'Dubletter'
+                : 'Studsade';
+              return (
+                <button
+                  onClick={emptyCurrentFolder}
+                  disabled={emptyingFolder || filteredTickets.length === 0}
+                  className="text-xs px-3 py-1.5 rounded-md border border-red-300 dark:border-red-700 bg-white dark:bg-slate-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50 whitespace-nowrap"
+                  title={`Radera alla ärenden i ${folderName}-mappen`}
+                >
+                  {emptyingFolder ? 'Tömmer…' : `Töm ${folderName}`}
+                </button>
+              );
+            })()}
             <button
               onClick={runDedupeExisting}
               disabled={dedupeRunning}

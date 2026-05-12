@@ -26,6 +26,25 @@ export async function POST(request: NextRequest) {
       case 'duplicate':
         where = { tenantId: tenant.id, status: 'duplicate' };
         break;
+      case 'bounce':
+        // Mirror the UI's bounce detection so what you see in the
+        // Studsade tab matches what gets deleted: mailer-daemon /
+        // postmaster senders OR a standard bounce subject line.
+        where = {
+          tenantId: tenant.id,
+          OR: [
+            { customerEmail: { startsWith: 'mailer-daemon@' } },
+            { customerEmail: { startsWith: 'postmaster@' } },
+            { customerEmail: { startsWith: 'mailer-noreply@' } },
+            { customerEmail: { contains: 'mail-daemon@' } },
+            { subject: { contains: 'Delivery Status Notification', mode: 'insensitive' } },
+            { subject: { contains: 'Undeliverable', mode: 'insensitive' } },
+            { subject: { contains: 'Mail Delivery Failed', mode: 'insensitive' } },
+            { subject: { contains: 'Returned Mail', mode: 'insensitive' } },
+            { subject: { startsWith: 'Failure notice', mode: 'insensitive' } },
+          ],
+        };
+        break;
       default:
         return NextResponse.json(
           { error: `Bulk delete is not allowed for folder "${folder}"` },
