@@ -48,6 +48,25 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
     }
   };
 
+  // Left-edge color bar + chip color so prioritized tickets are
+  // immediately scannable in the list. Red = urgent (akut), orange =
+  // high (hög), yellow = normal-with-attention is not used (we keep
+  // normal neutral so the warm colors stay meaningful).
+  const getPriorityStripe = (priority: string): { stripe: string; chipBg: string; label: string } => {
+    switch (priority) {
+      case 'urgent':
+        return { stripe: 'bg-red-500', chipBg: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700', label: 'Akut' };
+      case 'high':
+        return { stripe: 'bg-orange-500', chipBg: 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700', label: 'Hög' };
+      case 'normal':
+        return { stripe: 'bg-yellow-400', chipBg: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700', label: 'Normal' };
+      case 'low':
+        return { stripe: 'bg-transparent', chipBg: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600', label: 'Låg' };
+      default:
+        return { stripe: 'bg-transparent', chipBg: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600', label: priority };
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700">
@@ -60,14 +79,19 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
             Inga ärenden ännu
           </div>
         ) : (
-          tickets.map((ticket) => (
+          tickets.map((ticket) => {
+            const prio = getPriorityStripe(ticket.priority);
+            return (
             <button
               key={ticket.id}
               onClick={() => onSelectTicket(ticket)}
-              className={`w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${
+              className={`relative w-full text-left pl-5 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${
                 selectedTicket?.id === ticket.id ? 'bg-slate-50 dark:bg-slate-700' : ''
               }`}
             >
+              {/* Priority color stripe on the left edge — at-a-glance
+                  signal of how urgent each ticket is. */}
+              <span className={`absolute left-0 top-0 bottom-0 w-1.5 ${prio.stripe}`} aria-hidden="true" />
               <div className="flex items-start justify-between gap-2 mb-2">
                 <h3 className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">
                   {ticket.subject}
@@ -112,6 +136,11 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
                 <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(ticket.status)}`}>
                   {statusLabelSv(ticket.status)}
                 </span>
+                {(ticket.priority === 'urgent' || ticket.priority === 'high') && (
+                  <span className={`text-xs px-2 py-1 rounded-full font-semibold ${prio.chipBg}`}>
+                    {prio.label}
+                  </span>
+                )}
                 {ticket.assignedTo && (() => {
                   const color = agentColor(ticket.assignedTo);
                   return (
@@ -132,7 +161,8 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
                 </span>
               </div>
             </button>
-          ))
+            );
+          })
         )}
       </div>
     </div>

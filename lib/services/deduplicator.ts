@@ -22,6 +22,12 @@ export interface UpsertTicketInput {
   priority?: string;
   contextData?: any;
   gmailMessageId?: string | null;
+  // Gmail thread id (msg.threadId from the Gmail API). Stored as a
+  // marker in originalMessage so any future message in the same thread
+  // — replies, follow-ups, however the subject changes — gets merged
+  // into the original ticket. This is the most reliable dedup signal
+  // we have; subject/sender heuristics still apply as a fallback.
+  gmailThreadId?: string | null;
   // When set, the new message is appended to this exact ticket regardless
   // of how old it is — used for customer replies that should join the
   // original thread instead of opening a fresh ticket. Without this the
@@ -54,6 +60,29 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
       lockKey
     );
 
+    // Helper to merge into an existing parent ticket. Used by both the
+    // caller-supplied parent ID path and the Gmail thread-id lookup.
+    const mergeInto = async (parent: { id: string; originalMessage: string }) => {
+      if (
+        input.gmailMessageId &&
+        parent.originalMessage.includes(`[Gmail ID: ${input.gmailMessageId}]`)
+      ) {
+        const refreshed = await tx.ticket.findUnique({ where: { id: parent.id } });
+        return { ticket: refreshed, created: false };
+      }
+      const separator = `\n\n---\n[Följdmail ${new Date().toLocaleString('sv-SE')}]\n`;
+      const appendedBody = input.gmailMessageId
+        ? `[Gmail ID: ${input.gmailMessageId}]\n${input.originalMessage}`
+        : input.originalMessage;
+      const updated = await tx.ticket.update({
+        where: { id: parent.id },
+        data: {
+          originalMessage: `${parent.originalMessage}${separator}${appendedBody}`,
+        },
+      });
+      return { ticket: updated, created: false };
+    };
+
     // Caller already identified the parent thread (typically a customer
     // reply matching an older ticket via Re:/Sv: subject). Merge in
     // unconditionally when the parent still exists for this tenant.
@@ -65,23 +94,30 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
         },
       });
       if (parent) {
-        if (
-          input.gmailMessageId &&
-          parent.originalMessage.includes(`[Gmail ID: ${input.gmailMessageId}]`)
-        ) {
-          return { ticket: parent, created: false };
-        }
-        const separator = `\n\n---\n[Följdmail ${new Date().toLocaleString('sv-SE')}]\n`;
-        const appendedBody = input.gmailMessageId
-          ? `[Gmail ID: ${input.gmailMessageId}]\n${input.originalMessage}`
-          : input.originalMessage;
-        const updated = await tx.ticket.update({
-          where: { id: parent.id },
-          data: {
-            originalMessage: `${parent.originalMessage}${separator}${appendedBody}`,
-          },
-        });
-        return { ticket: updated, created: false };
+        const result = await mergeInto(parent);
+        return result as UpsertTicketResult;
+      }
+    }
+
+    // Gmail thread-id lookup. The thread id stays stable across an
+    // entire conversation regardless of subject mangling ("Re: Re: Sv:")
+    // or whether the customer trims/edits the subject line. This is
+    // the most reliable way to keep follow-ups in the same ticket and
+    // was added specifically to stop the recurring "original ticket
+    // sneaks in alongside the reply" duplicate.
+    if (input.gmailThreadId) {
+      const threadMarker = `[Gmail Thread: ${input.gmailThreadId}]`;
+      const parent = await tx.ticket.findFirst({
+        where: {
+          tenantId: input.tenantId,
+          originalMessage: { contains: threadMarker },
+          status: { notIn: ['archived', 'duplicate'] },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (parent) {
+        const result = await mergeInto(parent);
+        return result as UpsertTicketResult;
       }
     }
 
@@ -101,29 +137,17 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
     );
 
     if (match) {
-      // Guard against re-appending the exact same Gmail message (possible
-      // when the Gmail "mark as read" call didn't complete before the next
-      // sync picked up the same message).
-      if (
-        input.gmailMessageId &&
-        match.originalMessage.includes(`[Gmail ID: ${input.gmailMessageId}]`)
-      ) {
-        return { ticket: match, created: false };
-      }
-
-      const separator = `\n\n---\n[Följdmail ${new Date().toLocaleString('sv-SE')}]\n`;
-      const appendedBody = input.gmailMessageId
-        ? `[Gmail ID: ${input.gmailMessageId}]\n${input.originalMessage}`
-        : input.originalMessage;
-
-      const updated = await tx.ticket.update({
-        where: { id: match.id },
-        data: {
-          originalMessage: `${match.originalMessage}${separator}${appendedBody}`,
-        },
-      });
-      return { ticket: updated, created: false };
+      const result = await mergeInto(match);
+      return result as UpsertTicketResult;
     }
+
+    // Embed the Gmail thread id as a marker in originalMessage so the
+    // thread-id lookup above will find this ticket on the next message
+    // in the conversation. Done as a marker (no schema change required)
+    // so existing tickets without thread ids continue to work.
+    const messagePrefix = input.gmailThreadId
+      ? `[Gmail Thread: ${input.gmailThreadId}]\n`
+      : '';
 
     const created = await tx.ticket.create({
       data: {
@@ -131,7 +155,7 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
         customerEmail: input.customerEmail,
         customerName: input.customerName ?? null,
         subject: input.subject,
-        originalMessage: input.originalMessage,
+        originalMessage: `${messagePrefix}${input.originalMessage}`,
         status: input.status ?? 'new',
         priority: input.priority ?? 'normal',
         contextData: (input.contextData ?? undefined) as Prisma.InputJsonValue | undefined,
