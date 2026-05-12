@@ -6,6 +6,7 @@ import { generateAIResponse } from '@/lib/services/ai-generator';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
 import { sendConfirmationEmail } from '@/lib/services/confirmation-email';
+import { getBlockedPatterns, isBlocked } from '@/lib/services/blocked-senders';
 
 async function syncSingleAccount(account: {
   id: string;
@@ -55,6 +56,7 @@ async function syncSingleAccount(account: {
     },
   });
   const contextAggregator = new ContextAggregator();
+  const blockedPatterns = await getBlockedPatterns(tenant.id);
 
   const response = await gmail.users.messages.list({
     userId: 'me',
@@ -82,6 +84,22 @@ async function syncSingleAccount(account: {
       const emailMatch = senderRaw.match(/<([^>]+)>/);
       const customerEmail = emailMatch ? emailMatch[1] : senderRaw.trim();
       const customerName = from.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
+
+      // Block-list filter: drop the message silently (still mark read
+      // so it disappears from the inbox) and skip ticket creation.
+      if (isBlocked(customerEmail, blockedPatterns)) {
+        console.log(`[Email Sync] Blocked sender ${customerEmail}, skipping message ${message.id}`);
+        try {
+          await gmail.users.messages.modify({
+            userId: 'me',
+            id: message.id!,
+            requestBody: { removeLabelIds: ['UNREAD'] },
+          });
+        } catch (err) {
+          console.error(`[Email Sync] Failed to mark blocked message read:`, err);
+        }
+        continue;
+      }
 
       // Recursive function to extract all text content from nested parts
       function extractTextFromParts(parts: any[]): string {
@@ -159,6 +177,8 @@ async function syncSingleAccount(account: {
         }
       }
 
+      const gmailThreadId = msg.data.threadId || null;
+
       // Check if ticket already exists for this Gmail message ID. Atomic
       // dedup below also handles this, but a quick pre-check avoids
       // fetching context & attachments for messages we've already seen.
@@ -176,6 +196,23 @@ async function syncSingleAccount(account: {
         continue;
       }
 
+      // Gmail thread-id match wins over the subject heuristic — if any
+      // earlier message in this thread already became a ticket, merge.
+      // Catches the reported case where replying to an autoresponder
+      // produced a duplicate because the subject prefix changed.
+      let threadIdMatchTicket: { id: string; status: string } | null = null;
+      if (gmailThreadId) {
+        threadIdMatchTicket = await prisma.ticket.findFirst({
+          where: {
+            tenantId: tenant.id,
+            originalMessage: { contains: `[Gmail Thread: ${gmailThreadId}]` },
+            status: { notIn: ['archived', 'duplicate'] },
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, status: true },
+        });
+      }
+
       const contextData = await contextAggregator.gatherContext(customerEmail, integrations as any);
 
       // Customer replies (Re:/Sv:/Fwd:/Fw:) should be appended to the
@@ -186,8 +223,14 @@ async function syncSingleAccount(account: {
       // duplicate ticket.
       const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
       const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
-      let threadParentId: string | null = null;
-      if (isReply && subjectNormalized) {
+
+      // Prefer the Gmail thread-id match; fall back to subject heuristic
+      // when no thread match is found (e.g. legacy tickets without the
+      // marker).
+      let threadParentId: string | null = threadIdMatchTicket?.id || null;
+      let threadParentStatus: string | null = threadIdMatchTicket?.status || null;
+
+      if (!threadParentId && isReply && subjectNormalized) {
         const priorTicket = await prisma.ticket.findFirst({
           where: {
             tenantId: tenant.id,
@@ -199,23 +242,26 @@ async function syncSingleAccount(account: {
           },
           orderBy: { createdAt: 'desc' },
         });
-
         if (priorTicket) {
           threadParentId = priorTicket.id;
-          // Move "new" tickets that the agent hasn't picked up yet into
-          // Öppna so it's clear there's been customer activity. Don't
-          // ever flip closed/sent/review tickets back open — those
-          // statuses represent agent decisions; the new reply gets
-          // appended to the thread but the resolved status stays put.
-          if (priorTicket.status === 'new') {
-            await prisma.ticket.update({
-              where: { id: priorTicket.id },
-              data: { status: 'in_progress' },
-            });
-            console.log(`[Email Sync] Customer reply detected, moved ticket ${priorTicket.id} from Nytt to Öppna`);
-          } else {
-            console.log(`[Email Sync] Customer reply appended to ticket ${priorTicket.id} (status preserved: ${priorTicket.status})`);
-          }
+          threadParentStatus = priorTicket.status;
+        }
+      }
+
+      if (threadParentId && threadParentStatus) {
+        // Move "new" tickets that the agent hasn't picked up yet into
+        // Öppna so it's clear there's been customer activity. Don't
+        // ever flip closed/sent/review tickets back open — those
+        // statuses represent agent decisions; the new reply gets
+        // appended to the thread but the resolved status stays put.
+        if (threadParentStatus === 'new') {
+          await prisma.ticket.update({
+            where: { id: threadParentId },
+            data: { status: 'in_progress' },
+          });
+          console.log(`[Email Sync] Customer message merged into ticket ${threadParentId} (moved Nytt → Öppna)`);
+        } else {
+          console.log(`[Email Sync] Customer message merged into ticket ${threadParentId} (status preserved: ${threadParentStatus})`);
         }
       }
 
@@ -238,6 +284,7 @@ async function syncSingleAccount(account: {
         priority: 'normal',
         contextData,
         gmailMessageId: message.id,
+        gmailThreadId,
         threadParentTicketId: threadParentId,
       });
 

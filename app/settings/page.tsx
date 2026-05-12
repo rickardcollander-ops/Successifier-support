@@ -1,9 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, ExternalLink, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
+import { Mail, ExternalLink, RefreshCw, CheckCircle, AlertCircle, Ban, X } from 'lucide-react';
 import IntegrationCard from '@/components/IntegrationCard';
 import type { Integration } from '@/lib/types';
+
+interface BlockedSender {
+  id: string;
+  pattern: string;
+  reason: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
 
 interface ConnectedEmailAccount {
   id: string;
@@ -18,11 +26,68 @@ export default function SettingsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [emailAccounts, setEmailAccounts] = useState<ConnectedEmailAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [blockedSenders, setBlockedSenders] = useState<BlockedSender[]>([]);
+  const [blockedInput, setBlockedInput] = useState('');
+  const [blockedReason, setBlockedReason] = useState('');
+  const [blockedError, setBlockedError] = useState<string | null>(null);
+  const [blockedSubmitting, setBlockedSubmitting] = useState(false);
 
   useEffect(() => {
     fetchIntegrations();
     fetchEmailAccounts();
+    fetchBlockedSenders();
   }, []);
+
+  const fetchBlockedSenders = async () => {
+    try {
+      const res = await fetch('/api/blocked-senders');
+      if (res.ok) {
+        const data = await res.json();
+        setBlockedSenders(data.blockedSenders || []);
+      }
+    } catch (error) {
+      console.error('Error fetching blocked senders:', error);
+    }
+  };
+
+  const addBlockedSender = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!blockedInput.trim()) return;
+    setBlockedSubmitting(true);
+    setBlockedError(null);
+    try {
+      const res = await fetch('/api/blocked-senders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pattern: blockedInput.trim(),
+          reason: blockedReason.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setBlockedError(data.error || `Fel: ${res.status}`);
+        return;
+      }
+      setBlockedInput('');
+      setBlockedReason('');
+      await fetchBlockedSenders();
+    } catch (error) {
+      setBlockedError('Nätverksfel');
+    } finally {
+      setBlockedSubmitting(false);
+    }
+  };
+
+  const removeBlockedSender = async (id: string) => {
+    if (!confirm('Ta bort denna blockering?')) return;
+    try {
+      await fetch(`/api/blocked-senders?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await fetchBlockedSenders();
+    } catch (error) {
+      console.error('Error removing blocked sender:', error);
+    }
+  };
 
   const fetchEmailAccounts = async () => {
     try {
@@ -243,6 +308,82 @@ export default function SettingsPage() {
               </a>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Blocked senders */}
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Blockerade avsändare</h2>
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-center flex-shrink-0">
+                <Ban className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="font-medium text-slate-900 dark:text-slate-100">Filtrera bort avsändare</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+                  Mejl från dessa adresser markeras automatiskt som lästa i Gmail och skapar inga ärenden. Ange en hel e-postadress (t.ex. <code>spam@exempel.se</code>) eller en hel domän med inledande @ (t.ex. <code>@spamdomän.se</code>).
+                </p>
+              </div>
+            </div>
+          </div>
+          <form onSubmit={addBlockedSender} className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-2 sm:flex-row sm:items-start">
+            <input
+              type="text"
+              value={blockedInput}
+              onChange={(e) => setBlockedInput(e.target.value)}
+              placeholder="email@exempel.se eller @exempel.se"
+              className="flex-1 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              required
+            />
+            <input
+              type="text"
+              value={blockedReason}
+              onChange={(e) => setBlockedReason(e.target.value)}
+              placeholder="Anledning (valfritt)"
+              className="flex-1 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            />
+            <button
+              type="submit"
+              disabled={blockedSubmitting || !blockedInput.trim()}
+              className="px-4 py-2 text-sm font-medium rounded-md bg-[#7C5CFF] text-white hover:bg-[#6B4FE0] disabled:opacity-50 whitespace-nowrap"
+            >
+              {blockedSubmitting ? 'Lägger till…' : 'Blockera'}
+            </button>
+          </form>
+          {blockedError && (
+            <div className="px-4 py-2 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800">
+              {blockedError}
+            </div>
+          )}
+          {blockedSenders.length === 0 ? (
+            <div className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
+              Inga blockerade avsändare ännu.
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100 dark:divide-slate-700">
+              {blockedSenders.map((bs) => (
+                <div key={bs.id} className="p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm text-slate-900 dark:text-slate-100 truncate">{bs.pattern}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {bs.reason ? `${bs.reason} · ` : ''}
+                      Tillagd {new Date(bs.createdAt).toLocaleDateString('sv-SE')}
+                      {bs.createdBy ? ` av ${bs.createdBy}` : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => removeBlockedSender(bs.id)}
+                    className="text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition-colors flex-shrink-0"
+                    title="Ta bort blockering"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

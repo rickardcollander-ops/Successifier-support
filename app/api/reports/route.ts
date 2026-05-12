@@ -79,13 +79,17 @@ export async function GET(request: NextRequest) {
       (t) => t.status === 'new' || t.status === 'in_progress'
     ).length;
 
-    // Average response time (in hours)
-    const respondedTickets = tickets.filter((t) => t.aiResponse || t.finalResponse);
+    // Average response time (in hours). Only count tickets where the
+    // agent actually clicked Send (sentAt is set) — earlier we used
+    // updatedAt - createdAt which moves every time anything on the
+    // ticket changes (AI suggestion arriving, assignment change, etc.)
+    // and inflated the number compared to actual time-to-reply.
+    const respondedTickets = tickets.filter((t) => t.sentAt);
     const avgResponseTime = respondedTickets.length > 0
       ? respondedTickets.reduce((sum, ticket) => {
           const created = new Date(ticket.createdAt).getTime();
-          const updated = new Date(ticket.updatedAt).getTime();
-          return sum + (updated - created) / (1000 * 60 * 60); // Convert to hours
+          const sent = new Date(ticket.sentAt!).getTime();
+          return sum + (sent - created) / (1000 * 60 * 60); // Convert to hours
         }, 0) / respondedTickets.length
       : 0;
 
@@ -115,16 +119,33 @@ export async function GET(request: NextRequest) {
     for (const agent of AGENTS) {
       perUserMap.set(agent, { name: agent, assigned: 0, sent: 0 });
     }
+    // sentBy is stored as session.user.name OR session.user.email, so
+    // Malin sometimes gets logged as "Malin Sundberg" and sometimes as
+    // "malin@doldadress.se". Resolve both forms back to the canonical
+    // agent name when possible, otherwise the report shows her at 0.
+    const resolveAgent = (raw: string | null | undefined): string | null => {
+      if (!raw) return null;
+      if (perUserMap.has(raw)) return raw;
+      const lower = raw.toLowerCase();
+      for (const agent of AGENTS) {
+        if (agent.toLowerCase() === lower) return agent;
+        const first = agent.split(' ')[0].toLowerCase();
+        if (lower.includes(first)) return agent;
+      }
+      return raw;
+    };
     for (const t of tickets) {
       if (t.assignedTo) {
-        const existing = perUserMap.get(t.assignedTo) || { name: t.assignedTo, assigned: 0, sent: 0 };
+        const name = resolveAgent(t.assignedTo) || t.assignedTo;
+        const existing = perUserMap.get(name) || { name, assigned: 0, sent: 0 };
         existing.assigned += 1;
-        perUserMap.set(t.assignedTo, existing);
+        perUserMap.set(name, existing);
       }
       if (t.sentBy) {
-        const existing = perUserMap.get(t.sentBy) || { name: t.sentBy, assigned: 0, sent: 0 };
+        const name = resolveAgent(t.sentBy) || t.sentBy;
+        const existing = perUserMap.get(name) || { name, assigned: 0, sent: 0 };
         existing.sent += 1;
-        perUserMap.set(t.sentBy, existing);
+        perUserMap.set(name, existing);
       }
     }
     const perUserStats = Array.from(perUserMap.values())

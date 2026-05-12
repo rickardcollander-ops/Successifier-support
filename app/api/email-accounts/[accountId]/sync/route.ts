@@ -6,6 +6,7 @@ import { generateAIResponse } from '@/lib/services/ai-generator';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
 import { sendConfirmationEmail } from '@/lib/services/confirmation-email';
+import { getBlockedPatterns, isBlocked } from '@/lib/services/blocked-senders';
 
 export async function POST(
   request: NextRequest,
@@ -99,6 +100,7 @@ export async function POST(
       },
     });
     const contextAggregator = new ContextAggregator();
+    const blockedPatterns = await getBlockedPatterns(tenant.id);
 
     for (const message of messages) {
       try {
@@ -118,6 +120,20 @@ export async function POST(
         const customerEmail = emailMatch ? emailMatch[1] : senderRaw.trim();
         const customerName = from.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
 
+        if (isBlocked(customerEmail, blockedPatterns)) {
+          console.log(`[Email Sync] Blocked sender ${customerEmail}, skipping ${message.id}`);
+          try {
+            await gmail.users.messages.modify({
+              userId: 'me',
+              id: message.id!,
+              requestBody: { removeLabelIds: ['UNREAD'] },
+            });
+          } catch (err) {
+            console.error('[Email Sync] Failed to mark blocked message read:', err);
+          }
+          continue;
+        }
+
         // Get email body
         let body = '';
         if (msg.data.payload?.body?.data) {
@@ -128,6 +144,8 @@ export async function POST(
             body = Buffer.from(textPart.body.data, 'base64').toString();
           }
         }
+
+        const gmailThreadId = msg.data.threadId || null;
 
         // Skip if this exact Gmail message is already a ticket (pre-check
         // before fetching context; upsertTicket also handles this race).
@@ -141,12 +159,28 @@ export async function POST(
           continue;
         }
 
+        let threadIdMatchTicket: { id: string; status: string } | null = null;
+        if (gmailThreadId) {
+          threadIdMatchTicket = await prisma.ticket.findFirst({
+            where: {
+              tenantId: tenant.id,
+              originalMessage: { contains: `[Gmail Thread: ${gmailThreadId}]` },
+              status: { notIn: ['archived', 'duplicate'] },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, status: true },
+          });
+        }
+
         const contextData = await contextAggregator.gatherContext(customerEmail, integrations as any);
 
         const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
         const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
-        let threadParentId: string | null = null;
-        if (isReply && subjectNormalized) {
+
+        let threadParentId: string | null = threadIdMatchTicket?.id || null;
+        let threadParentStatus: string | null = threadIdMatchTicket?.status || null;
+
+        if (!threadParentId && isReply && subjectNormalized) {
           const priorTicket = await prisma.ticket.findFirst({
             where: {
               tenantId: tenant.id,
@@ -158,18 +192,21 @@ export async function POST(
             },
             orderBy: { createdAt: 'desc' },
           });
-
           if (priorTicket) {
             threadParentId = priorTicket.id;
-            if (priorTicket.status === 'new') {
-              await prisma.ticket.update({
-                where: { id: priorTicket.id },
-                data: { status: 'in_progress' },
-              });
-              console.log(`[Email Sync] Customer reply detected, moved ticket ${priorTicket.id} from Nytt to Öppna`);
-            } else {
-              console.log(`[Email Sync] Customer reply appended to ticket ${priorTicket.id} (status preserved: ${priorTicket.status})`);
-            }
+            threadParentStatus = priorTicket.status;
+          }
+        }
+
+        if (threadParentId && threadParentStatus) {
+          if (threadParentStatus === 'new') {
+            await prisma.ticket.update({
+              where: { id: threadParentId },
+              data: { status: 'in_progress' },
+            });
+            console.log(`[Email Sync] Customer message merged into ticket ${threadParentId} (moved Nytt → Öppna)`);
+          } else {
+            console.log(`[Email Sync] Customer message merged into ticket ${threadParentId} (status preserved: ${threadParentStatus})`);
           }
         }
 
@@ -183,6 +220,7 @@ export async function POST(
           priority: 'normal',
           contextData,
           gmailMessageId: message.id,
+          gmailThreadId,
           threadParentTicketId: threadParentId,
         });
 

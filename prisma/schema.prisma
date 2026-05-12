@@ -14,12 +14,13 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tickets      Ticket[]
-  knowledge    KnowledgeBase[]
-  integrations Integration[]
-  agents       Agent[]
-  users        User[]
-  apiKeys      ApiKey[]
+  tickets        Ticket[]
+  knowledge      KnowledgeBase[]
+  integrations   Integration[]
+  agents         Agent[]
+  users          User[]
+  apiKeys        ApiKey[]
+  blockedSenders BlockedSender[]
 }
 
 model Agent {
@@ -100,6 +101,23 @@ model AIResponseFeedback {
   @@index([tenantId, createdAt])
   @@index([tenantId, rating])
   @@index([customerEmail])
+}
+
+// Email addresses (or domains, with a leading "@") whose incoming mail
+// should be silently dropped by the Gmail sync. Used to filter persistent
+// spam senders without having to delete tickets one by one.
+model BlockedSender {
+  id        String   @id @default(cuid())
+  tenantId  String
+  pattern   String   // e.g. "spam@example.com" or "@spamdomain.com"
+  reason    String?
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, pattern])
+  @@index([tenantId])
 }
 
 model Integration {

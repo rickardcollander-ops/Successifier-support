@@ -20,6 +20,33 @@ function buildConfirmationEmail(originalSubject: string) {
   return { subject, body };
 }
 
+// Addresses that obviously don't accept incoming mail. Sending an
+// autoresponder to these used to flood our own inbox with bounces from
+// mailer-daemon (e.g. our confirmation to no-reply@billecta.com).
+const UNDELIVERABLE_LOCAL_PARTS = new Set([
+  'no-reply',
+  'noreply',
+  'do-not-reply',
+  'donotreply',
+  'mailer-daemon',
+  'postmaster',
+  'bounce',
+  'bounces',
+  'notifications',
+  'notification',
+]);
+
+export function isUndeliverableAddress(email: string): boolean {
+  if (!email) return true;
+  const lower = email.toLowerCase().trim();
+  const local = lower.split('@')[0] || '';
+  if (UNDELIVERABLE_LOCAL_PARTS.has(local)) return true;
+  // Common "no-reply" variants we don't want to enumerate exactly.
+  if (/^no[\-_\.]?reply/.test(local)) return true;
+  if (/^do[\-_\.]?not[\-_\.]?reply/.test(local)) return true;
+  return false;
+}
+
 // Send a "we received your email" autoresponder from the same Gmail account
 // that the customer emailed. Returns silently on failure — we never want a
 // failing autoresponder to block ticket creation.
@@ -29,6 +56,13 @@ export async function sendConfirmationEmail(opts: {
   originalSubject: string;
 }): Promise<void> {
   try {
+    // Don't autoreply to no-reply@/postmaster@/mailer-daemon@ etc. —
+    // these either bounce immediately or generate noise notifications
+    // that come back into our own inbox.
+    if (isUndeliverableAddress(opts.toEmail)) {
+      console.log(`[Confirmation] Skipping autoresponder to undeliverable address ${opts.toEmail}`);
+      return;
+    }
     const account = await prisma.emailAccount.findUnique({
       where: { id: opts.emailAccountId },
     });

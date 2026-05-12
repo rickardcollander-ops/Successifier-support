@@ -97,24 +97,73 @@ export async function POST(
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-      // Check if response contains inline images
+      // Extract the Gmail thread id stored on the original ticket so the
+      // outgoing message stays in the same conversation in Gmail. Without
+      // this Gmail treated our replies as new threads, which made the
+      // mails from kontakt@doldadress.se look disconnected.
+      const threadMarker = ticket.originalMessage.match(/\[Gmail Thread: ([^\]]+)\]/);
+      const gmailThreadId = threadMarker?.[1] || null;
+
+      // Don't prefix "Re:" if the subject already starts with one
+      // (case-insensitive, also Swedish "Sv:") — otherwise outgoing
+      // mails accumulated "Re: Re: Re:" prefixes.
+      const subjectPrefixed = /^\s*(re|sv|fwd|fw)\s*:/i.test(ticket.subject)
+        ? ticket.subject
+        : `Re: ${ticket.subject}`;
+
+      // Build a clean multipart/alternative message: plain text for
+      // older clients, properly-styled HTML for everyone else. The old
+      // format relied on `white-space: pre-wrap` which rendered the
+      // greeting + signature as a single visually-glued block in some
+      // clients. Now paragraphs become real <p> blocks.
       const hasImages = response.includes('[INLINE_IMAGES]');
-      const textPart = hasImages ? response.split('[INLINE_IMAGES]')[0] : response;
+      const textOnly = hasImages ? response.split('[INLINE_IMAGES]')[0] : response;
       const imageHtml = hasImages ? response.split('[INLINE_IMAGES]')[1] : '';
+      const plainText = textOnly.replace(/\r?\n\s*\r?\n/g, '\n\n');
+      const escapeHtml = (s: string) =>
+        s.replace(/&/g, '&amp;')
+         .replace(/</g, '&lt;')
+         .replace(/>/g, '&gt;')
+         .replace(/"/g, '&quot;')
+         .replace(/'/g, '&#39;');
+      const htmlParagraphs = plainText
+        .trim()
+        .split(/\r?\n\r?\n/)
+        .map((para) => `<p style="margin:0 0 12px 0;">${escapeHtml(para).replace(/\r?\n/g, '<br/>')}</p>`)
+        .join('\n');
+      const htmlBody = [
+        '<!DOCTYPE html>',
+        '<html><body style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#222;">',
+        `<div style="max-width:640px;">${htmlParagraphs}${imageHtml}</div>`,
+        '</body></html>',
+      ].join('');
 
-      const contentType = hasImages ? 'text/html; charset="UTF-8"' : 'text/plain; charset="UTF-8"';
-      const emailBody = hasImages
-        ? `<div style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;">${textPart.replace(/\n/g, '<br/>')}</div>${imageHtml}`
-        : textPart;
-
-      const rawMessage = [
-        `From: ${emailAccount.email}`,
+      const boundary = `=_dadrs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+      const headers = [
+        `From: Doldadress Kundtjänst <${emailAccount.email}>`,
         `To: ${recipientEmail || ticket.customerEmail}`,
-        `Subject: Re: ${ticket.subject}`,
-        `Content-Type: ${contentType}`,
+        `Subject: ${subjectPrefixed}`,
+        'MIME-Version: 1.0',
+        `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      ];
+      const mimeBody = [
         '',
-        emailBody,
+        `--${boundary}`,
+        'Content-Type: text/plain; charset="UTF-8"',
+        'Content-Transfer-Encoding: 8bit',
+        '',
+        plainText,
+        '',
+        `--${boundary}`,
+        'Content-Type: text/html; charset="UTF-8"',
+        'Content-Transfer-Encoding: 8bit',
+        '',
+        htmlBody,
+        '',
+        `--${boundary}--`,
+        '',
       ].join('\r\n');
+      const rawMessage = headers.join('\r\n') + '\r\n' + mimeBody;
 
       const encodedMessage = Buffer.from(rawMessage)
         .toString('base64')
@@ -122,9 +171,14 @@ export async function POST(
         .replace(/\//g, '_')
         .replace(/=+$/, '');
 
+      // Pass the Gmail thread id so the customer sees our reply
+      // inside the original conversation instead of as a new thread.
+      const sendRequest: any = { raw: encodedMessage };
+      if (gmailThreadId) sendRequest.threadId = gmailThreadId;
+
       await gmail.users.messages.send({
         userId: 'me',
-        requestBody: { raw: encodedMessage },
+        requestBody: sendRequest,
       });
 
       sentVia = emailAccount.email;
