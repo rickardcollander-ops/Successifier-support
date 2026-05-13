@@ -111,6 +111,16 @@ export async function POST(
         ? ticket.subject
         : `Re: ${ticket.subject}`;
 
+      // RFC 2047 encoded-word for any header value containing non-ASCII
+      // (e.g. å, ä, ö). Gmail's send API otherwise rejects the message
+      // — that was Malin's "Mailet kunde inte skickas. Försök igen."
+      // when the subject or display name contained Swedish letters.
+      const encodeHeader = (value: string): string => {
+        if (/^[\x20-\x7E]*$/.test(value)) return value;
+        const b64 = Buffer.from(value, 'utf-8').toString('base64');
+        return `=?UTF-8?B?${b64}?=`;
+      };
+
       // Build a clean multipart/alternative message: plain text for
       // older clients, properly-styled HTML for everyone else. The old
       // format relied on `white-space: pre-wrap` which rendered the
@@ -138,11 +148,16 @@ export async function POST(
         '</body></html>',
       ].join('');
 
-      const boundary = `=_dadrs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+      // Boundary must avoid characters that some MTAs treat specially.
+      // Earlier we used a leading "=" which is the sentinel for
+      // quoted-printable and was a likely cause of intermittent send
+      // failures.
+      const boundary = `dadrs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+      const fromValue = `${encodeHeader('Doldadress Kundtjänst')} <${emailAccount.email}>`;
       const headers = [
-        `From: Doldadress Kundtjänst <${emailAccount.email}>`,
+        `From: ${fromValue}`,
         `To: ${recipientEmail || ticket.customerEmail}`,
-        `Subject: ${subjectPrefixed}`,
+        `Subject: ${encodeHeader(subjectPrefixed)}`,
         'MIME-Version: 1.0',
         `Content-Type: multipart/alternative; boundary="${boundary}"`,
       ];
@@ -165,7 +180,7 @@ export async function POST(
       ].join('\r\n');
       const rawMessage = headers.join('\r\n') + '\r\n' + mimeBody;
 
-      const encodedMessage = Buffer.from(rawMessage)
+      const encodedMessage = Buffer.from(rawMessage, 'utf-8')
         .toString('base64')
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
@@ -176,10 +191,27 @@ export async function POST(
       const sendRequest: any = { raw: encodedMessage };
       if (gmailThreadId) sendRequest.threadId = gmailThreadId;
 
-      await gmail.users.messages.send({
-        userId: 'me',
-        requestBody: sendRequest,
-      });
+      try {
+        await gmail.users.messages.send({
+          userId: 'me',
+          requestBody: sendRequest,
+        });
+      } catch (gmailError: any) {
+        // Surface the actual Gmail error so the UI/log shows why the
+        // send failed instead of a generic "Försök igen". Googleapis
+        // throws errors with the API message inside `errors[0].message`
+        // or `message`.
+        const detail =
+          gmailError?.errors?.[0]?.message ||
+          gmailError?.response?.data?.error?.message ||
+          gmailError?.message ||
+          'Okänt Gmail-fel';
+        console.error('[Send] Gmail send failed:', detail, gmailError);
+        return NextResponse.json(
+          { error: `Gmail kunde inte skicka mejlet: ${detail}` },
+          { status: 502 }
+        );
+      }
 
       sentVia = emailAccount.email;
     } else {
@@ -212,11 +244,20 @@ export async function POST(
         ? `<div style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;">${textPartResend.replace(/\n/g, '<br/>')}</div>${imageHtmlResend}`
         : `<div style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;">${response.replace(/\n/g, '<br/>')}</div>`;
 
-      await resendService.sendEmail(
-        recipientEmail || ticket.customerEmail,
-        `Re: ${ticket.subject}`,
-        htmlContent
-      );
+      try {
+        await resendService.sendEmail(
+          recipientEmail || ticket.customerEmail,
+          `Re: ${ticket.subject}`,
+          htmlContent
+        );
+      } catch (resendError: any) {
+        const detail = resendError?.message || 'Okänt Resend-fel';
+        console.error('[Send] Resend send failed:', detail, resendError);
+        return NextResponse.json(
+          { error: `Resend kunde inte skicka mejlet: ${detail}` },
+          { status: 502 }
+        );
+      }
 
       sentVia = (resendIntegration.credentials as any).fromEmail || 'resend';
     }
@@ -276,10 +317,11 @@ Detta svar har skickats till en riktig kund och är verifierat korrekt.`,
     }
 
     return NextResponse.json({ ...updatedTicket, sentVia });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending response:', error);
+    const detail = error?.message || 'Okänt fel';
     return NextResponse.json(
-      { error: 'Failed to send response' },
+      { error: `Kunde inte skicka svaret: ${detail}` },
       { status: 500 }
     );
   }

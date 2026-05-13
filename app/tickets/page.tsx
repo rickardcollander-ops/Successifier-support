@@ -386,7 +386,7 @@ export default function TicketsPage() {
     }
   };
 
-  const handleSendResponse = async (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string): Promise<boolean> => {
+  const handleSendResponse = async (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string): Promise<{ ok: boolean; error?: string }> => {
     try {
       const res = await fetch(`/api/tickets/${ticketId}/send`, {
         method: 'POST',
@@ -400,12 +400,13 @@ export default function TicketsPage() {
         if (selectedTicket?.id === ticketId) {
           setSelectedTicket(updatedTicket);
         }
-        return true;
+        return { ok: true };
       }
-      return false;
-    } catch (error) {
+      const data = await res.json().catch(() => ({}));
+      return { ok: false, error: data?.error || `HTTP ${res.status}` };
+    } catch (error: any) {
       console.error('Error sending response:', error);
-      return false;
+      return { ok: false, error: error?.message || 'Nätverksfel' };
     }
   };
 
