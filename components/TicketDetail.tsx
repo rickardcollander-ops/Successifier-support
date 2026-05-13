@@ -58,7 +58,7 @@ interface TicketDetailProps {
   ticket: Ticket;
   onUpdate: (ticketId: string, updates: Partial<Ticket>) => void;
   onGenerateAI: (ticketId: string) => Promise<string | null>;
-  onSend: (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string) => Promise<boolean>;
+  onSend: (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string) => Promise<{ ok: boolean; error?: string }>;
   onDelete?: (ticketId: string) => void;
   onSpam?: (ticketId: string) => void;
   onSelectTicket?: (ticket: Ticket | null) => void;
@@ -328,11 +328,11 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
       finalResponseContent = response + '\n[INLINE_IMAGES]' + imagesHtml;
     }
 
-    const success = await onSend(ticket.id, finalResponseContent, selectedFromAccount || undefined, recipientEmail);
+    const result = await onSend(ticket.id, finalResponseContent, selectedFromAccount || undefined, recipientEmail);
     isSendingRef.current = false;
     setIsSending(false);
 
-    if (success) {
+    if (result.ok) {
       const fromAccount = emailAccounts.find(a => a.id === selectedFromAccount);
       setSendConfirmation({
         type: 'success',
@@ -342,9 +342,12 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     } else {
       setSendConfirmation({
         type: 'error',
-        message: 'Fel: Mailet kunde inte skickas. Försök igen.',
+        message: result.error
+          ? `Mailet kunde inte skickas: ${result.error}`
+          : 'Mailet kunde inte skickas. Försök igen.',
       });
-      setTimeout(() => setSendConfirmation(null), 10000);
+      // Leave the error visible longer so support can read it.
+      setTimeout(() => setSendConfirmation(null), 20000);
     }
   };
 
