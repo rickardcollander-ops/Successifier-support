@@ -104,6 +104,19 @@ export async function POST(
       const threadMarker = ticket.originalMessage.match(/\[Gmail Thread: ([^\]]+)\]/);
       const gmailThreadId = threadMarker?.[1] || null;
 
+      // The thread id is only valid in the inbox that originally
+      // received the message. If support picks a different "Svara
+      // från"-konto we must NOT pass it — otherwise Gmail returns
+      // "Requested entity was not found" and the whole send fails.
+      // We stamped the inbox account into originalMessage at sync time
+      // as "[Inbox account: <email>]"; if that header is missing
+      // (legacy tickets) we err on the side of caution and skip the
+      // thread id.
+      const inboxMarker = ticket.originalMessage.match(/\[Inbox account: ([^\]]+)\]/);
+      const ticketInboxAccount = inboxMarker?.[1]?.trim().toLowerCase() || null;
+      const sameInbox = ticketInboxAccount && ticketInboxAccount === emailAccount.email.toLowerCase();
+      const safeThreadId = sameInbox ? gmailThreadId : null;
+
       // Don't prefix "Re:" if the subject already starts with one
       // (case-insensitive, also Swedish "Sv:") — otherwise outgoing
       // mails accumulated "Re: Re: Re:" prefixes.
@@ -189,28 +202,57 @@ export async function POST(
       // Pass the Gmail thread id so the customer sees our reply
       // inside the original conversation instead of as a new thread.
       const sendRequest: any = { raw: encodedMessage };
-      if (gmailThreadId) sendRequest.threadId = gmailThreadId;
+      if (safeThreadId) sendRequest.threadId = safeThreadId;
+
+      const isNotFoundError = (err: any): boolean => {
+        const code = err?.code || err?.response?.status;
+        if (code === 404) return true;
+        const msg = (err?.errors?.[0]?.message || err?.response?.data?.error?.message || err?.message || '').toLowerCase();
+        return msg.includes('not found') || msg.includes('requested entity');
+      };
 
       try {
         await gmail.users.messages.send({
           userId: 'me',
           requestBody: sendRequest,
         });
-      } catch (gmailError: any) {
-        // Surface the actual Gmail error so the UI/log shows why the
-        // send failed instead of a generic "Försök igen". Googleapis
-        // throws errors with the API message inside `errors[0].message`
-        // or `message`.
-        const detail =
-          gmailError?.errors?.[0]?.message ||
-          gmailError?.response?.data?.error?.message ||
-          gmailError?.message ||
-          'Okänt Gmail-fel';
-        console.error('[Send] Gmail send failed:', detail, gmailError);
-        return NextResponse.json(
-          { error: `Gmail kunde inte skicka mejlet: ${detail}` },
-          { status: 502 }
-        );
+      } catch (firstError: any) {
+        // Gmail can still reject the threadId — for example when the
+        // thread has been deleted or the inbox marker was missing on
+        // older tickets and we guessed wrong. Retry once without the
+        // threadId so the customer at least gets the reply.
+        if (sendRequest.threadId && isNotFoundError(firstError)) {
+          console.warn('[Send] Gmail rejected threadId, retrying without it:', firstError?.message);
+          delete sendRequest.threadId;
+          try {
+            await gmail.users.messages.send({
+              userId: 'me',
+              requestBody: sendRequest,
+            });
+          } catch (retryError: any) {
+            const detail =
+              retryError?.errors?.[0]?.message ||
+              retryError?.response?.data?.error?.message ||
+              retryError?.message ||
+              'Okänt Gmail-fel';
+            console.error('[Send] Gmail send retry failed:', detail, retryError);
+            return NextResponse.json(
+              { error: `Gmail kunde inte skicka mejlet: ${detail}` },
+              { status: 502 }
+            );
+          }
+        } else {
+          const detail =
+            firstError?.errors?.[0]?.message ||
+            firstError?.response?.data?.error?.message ||
+            firstError?.message ||
+            'Okänt Gmail-fel';
+          console.error('[Send] Gmail send failed:', detail, firstError);
+          return NextResponse.json(
+            { error: `Gmail kunde inte skicka mejlet: ${detail}` },
+            { status: 502 }
+          );
+        }
       }
 
       sentVia = emailAccount.email;
