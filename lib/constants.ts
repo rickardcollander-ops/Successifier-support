@@ -9,6 +9,7 @@
 export const AGENTS: readonly string[] = [
   'Ida Rosell',
   'Malin Sundberg',
+  'Filippa Kramp',
 ] as const;
 
 // Per-agent email sign-off. When an agent sends a reply we automatically
@@ -19,6 +20,7 @@ export const AGENTS: readonly string[] = [
 export const AGENT_SIGNATURES: Record<string, string> = {
   'Ida Rosell': 'Vänliga hälsningar,\nIda\nSupportteamet Doldadress.se',
   'Malin Sundberg': 'Vänliga hälsningar,\nMalin\nSupportteamet Doldadress.se',
+  'Filippa Kramp': 'Vänliga hälsningar,\nFilippa\nSupportteamet Doldadress.se',
 };
 
 const DEFAULT_SIGNATURE = 'Vänliga hälsningar,\nDoldadress Kundtjänst';
@@ -65,6 +67,7 @@ export interface AgentColor {
 const AGENT_COLORS: Record<string, AgentColor> = {
   'Ida Rosell': { bg: '#DC2626', border: '#B91C1C', text: '#FFFFFF' },
   'Malin Sundberg': { bg: '#16A34A', border: '#15803D', text: '#FFFFFF' },
+  'Filippa Kramp': { bg: '#2563EB', border: '#1D4ED8', text: '#FFFFFF' },
 };
 
 const DEFAULT_AGENT_COLOR: AgentColor = {
