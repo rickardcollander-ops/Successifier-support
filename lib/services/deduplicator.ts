@@ -67,18 +67,11 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
 
     // Helper to merge into an existing parent ticket. Used by both the
     // caller-supplied parent ID path and the Gmail thread-id lookup.
-    const mergeInto = async (parent: { id: string; originalMessage: string }) => {
-      // Idempotency: skip the append when we've already merged this
-      // exact physical mail. We check both keys — per-account Gmail
-      // ID (catches retries within the same inbox) and RFC 2822
-      // Message-Id (catches the same mail arriving via two synced
-      // Gmail accounts).
-      const alreadyMerged =
-        (input.gmailMessageId &&
-          parent.originalMessage.includes(`[Gmail ID: ${input.gmailMessageId}]`)) ||
-        (input.rfcMessageId &&
-          parent.originalMessage.includes(`[Message-Id: ${input.rfcMessageId}]`));
-      if (alreadyMerged) {
+    const mergeInto = async (parent: { id: string; originalMessage: string; status: string }) => {
+      if (
+        input.gmailMessageId &&
+        parent.originalMessage.includes(`[Gmail ID: ${input.gmailMessageId}]`)
+      ) {
         const refreshed = await tx.ticket.findUnique({ where: { id: parent.id } });
         return { ticket: refreshed, created: false };
       }
@@ -88,10 +81,16 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
       // append it as-is. Previously we re-prepended the Gmail ID which
       // produced duplicate "[Gmail ID: …]" lines in the merged ticket.
       const appendedBody = input.originalMessage;
+      // If the parent had been considered "done" by support (sent or
+      // closed), a fresh customer message means we missed something —
+      // reopen it to Öppna so the new follow-up shows up in the active
+      // queue instead of being buried. This is the stäng-ärende-buggen.
+      const shouldReopen = parent.status === 'sent' || parent.status === 'closed';
       const updated = await tx.ticket.update({
         where: { id: parent.id },
         data: {
           originalMessage: `${parent.originalMessage}${separator}${appendedBody}`,
+          ...(shouldReopen ? { status: 'in_progress' } : {}),
         },
       });
       return { ticket: updated, created: false };

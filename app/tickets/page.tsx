@@ -36,6 +36,30 @@ export default function TicketsPage() {
   const [dedupeRunning, setDedupeRunning] = useState(false);
   const [dedupeResult, setDedupeResult] = useState<string | null>(null);
   const [emptyingFolder, setEmptyingFolder] = useState(false);
+  const [reopeningAffected, setReopeningAffected] = useState(false);
+  const [reopenResult, setReopenResult] = useState<string | null>(null);
+
+  const reopenAffectedTickets = async () => {
+    if (reopeningAffected) return;
+    if (!confirm('Återöppna alla ärenden där en kund svarade efter att ärendet markerats som löst/skickat? De flyttas tillbaka till Öppna så ni kan följa upp.')) return;
+    setReopeningAffected(true);
+    setReopenResult(null);
+    try {
+      const res = await fetch('/api/admin/reopen-affected', { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setReopenResult(`Fel: ${err.error || res.status}`);
+        return;
+      }
+      const data = await res.json();
+      setReopenResult(`Återöppnade ${data.reopened} ärenden — finns nu i Öppna.`);
+      await fetchTickets();
+    } catch (error) {
+      setReopenResult('Nätverksfel vid återöppning');
+    } finally {
+      setReopeningAffected(false);
+    }
+  };
 
   const emptyCurrentFolder = async () => {
     if (emptyingFolder) return;
@@ -356,7 +380,14 @@ export default function TicketsPage() {
         // Functional setState so concurrent polls/updates don't clobber
         // the local update (e.g. a stale poll arriving after this PATCH).
         setTickets((prev) => prev.map(t => t.id === ticketId ? updatedTicket : t));
-        if (selectedTicket?.id === ticketId) {
+        // When closing a ticket the detail view already calls
+        // onSelectTicket(null) to clear the selection. Don't restore the
+        // updated ticket here — that race was the "stäng-ärende-bugg"
+        // where pressing Löst briefly cleared the selection and then the
+        // PATCH response set it right back.
+        if ((updates as any).status === 'closed') {
+          setSelectedTicket((curr) => (curr?.id === ticketId ? null : curr));
+        } else if (selectedTicket?.id === ticketId) {
           setSelectedTicket(updatedTicket);
         }
       }
@@ -669,8 +700,18 @@ export default function TicketsPage() {
             >
               {dedupeRunning ? 'Rensar…' : 'Rensa dubletter'}
             </button>
-            {dedupeResult && (
-              <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{dedupeResult}</span>
+            <button
+              onClick={reopenAffectedTickets}
+              disabled={reopeningAffected}
+              className="text-xs px-3 py-1.5 rounded-md border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 disabled:opacity-50 whitespace-nowrap"
+              title="Hitta ärenden där kunden svarade efter att supporten markerat som klart, och flytta tillbaka dem till Öppna"
+            >
+              {reopeningAffected ? 'Återöppnar…' : 'Återöppna drabbade'}
+            </button>
+            {(dedupeResult || reopenResult) && (
+              <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                {reopenResult || dedupeResult}
+              </span>
             )}
             <div className={`text-xs px-3 py-1.5 rounded-md border whitespace-nowrap ${
               emailSyncStatus.error
@@ -713,6 +754,7 @@ export default function TicketsPage() {
                   tickets={filteredArchivedTickets}
                   selectedTicket={selectedTicket}
                   onSelectTicket={setSelectedTicket}
+                  onDelete={handleDeleteTicket}
                 />
               </div>
               <div className="lg:col-span-2 overflow-auto">
@@ -743,6 +785,7 @@ export default function TicketsPage() {
               selectedTicket={selectedTicket}
               onSelectTicket={setSelectedTicket}
               presence={ticketPresence}
+              onDelete={handleDeleteTicket}
             />
           </div>
           <div className="lg:col-span-2 overflow-auto">
