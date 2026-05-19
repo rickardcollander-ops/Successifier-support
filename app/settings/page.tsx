@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, ExternalLink, RefreshCw, CheckCircle, AlertCircle, Ban, X, AlertTriangle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Mail, ExternalLink, RefreshCw, CheckCircle, AlertCircle, Ban, X, AlertTriangle, Trash2 } from 'lucide-react';
 import IntegrationCard from '@/components/IntegrationCard';
 import type { Integration } from '@/lib/types';
 
@@ -41,6 +42,7 @@ interface ConnectedEmailAccount {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [emailAccounts, setEmailAccounts] = useState<ConnectedEmailAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +54,48 @@ export default function SettingsPage() {
   const [affectedReport, setAffectedReport] = useState<AffectedReport | null>(null);
   const [affectedLoading, setAffectedLoading] = useState(false);
   const [affectedError, setAffectedError] = useState<string | null>(null);
+  const [affectedDeleting, setAffectedDeleting] = useState<string | null>(null);
+
+  const openAffectedTicket = (ticketId: string) => {
+    // Land on the tickets page with the deep-link query param so the
+    // tickets view auto-selects this ticket on mount (see page.tsx).
+    router.push(`/tickets?ticket=${encodeURIComponent(ticketId)}`);
+  };
+
+  const deleteAffectedTicket = async (ticketId: string) => {
+    if (affectedDeleting) return;
+    if (!confirm('Ta bort detta ärende? Detta kan inte ångras.')) return;
+    setAffectedDeleting(ticketId);
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}/delete`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(`Kunde inte radera: ${data?.error || res.status}`);
+        return;
+      }
+      // Remove the row from the local report and recompute the summary
+      // counts so the header numbers stay in sync.
+      setAffectedReport((prev) => {
+        if (!prev) return prev;
+        const remaining = prev.tickets.filter((t) => t.id !== ticketId);
+        const remainingEmails = Array.from(
+          new Set(remaining.map((t) => t.customerEmail.toLowerCase()))
+        ).sort();
+        return {
+          ...prev,
+          tickets: remaining,
+          count: remaining.length,
+          uniqueCustomerCount: remainingEmails.length,
+          customerEmails: remainingEmails,
+          totalUnseenReplies: remaining.reduce((s, t) => s + t.repliesAfterOriginal, 0),
+        };
+      });
+    } catch (e) {
+      alert('Nätverksfel vid radering');
+    } finally {
+      setAffectedDeleting(null);
+    }
+  };
 
   useEffect(() => {
     fetchIntegrations();
@@ -449,16 +493,37 @@ export default function SettingsPage() {
                         <th className="px-4 py-2 font-medium">Status</th>
                         <th className="px-4 py-2 font-medium text-right">Följdmail</th>
                         <th className="px-4 py-2 font-medium">Senaste</th>
+                        <th className="px-2 py-2 font-medium w-10" aria-label="Åtgärder" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                       {affectedReport.tickets.map((t) => (
-                        <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                        <tr
+                          key={t.id}
+                          onClick={() => openAffectedTicket(t.id)}
+                          className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40"
+                          title="Öppna ärende"
+                        >
                           <td className="px-4 py-2 font-mono text-slate-900 dark:text-slate-100 whitespace-nowrap">{t.customerEmail}</td>
                           <td className="px-4 py-2 text-slate-700 dark:text-slate-300 max-w-xs truncate" title={t.subject}>{t.subject}</td>
                           <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{t.status}</td>
                           <td className="px-4 py-2 text-right text-slate-900 dark:text-slate-100 font-semibold">{t.repliesAfterOriginal}</td>
                           <td className="px-4 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">{t.lastFollowupAt ?? '—'}</td>
+                          <td className="px-2 py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteAffectedTicket(t.id);
+                              }}
+                              disabled={affectedDeleting === t.id}
+                              className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:text-slate-500 dark:hover:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+                              title="Ta bort ärende"
+                              aria-label="Ta bort ärende"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
