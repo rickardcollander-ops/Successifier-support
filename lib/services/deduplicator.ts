@@ -39,6 +39,12 @@ export interface UpsertTicketInput {
   // dedup window of 10 minutes would let any reply that arrives later
   // spawn a duplicate.
   threadParentTicketId?: string | null;
+  // Real arrival time of the mail (e.g. Gmail's internalDate). When set
+  // we use this as the ticket's createdAt so the list shows the actual
+  // send time of the email instead of the sync timestamp. Without it,
+  // a batch of 20 mails synced together all get clustered to the same
+  // second and the order in the UI becomes arbitrary.
+  receivedAt?: Date | null;
 }
 
 export interface UpsertTicketResult {
@@ -172,6 +178,7 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
         status: input.status ?? 'new',
         priority: input.priority ?? 'normal',
         contextData: (input.contextData ?? undefined) as Prisma.InputJsonValue | undefined,
+        ...(input.receivedAt ? { createdAt: input.receivedAt } : {}),
       },
     });
 

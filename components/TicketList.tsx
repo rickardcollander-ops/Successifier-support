@@ -149,7 +149,33 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
               <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                 <span>{ticket.customerEmail}</span>
                 <span>•</span>
-                <span suppressHydrationWarning>{new Date(ticket.createdAt).toLocaleString()}</span>
+                {/* Two timestamps: when the original mail arrived (createdAt
+                    holds the Gmail internalDate for synced tickets) and
+                    when the ticket last had activity (updatedAt — bumps
+                    on follow-up mails). Show "uppdaterad" only when
+                    there's a real gap so the row stays clean for fresh
+                    tickets. */}
+                <span suppressHydrationWarning title="Inkommet">
+                  {new Date(ticket.createdAt).toLocaleString('sv-SE')}
+                </span>
+                {(() => {
+                  const created = new Date(ticket.createdAt).getTime();
+                  const updated = new Date(ticket.updatedAt).getTime();
+                  const gapMs = updated - created;
+                  if (gapMs <= 60_000) return null;
+                  return (
+                    <>
+                      <span>•</span>
+                      <span
+                        suppressHydrationWarning
+                        title="Senaste aktivitet"
+                        className="text-amber-700 dark:text-amber-400 font-medium"
+                      >
+                        Uppdaterad {new Date(ticket.updatedAt).toLocaleString('sv-SE')}
+                      </span>
+                    </>
+                  );
+                })()}
                 {ticket.aiResponse && (
                   <>
                     <span>•</span>
