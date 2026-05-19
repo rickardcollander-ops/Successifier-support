@@ -28,6 +28,11 @@ export interface UpsertTicketInput {
   // into the original ticket. This is the most reliable dedup signal
   // we have; subject/sender heuristics still apply as a fallback.
   gmailThreadId?: string | null;
+  // RFC 2822 Message-Id from the email's headers. Unlike Gmail's
+  // per-account message.id this value is identical across every
+  // inbox that received the same physical mail, so we use it as the
+  // cross-account dedup signal in the merge path as well.
+  rfcMessageId?: string | null;
   // When set, the new message is appended to this exact ticket regardless
   // of how old it is — used for customer replies that should join the
   // original thread instead of opening a fresh ticket. Without this the
@@ -63,10 +68,17 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
     // Helper to merge into an existing parent ticket. Used by both the
     // caller-supplied parent ID path and the Gmail thread-id lookup.
     const mergeInto = async (parent: { id: string; originalMessage: string }) => {
-      if (
-        input.gmailMessageId &&
-        parent.originalMessage.includes(`[Gmail ID: ${input.gmailMessageId}]`)
-      ) {
+      // Idempotency: skip the append when we've already merged this
+      // exact physical mail. We check both keys — per-account Gmail
+      // ID (catches retries within the same inbox) and RFC 2822
+      // Message-Id (catches the same mail arriving via two synced
+      // Gmail accounts).
+      const alreadyMerged =
+        (input.gmailMessageId &&
+          parent.originalMessage.includes(`[Gmail ID: ${input.gmailMessageId}]`)) ||
+        (input.rfcMessageId &&
+          parent.originalMessage.includes(`[Message-Id: ${input.rfcMessageId}]`));
+      if (alreadyMerged) {
         const refreshed = await tx.ticket.findUnique({ where: { id: parent.id } });
         return { ticket: refreshed, created: false };
       }

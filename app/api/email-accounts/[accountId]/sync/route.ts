@@ -115,6 +115,12 @@ export async function POST(
         const subject = getHeader('Subject') || 'No Subject';
         const replyTo = getHeader('Reply-To');
         const from = getHeader('From');
+        // RFC 2822 Message-Id for cross-account dedup. See sync-all
+        // for the explanation; Gmail's per-account message.id alone
+        // doesn't dedupe across two inboxes that received the same
+        // physical mail.
+        const rfcMessageIdRaw = getHeader('Message-Id') || getHeader('Message-ID');
+        const rfcMessageId = rfcMessageIdRaw.trim().replace(/^<|>$/g, '');
         const senderRaw = replyTo || from;
         const emailMatch = senderRaw.match(/<([^>]+)>/);
         const customerEmail = emailMatch ? emailMatch[1] : senderRaw.trim();
@@ -146,6 +152,34 @@ export async function POST(
         }
 
         const gmailThreadId = msg.data.threadId || null;
+
+        // Cross-account dedup via RFC 2822 Message-Id. See sync-all
+        // for full reasoning — this stops the same physical email
+        // (received in multiple inboxes) from triggering status
+        // promotion twice and flipping closed/sent tickets back to
+        // in_progress.
+        if (rfcMessageId) {
+          const seenByMessageId = await prisma.ticket.findFirst({
+            where: {
+              tenantId: tenant.id,
+              originalMessage: { contains: `[Message-Id: ${rfcMessageId}]` },
+            },
+            select: { id: true },
+          });
+          if (seenByMessageId) {
+            console.log(`[Email Sync] Skipping cross-account duplicate ${message.id} (Message-Id ${rfcMessageId})`);
+            try {
+              await gmail.users.messages.modify({
+                userId: 'me',
+                id: message.id!,
+                requestBody: { removeLabelIds: ['UNREAD'] },
+              });
+            } catch (err) {
+              console.error('[Email Sync] Failed to mark cross-account dup read:', err);
+            }
+            continue;
+          }
+        }
 
         // Skip if this exact Gmail message is already a ticket (pre-check
         // before fetching context; upsertTicket also handles this race).
@@ -219,12 +253,13 @@ export async function POST(
           customerEmail,
           customerName,
           subject,
-          originalMessage: `[Gmail ID: ${message.id}]\n\n${body || 'No content'}`,
+          originalMessage: `[Gmail ID: ${message.id}]\n${rfcMessageId ? `[Message-Id: ${rfcMessageId}]\n` : ''}\n${body || 'No content'}`,
           status: isReply ? 'in_progress' : 'new',
           priority: 'normal',
           contextData,
           gmailMessageId: message.id,
           gmailThreadId,
+          rfcMessageId: rfcMessageId || null,
           threadParentTicketId: threadParentId,
         });
 
