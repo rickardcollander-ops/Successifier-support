@@ -1,5 +1,6 @@
 import type { Ticket } from '@/lib/types';
 import { statusLabelSv, agentColor } from '@/lib/constants';
+import { Trash2 } from 'lucide-react';
 
 type PresenceViewer = { name: string; email: string; initials: string };
 type PresenceMap = Record<string, PresenceViewer[]>;
@@ -9,9 +10,10 @@ interface TicketListProps {
   selectedTicket: Ticket | null;
   onSelectTicket: (ticket: Ticket) => void;
   presence?: PresenceMap;
+  onDelete?: (ticketId: string) => void;
 }
 
-export default function TicketList({ tickets, selectedTicket, onSelectTicket, presence = {} }: TicketListProps) {
+export default function TicketList({ tickets, selectedTicket, onSelectTicket, presence = {}, onDelete }: TicketListProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'new':
@@ -81,11 +83,28 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
         ) : (
           tickets.map((ticket) => {
             const prio = getPriorityStripe(ticket.priority);
+            const handleRowClick = () => onSelectTicket(ticket);
+            const handleRowKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelectTicket(ticket);
+              }
+            };
+            const handleTrashClick = (e: React.MouseEvent) => {
+              e.stopPropagation();
+              if (!onDelete) return;
+              if (confirm('Ta bort detta ärende? Detta kan inte ångras.')) {
+                onDelete(ticket.id);
+              }
+            };
             return (
-            <button
+            <div
               key={ticket.id}
-              onClick={() => onSelectTicket(ticket)}
-              className={`relative w-full text-left pl-5 p-4 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${
+              role="button"
+              tabIndex={0}
+              onClick={handleRowClick}
+              onKeyDown={handleRowKey}
+              className={`relative w-full text-left pl-5 p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${
                 selectedTicket?.id === ticket.id ? 'bg-slate-50 dark:bg-slate-700' : ''
               }`}
             >
@@ -96,23 +115,36 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
                 <h3 className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">
                   {ticket.subject}
                 </h3>
-                {presence[ticket.id] && presence[ticket.id].length > 0 && (
-                  <div className="flex -space-x-1 flex-shrink-0">
-                    {presence[ticket.id].map((viewer, idx) => {
-                      const color = agentColor(viewer.name || viewer.email);
-                      return (
-                        <div
-                          key={idx}
-                          title={`${viewer.name} (${viewer.email})`}
-                          style={{ backgroundColor: color.bg, color: color.text }}
-                          className="w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-800"
-                        >
-                          {viewer.initials}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {presence[ticket.id] && presence[ticket.id].length > 0 && (
+                    <div className="flex -space-x-1">
+                      {presence[ticket.id].map((viewer, idx) => {
+                        const color = agentColor(viewer.name || viewer.email);
+                        return (
+                          <div
+                            key={idx}
+                            title={`${viewer.name} (${viewer.email})`}
+                            style={{ backgroundColor: color.bg, color: color.text }}
+                            className="w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-800"
+                          >
+                            {viewer.initials}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {onDelete && (
+                    <button
+                      type="button"
+                      onClick={handleTrashClick}
+                      className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:text-slate-500 dark:hover:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+                      title="Ta bort ärende"
+                      aria-label="Ta bort ärende"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                 <span>{ticket.customerEmail}</span>
@@ -160,7 +192,7 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
                   {new Date(ticket.createdAt).toLocaleDateString('sv-SE')}
                 </span>
               </div>
-            </button>
+            </div>
             );
           })
         )}
