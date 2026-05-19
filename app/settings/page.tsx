@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, ExternalLink, RefreshCw, CheckCircle, AlertCircle, Ban, X } from 'lucide-react';
+import { Mail, ExternalLink, RefreshCw, CheckCircle, AlertCircle, Ban, X, AlertTriangle } from 'lucide-react';
 import IntegrationCard from '@/components/IntegrationCard';
 import type { Integration } from '@/lib/types';
 
@@ -11,6 +11,24 @@ interface BlockedSender {
   reason: string | null;
   createdBy: string | null;
   createdAt: string;
+}
+
+interface AffectedTicket {
+  id: string;
+  customerEmail: string;
+  customerName: string | null;
+  subject: string;
+  status: string;
+  sentAt: string | null;
+  repliesAfterOriginal: number;
+  lastFollowupAt: string | null;
+}
+interface AffectedReport {
+  count: number;
+  uniqueCustomerCount: number;
+  totalUnseenReplies: number;
+  customerEmails: string[];
+  tickets: AffectedTicket[];
 }
 
 interface ConnectedEmailAccount {
@@ -31,12 +49,60 @@ export default function SettingsPage() {
   const [blockedReason, setBlockedReason] = useState('');
   const [blockedError, setBlockedError] = useState<string | null>(null);
   const [blockedSubmitting, setBlockedSubmitting] = useState(false);
+  const [affectedReport, setAffectedReport] = useState<AffectedReport | null>(null);
+  const [affectedLoading, setAffectedLoading] = useState(false);
+  const [affectedError, setAffectedError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchIntegrations();
     fetchEmailAccounts();
     fetchBlockedSenders();
   }, []);
+
+  const fetchAffectedReport = async () => {
+    setAffectedLoading(true);
+    setAffectedError(null);
+    try {
+      const res = await fetch('/api/admin/affected-by-closed-reply-bug');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setAffectedError(data?.error || `Fel: ${res.status}`);
+        return;
+      }
+      const data = await res.json();
+      setAffectedReport(data);
+    } catch (e: any) {
+      setAffectedError(e?.message || 'Nätverksfel');
+    } finally {
+      setAffectedLoading(false);
+    }
+  };
+
+  const downloadAffectedCsv = () => {
+    if (!affectedReport) return;
+    const rows = [
+      ['customerEmail', 'customerName', 'subject', 'status', 'repliesAfterOriginal', 'lastFollowupAt', 'ticketId'],
+      ...affectedReport.tickets.map((t) => [
+        t.customerEmail,
+        t.customerName ?? '',
+        t.subject.replace(/"/g, '""'),
+        t.status,
+        String(t.repliesAfterOriginal),
+        t.lastFollowupAt ?? '',
+        t.id,
+      ]),
+    ];
+    const csv = rows
+      .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `drabbade-kundsvar-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const fetchBlockedSenders = async () => {
     try {
@@ -308,6 +374,99 @@ export default function SettingsPage() {
               </a>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Affected by closed-reply bug (diagnostic) */}
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Drabbade kunder (stängd-ärende-buggen)</h2>
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-medium text-slate-900 dark:text-slate-100">Hitta kunder vars svar hamnade i Stängda</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+                  Listar stängda/skickade ärenden där en kund replierat efteråt. Dessa ärenden bör eventuellt öppnas igen och besvaras.
+                </p>
+              </div>
+              <button
+                onClick={fetchAffectedReport}
+                disabled={affectedLoading}
+                className="text-sm px-4 py-2 rounded-md bg-[#7C5CFF] text-white hover:bg-[#6B4FE0] disabled:opacity-50 whitespace-nowrap"
+              >
+                {affectedLoading ? 'Söker…' : affectedReport ? 'Sök om' : 'Visa drabbade'}
+              </button>
+            </div>
+          </div>
+          {affectedError && (
+            <div className="px-4 py-2 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800">
+              {affectedError}
+            </div>
+          )}
+          {affectedReport && (
+            <>
+              <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-sm text-slate-700 dark:text-slate-300">
+                  <strong>{affectedReport.count}</strong> ärenden ·{' '}
+                  <strong>{affectedReport.uniqueCustomerCount}</strong> unika kunder ·{' '}
+                  <strong>{affectedReport.totalUnseenReplies}</strong> följdmail totalt
+                </div>
+                <button
+                  onClick={downloadAffectedCsv}
+                  className="text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 whitespace-nowrap"
+                >
+                  Ladda ner CSV
+                </button>
+              </div>
+              {affectedReport.customerEmails.length > 0 && (
+                <div className="p-5 border-b border-slate-100 dark:border-slate-700">
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">
+                    Unika e-postadresser ({affectedReport.customerEmails.length})
+                  </p>
+                  <textarea
+                    readOnly
+                    value={affectedReport.customerEmails.join('\n')}
+                    rows={Math.min(10, affectedReport.customerEmails.length)}
+                    className="w-full font-mono text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                  />
+                </div>
+              )}
+              {affectedReport.tickets.length === 0 ? (
+                <div className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                  Inga drabbade ärenden hittades.
+                </div>
+              ) : (
+                <div className="max-h-96 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0">
+                      <tr className="text-left text-slate-500 dark:text-slate-400">
+                        <th className="px-4 py-2 font-medium">Kund</th>
+                        <th className="px-4 py-2 font-medium">Ämne</th>
+                        <th className="px-4 py-2 font-medium">Status</th>
+                        <th className="px-4 py-2 font-medium text-right">Följdmail</th>
+                        <th className="px-4 py-2 font-medium">Senaste</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                      {affectedReport.tickets.map((t) => (
+                        <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                          <td className="px-4 py-2 font-mono text-slate-900 dark:text-slate-100 whitespace-nowrap">{t.customerEmail}</td>
+                          <td className="px-4 py-2 text-slate-700 dark:text-slate-300 max-w-xs truncate" title={t.subject}>{t.subject}</td>
+                          <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{t.status}</td>
+                          <td className="px-4 py-2 text-right text-slate-900 dark:text-slate-100 font-semibold">{t.repliesAfterOriginal}</td>
+                          <td className="px-4 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">{t.lastFollowupAt ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
