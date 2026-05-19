@@ -71,9 +71,11 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
         return { ticket: refreshed, created: false };
       }
       const separator = `\n\n---\n[Följdmail ${new Date().toLocaleString('sv-SE')}]\n`;
-      const appendedBody = input.gmailMessageId
-        ? `[Gmail ID: ${input.gmailMessageId}]\n${input.originalMessage}`
-        : input.originalMessage;
+      // input.originalMessage from the sync route already starts with
+      // "[Gmail ID: <id>]\n[Inbox account: …]\n\n<body>", so we just
+      // append it as-is. Previously we re-prepended the Gmail ID which
+      // produced duplicate "[Gmail ID: …]" lines in the merged ticket.
+      const appendedBody = input.originalMessage;
       const updated = await tx.ticket.update({
         where: { id: parent.id },
         data: {

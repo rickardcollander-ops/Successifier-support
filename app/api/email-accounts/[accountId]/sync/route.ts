@@ -199,12 +199,16 @@ export async function POST(
         }
 
         if (threadParentId && threadParentStatus) {
-          if (threadParentStatus === 'new') {
+          // The Gmail ID pre-check filtered out re-processed messages,
+          // so reaching here means a genuinely new customer message.
+          // Reopen sent/closed tickets so the reply doesn't vanish
+          // into Stängda; keep review/in_progress untouched.
+          if (threadParentStatus === 'new' || threadParentStatus === 'sent' || threadParentStatus === 'closed') {
             await prisma.ticket.update({
               where: { id: threadParentId },
               data: { status: 'in_progress' },
             });
-            console.log(`[Email Sync] Customer message merged into ticket ${threadParentId} (moved Nytt → Öppna)`);
+            console.log(`[Email Sync] New customer message in thread ${threadParentId}: ${threadParentStatus} → in_progress`);
           } else {
             console.log(`[Email Sync] Customer message merged into ticket ${threadParentId} (status preserved: ${threadParentStatus})`);
           }
