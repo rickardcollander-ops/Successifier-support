@@ -80,6 +80,12 @@ async function syncSingleAccount(account: {
       const subject = getHeader('Subject') || 'No Subject';
       const replyTo = getHeader('Reply-To');
       const from = getHeader('From');
+      // RFC 2822 Message-Id is globally unique across all Gmail
+      // inboxes that received the same mail. Gmail's per-account
+      // message.id is NOT — so we use this for cross-account dedup
+      // (see /root/.claude/plans/den-saken-som-flipprade-…).
+      const rfcMessageIdRaw = getHeader('Message-Id') || getHeader('Message-ID');
+      const rfcMessageId = rfcMessageIdRaw.trim().replace(/^<|>$/g, '');
       const senderRaw = replyTo || from;
       const emailMatch = senderRaw.match(/<([^>]+)>/);
       const customerEmail = emailMatch ? emailMatch[1] : senderRaw.trim();
@@ -178,6 +184,35 @@ async function syncSingleAccount(account: {
       }
 
       const gmailThreadId = msg.data.threadId || null;
+
+      // Cross-account dedup. The RFC 2822 Message-Id is preserved
+      // across every Gmail inbox that received this email; the
+      // per-account `message.id` below is not. Without this check the
+      // second inbox sees a different Gmail ID for the same physical
+      // mail and re-runs the status-promotion logic — which is what
+      // flipped agent-closed tickets back to Öppna.
+      if (rfcMessageId) {
+        const seenByMessageId = await prisma.ticket.findFirst({
+          where: {
+            tenantId: tenant.id,
+            originalMessage: { contains: `[Message-Id: ${rfcMessageId}]` },
+          },
+          select: { id: true },
+        });
+        if (seenByMessageId) {
+          console.log(`[Email Sync] Skipping cross-account duplicate ${message.id} (Message-Id ${rfcMessageId}) for ${account.email}`);
+          try {
+            await gmail.users.messages.modify({
+              userId: 'me',
+              id: message.id!,
+              requestBody: { removeLabelIds: ['UNREAD'] },
+            });
+          } catch (err) {
+            console.error('[Email Sync] Failed to mark cross-account dup read:', err);
+          }
+          continue;
+        }
+      }
 
       // Check if ticket already exists for this Gmail message ID. Atomic
       // dedup below also handles this, but a quick pre-check avoids
@@ -284,12 +319,13 @@ async function syncSingleAccount(account: {
         customerEmail,
         customerName,
         subject,
-        originalMessage: `[Gmail ID: ${message.id}]\n[Inbox account: ${account.email}]\n\n${body || 'No content'}`,
+        originalMessage: `[Gmail ID: ${message.id}]\n[Inbox account: ${account.email}]\n${rfcMessageId ? `[Message-Id: ${rfcMessageId}]\n` : ''}\n${body || 'No content'}`,
         status: isReply ? 'in_progress' : 'new',
         priority: 'normal',
         contextData,
         gmailMessageId: message.id,
         gmailThreadId,
+        rfcMessageId: rfcMessageId || null,
         threadParentTicketId: threadParentId,
       });
 
