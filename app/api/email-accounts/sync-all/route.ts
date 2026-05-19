@@ -314,6 +314,13 @@ async function syncSingleAccount(account: {
       // inbound message. When threadParentId is set we always merge
       // into that ticket (even outside the dedup window) so follow-up
       // replies don't create duplicates.
+      // Gmail's internalDate is the real arrival timestamp for the
+      // message (UNIX millis as a string). Use it for createdAt so the
+      // ticket list reflects the order in which customers actually sent
+      // their mail, not the order in which sync happened to pick them up.
+      const internalMs = msg.data.internalDate ? Number(msg.data.internalDate) : NaN;
+      const receivedAt = Number.isFinite(internalMs) ? new Date(internalMs) : null;
+
       const { ticket, created } = await upsertTicket({
         tenantId: tenant.id,
         customerEmail,
@@ -327,6 +334,7 @@ async function syncSingleAccount(account: {
         gmailThreadId,
         rfcMessageId: rfcMessageId || null,
         threadParentTicketId: threadParentId,
+        receivedAt,
       });
 
       if (created) {

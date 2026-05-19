@@ -248,6 +248,9 @@ export async function POST(
           }
         }
 
+        const internalMs = msg.data.internalDate ? Number(msg.data.internalDate) : NaN;
+        const receivedAt = Number.isFinite(internalMs) ? new Date(internalMs) : null;
+
         const { ticket, created } = await upsertTicket({
           tenantId: tenant.id,
           customerEmail,
@@ -261,6 +264,7 @@ export async function POST(
           gmailThreadId,
           rfcMessageId: rfcMessageId || null,
           threadParentTicketId: threadParentId,
+          receivedAt,
         });
 
         if (created) {

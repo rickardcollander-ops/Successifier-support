@@ -24,7 +24,11 @@ export default function TicketsPage() {
   const [activeStatus, setActiveStatus] = useState<string>('all');
   const [archivedSearch, setArchivedSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'date' | 'priority' | 'status' | 'email'>('date');
+  // Default to "senaste aktivitet" so any ticket that just got a new
+  // follow-up email bubbles to the top — same semantics as a normal
+  // inbox. The old "date" sort by createdAt left replies buried at the
+  // bottom because the original ticket's createdAt didn't move.
+  const [sortBy, setSortBy] = useState<'activity' | 'received' | 'priority' | 'status' | 'email'>('activity');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [ticketPresence, setTicketPresence] = useState<PresenceMap>({});
   const [emailSyncStatus, setEmailSyncStatus] = useState<EmailSyncStatus>({
@@ -556,7 +560,13 @@ export default function TicketsPage() {
   const filteredTickets = [...searchFilteredTickets].sort((a, b) => {
     let comparison = 0;
     
-    if (sortBy === 'date') {
+    if (sortBy === 'activity') {
+      // Senaste aktivitet — updatedAt bumps when a follow-up mail is
+      // merged in, so tickets needing attention rise to the top.
+      comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+    } else if (sortBy === 'received') {
+      // Mail-ankomsttid — sync routes write Gmail's internalDate into
+      // createdAt, so this reflects when the customer actually sent it.
       comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     } else if (sortBy === 'priority') {
       const priorityOrder: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 };
@@ -565,9 +575,6 @@ export default function TicketsPage() {
       const statusOrder: Record<string, number> = { new: 0, in_progress: 1, waiting_ai: 1, review: 2, sent: 3, closed: 4, archived: 5 };
       comparison = (statusOrder[a.status] || 999) - (statusOrder[b.status] || 999);
     } else if (sortBy === 'email') {
-      // Group tickets from the same customer together. Tiebreak on
-      // createdAt so multiple tickets per customer stay chronological
-      // within the cluster.
       const emailCmp = a.customerEmail.toLowerCase().localeCompare(b.customerEmail.toLowerCase());
       comparison = emailCmp !== 0
         ? emailCmp
@@ -630,10 +637,11 @@ export default function TicketsPage() {
         />
         <select
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as 'date' | 'priority' | 'status' | 'email')}
+          onChange={(e) => setSortBy(e.target.value as 'activity' | 'received' | 'priority' | 'status' | 'email')}
           className="px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
         >
-          <option value="date">Sortera: Datum</option>
+          <option value="activity">Sortera: Senaste aktivitet</option>
+          <option value="received">Sortera: Inkommet</option>
           <option value="priority">Sortera: Prioritet</option>
           <option value="status">Sortera: Status</option>
           <option value="email">Sortera: E-post</option>
