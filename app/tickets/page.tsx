@@ -16,6 +16,18 @@ type PresenceViewer = { name: string; email: string; initials: string };
 type PresenceMap = Record<string, PresenceViewer[]>;
 
 export default function TicketsPage() {
+  // Deep-link param: `/tickets?ticket=<id>` lands here from the Settings
+  // "Drabbade kunder" table so support can jump straight to a ticket.
+  // We read it from window.location instead of useSearchParams so the
+  // page doesn't need to be wrapped in <Suspense> for Next.js 15
+  // prerendering — `/tickets` is rendered dynamically anyway.
+  const [deepLinkTicketId, setDeepLinkTicketId] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('ticket');
+    if (id) setDeepLinkTicketId(id);
+  }, []);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [archivedTickets, setArchivedTickets] = useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
@@ -188,6 +200,37 @@ export default function TicketsPage() {
     selectedTicketIdRef.current = selectedTicket?.id || null;
     reportPresence(selectedTicket?.id || null);
   }, [selectedTicket?.id]);
+
+  // Honour the ?ticket=<id> deep link from Settings → Drabbade kunder.
+  // Fetch the ticket directly (it may not be in the active list if it's
+  // closed/sent) and select it, then strip the param from the URL so a
+  // refresh doesn't keep re-selecting the same one.
+  useEffect(() => {
+    if (!deepLinkTicketId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/tickets/${deepLinkTicketId}`);
+        if (!res.ok || cancelled) return;
+        const ticket = await res.json();
+        if (!cancelled && ticket?.id) {
+          setSelectedTicket(ticket);
+          if (ticket.status === 'closed') setActiveStatus('closed');
+          else if (ticket.status === 'sent') setActiveStatus('sent');
+          else setActiveStatus('all');
+        }
+      } catch {
+        // ignore — leaves selection unchanged
+      } finally {
+        if (!cancelled && typeof window !== 'undefined') {
+          window.history.replaceState({}, '', '/tickets');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deepLinkTicketId]);
 
   useEffect(() => {
     fetchTickets();
