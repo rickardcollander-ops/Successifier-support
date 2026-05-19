@@ -249,17 +249,22 @@ async function syncSingleAccount(account: {
       }
 
       if (threadParentId && threadParentStatus) {
-        // Move "new" tickets that the agent hasn't picked up yet into
-        // Öppna so it's clear there's been customer activity. Don't
-        // ever flip closed/sent/review tickets back open — those
-        // statuses represent agent decisions; the new reply gets
-        // appended to the thread but the resolved status stays put.
-        if (threadParentStatus === 'new') {
+        // A genuinely new customer message just arrived (the Gmail ID
+        // pre-check above filtered out re-processed messages, so if
+        // we got here the message is new). Whatever status the ticket
+        // had — including closed/sent — it now needs an agent again:
+        //   new          → in_progress (agent hasn't started yet)
+        //   in_progress  → keep (already active)
+        //   review       → keep (intentionally awaiting agent action)
+        //   sent/closed  → in_progress (customer replied to resolved
+        //                  ticket → reopen so the reply is visible
+        //                  instead of disappearing into Stängda)
+        if (threadParentStatus === 'new' || threadParentStatus === 'sent' || threadParentStatus === 'closed') {
           await prisma.ticket.update({
             where: { id: threadParentId },
             data: { status: 'in_progress' },
           });
-          console.log(`[Email Sync] Customer message merged into ticket ${threadParentId} (moved Nytt → Öppna)`);
+          console.log(`[Email Sync] New customer message in thread ${threadParentId}: ${threadParentStatus} → in_progress`);
         } else {
           console.log(`[Email Sync] Customer message merged into ticket ${threadParentId} (status preserved: ${threadParentStatus})`);
         }
