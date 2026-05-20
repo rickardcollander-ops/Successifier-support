@@ -500,9 +500,7 @@ export default function SettingsPage() {
                       {affectedReport.tickets.map((t) => (
                         <tr
                           key={t.id}
-                          onClick={() => openAffectedTicket(t.id)}
-                          className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40"
-                          title="Öppna ärende"
+                          className="hover:bg-slate-50 dark:hover:bg-slate-700/40"
                         >
                           <td className="px-4 py-2 font-mono text-slate-900 dark:text-slate-100 whitespace-nowrap">{t.customerEmail}</td>
                           <td className="px-4 py-2 text-slate-700 dark:text-slate-300 max-w-xs truncate" title={t.subject}>{t.subject}</td>
@@ -510,19 +508,30 @@ export default function SettingsPage() {
                           <td className="px-4 py-2 text-right text-slate-900 dark:text-slate-100 font-semibold">{t.repliesAfterOriginal}</td>
                           <td className="px-4 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">{t.lastFollowupAt ?? '—'}</td>
                           <td className="px-2 py-2 text-right">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteAffectedTicket(t.id);
-                              }}
-                              disabled={affectedDeleting === t.id}
-                              className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:text-slate-500 dark:hover:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
-                              title="Ta bort ärende"
-                              aria-label="Ta bort ärende"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openAffectedTicket(t.id)}
+                                className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:text-slate-500 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
+                                title="Öppna ärende"
+                                aria-label="Öppna ärende"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteAffectedTicket(t.id);
+                                }}
+                                disabled={affectedDeleting === t.id}
+                                className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:text-slate-500 dark:hover:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+                                title="Ta bort ärende"
+                                aria-label="Ta bort ärende"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
