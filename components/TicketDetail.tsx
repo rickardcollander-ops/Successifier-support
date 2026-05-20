@@ -67,14 +67,22 @@ interface TicketDetailProps {
 interface ParsedEmailMessage {
   label: string;
   date: string | null;
+  dateRaw: Date | null;
   body: string;
   isOriginal: boolean;
+  isSupport: boolean;
+  sentBy?: string | null;
 }
 
-function parseEmailThread(rawMessage: string): ParsedEmailMessage[] {
-  const parts = rawMessage.split(/\n\n---\n(?=\[Följdmail )/);
+function parseEmailThread(
+  rawMessage: string,
+  finalResponse?: string | null,
+  sentAt?: Date | string | null,
+  sentBy?: string | null,
+): ParsedEmailMessage[] {
+  const parts = rawMessage.split(/\n\n---\n(?=\[(Följdmail|Support-svar) )/);
 
-  return parts.map((part, idx) => {
+  const messages: ParsedEmailMessage[] = parts.map((part, idx) => {
     if (idx === 0) {
       const body = part
         .replace(/^\[Gmail Thread: [^\]]+\]\n/gm, '')
@@ -82,22 +90,61 @@ function parseEmailThread(rawMessage: string): ParsedEmailMessage[] {
         .replace(/^\[Inbox account: [^\]]+\]\n/gm, '')
         .replace(/^\[Message-Id: [^\]]+\]\n/gm, '')
         .trim();
-      return { label: 'Ursprungligt meddelande', date: null, body, isOriginal: true };
+      return { label: 'Ursprungligt meddelande', date: null, dateRaw: null, body, isOriginal: true, isSupport: false };
     }
 
-    const dateMatch = part.match(/^\[Följdmail ([^\]]+)\]/);
-    const date = dateMatch ? dateMatch[1] : null;
+    const isSupportMsg = part.startsWith('[Support-svar ');
+    const markerMatch = part.match(/^\[(Följdmail|Support-svar) ([^\]]+)\]/);
+    const dateStr = markerMatch ? markerMatch[2] : null;
+    const dateRaw = dateStr ? new Date(dateStr.replace(' ', 'T')) : null;
+
+    // Extract optional "av <agent>" from Support-svar marker
+    const agentMatch = part.match(/^\[Support-svar [^\]]+? av ([^\]]+)\]/);
+    const agent = agentMatch ? agentMatch[1] : null;
 
     const bodyLines: string[] = [];
     for (const line of part.split('\n')) {
-      if (/^\[(Följdmail|Gmail ID|Gmail Thread|Inbox account|Message-Id):/.test(line)) continue;
-      if (line.startsWith('>')) continue;
+      if (/^\[(Följdmail|Support-svar|Gmail ID|Gmail Thread|Inbox account|Message-Id):/.test(line)) continue;
+      if (!isSupportMsg && line.startsWith('>')) continue;
       bodyLines.push(line);
     }
 
     const body = bodyLines.join('\n').trim();
-    return { label: 'Följdmail från kund', date, body, isOriginal: false };
+    return {
+      label: isSupportMsg ? 'Svar från support' : 'Följdmail från kund',
+      date: dateStr,
+      dateRaw,
+      body,
+      isOriginal: false,
+      isSupport: isSupportMsg,
+      sentBy: isSupportMsg ? agent : null,
+    };
   });
+
+  // Add finalResponse as a support message if it's not already embedded in the thread
+  if (finalResponse && !rawMessage.includes('[Support-svar ')) {
+    const dateRaw = sentAt ? new Date(sentAt) : null;
+    const dateStr = dateRaw ? dateRaw.toLocaleString('sv-SE') : null;
+    messages.push({
+      label: 'Svar från support',
+      date: dateStr,
+      dateRaw,
+      body: finalResponse,
+      isOriginal: false,
+      isSupport: true,
+      sentBy: sentBy || null,
+    });
+  }
+
+  // Sort newest first; original message (null date) always last
+  messages.sort((a, b) => {
+    if (!a.dateRaw && !b.dateRaw) return 0;
+    if (!a.dateRaw) return 1;
+    if (!b.dateRaw) return -1;
+    return b.dateRaw.getTime() - a.dateRaw.getTime();
+  });
+
+  return messages;
 }
 
 function sortInvoicesDesc(invoices: any[]): any[] {
@@ -537,12 +584,14 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             E-postkonversation
           </h3>
           <div className="space-y-3">
-            {parseEmailThread(ticket.originalMessage).map((msg, idx, arr) => (
+            {parseEmailThread(ticket.originalMessage, ticket.finalResponse, ticket.sentAt, ticket.sentBy).map((msg, idx, arr) => (
               <div
                 key={idx}
                 className={`rounded-lg border p-4 ${
                   msg.isOriginal
                     ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                    : msg.isSupport
+                    ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800'
                     : 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800'
                 }`}
               >
@@ -550,25 +599,23 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   <span className={`text-xs font-semibold ${
                     msg.isOriginal
                       ? 'text-slate-500 dark:text-slate-400'
+                      : msg.isSupport
+                      ? 'text-green-700 dark:text-green-300'
                       : 'text-blue-700 dark:text-blue-300'
                   }`}>
                     {msg.label}
+                    {msg.sentBy && (
+                      <span className="ml-1 font-normal opacity-80">· {msg.sentBy}</span>
+                    )}
                     {arr.length > 1 && (
-                      <span className="ml-2 text-[10px] font-normal opacity-70">
+                      <span className="ml-2 text-[10px] font-normal opacity-60">
                         ({idx + 1}/{arr.length})
                       </span>
                     )}
                   </span>
-                  {msg.date && (
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                      {msg.date}
-                    </span>
-                  )}
-                  {!msg.date && (
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500" suppressHydrationWarning>
-                      {new Date(ticket.createdAt).toLocaleString('sv-SE')}
-                    </span>
-                  )}
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500" suppressHydrationWarning>
+                    {msg.date ?? new Date(ticket.createdAt).toLocaleString('sv-SE')}
+                  </span>
                 </div>
                 <div className="text-sm whitespace-pre-wrap text-slate-900 dark:text-slate-100">
                   {msg.body || <span className="italic text-slate-400">(tomt)</span>}

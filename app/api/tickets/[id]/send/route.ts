@@ -304,10 +304,18 @@ export async function POST(
       sentVia = (resendIntegration.credentials as any).fromEmail || 'resend';
     }
 
+    // Append the sent reply to originalMessage so the full conversation
+    // thread is preserved and visible in the ticket detail view.
+    const sentTimestamp = new Date().toLocaleString('sv-SE');
+    const agentLabel = sentBy ? ` av ${sentBy}` : '';
+    const supportSeparator = `\n\n---\n[Support-svar ${sentTimestamp}${agentLabel}]\n`;
+    const responseBodyOnly = response.split('[INLINE_IMAGES]')[0].trim();
+
     const updatedTicket = await prisma.ticket.update({
       where: { id },
       data: {
         finalResponse: response,
+        originalMessage: ticket.originalMessage + supportSeparator + responseBodyOnly,
         status: 'sent',
         sentAt: new Date(),
         sentBy: sentBy,
