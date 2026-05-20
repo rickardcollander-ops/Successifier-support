@@ -136,12 +136,12 @@ function parseEmailThread(
     });
   }
 
-  // Sort chronologically; original message (null date) always first
+  // Sort newest first; original message (null date) always last
   messages.sort((a, b) => {
     if (!a.dateRaw && !b.dateRaw) return 0;
-    if (!a.dateRaw) return -1;
-    if (!b.dateRaw) return 1;
-    return a.dateRaw.getTime() - b.dateRaw.getTime();
+    if (!a.dateRaw) return 1;
+    if (!b.dateRaw) return -1;
+    return b.dateRaw.getTime() - a.dateRaw.getTime();
   });
 
   return messages;
