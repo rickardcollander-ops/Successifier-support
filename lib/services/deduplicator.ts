@@ -81,7 +81,7 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
         const refreshed = await tx.ticket.findUnique({ where: { id: parent.id } });
         return { ticket: refreshed, created: false };
       }
-      const separator = `\n\n---\n[Följdmail ${new Date().toLocaleString('sv-SE')}]\n`;
+      const separator = `\n\n---\n[Följdmail ${(input.receivedAt ?? new Date()).toLocaleString('sv-SE')}]\n`;
       // input.originalMessage from the sync route already starts with
       // "[Gmail ID: <id>]\n[Inbox account: …]\n\n<body>", so we just
       // append it as-is. Previously we re-prepended the Gmail ID which
