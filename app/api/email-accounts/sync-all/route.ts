@@ -91,6 +91,21 @@ async function syncSingleAccount(account: {
       const customerEmail = emailMatch ? emailMatch[1] : senderRaw.trim();
       const customerName = from.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
 
+      // Skip emails sent by the inbox account itself (e.g. support replies
+      // that Gmail puts back in the inbox on shared/Workspace accounts).
+      // Without this the sync would reopen a just-sent ticket to in_progress.
+      if (customerEmail.toLowerCase() === account.email.toLowerCase()) {
+        console.log(`[Email Sync] Skipping self-sent message ${message.id} from ${account.email}`);
+        try {
+          await gmail.users.messages.modify({
+            userId: 'me',
+            id: message.id!,
+            requestBody: { removeLabelIds: ['UNREAD'] },
+          });
+        } catch {}
+        continue;
+      }
+
       // Block-list filter: drop the message silently (still mark read
       // so it disappears from the inbox) and skip ticket creation.
       if (isBlocked(customerEmail, blockedPatterns)) {
