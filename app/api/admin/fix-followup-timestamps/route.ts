@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   // Load all email accounts so we can try each one when looking up a Gmail ID.
   const emailAccounts = await prisma.emailAccount.findMany({
-    where: { tenantId: tenant.id, isActive: true },
+    where: { isActive: true },
   });
 
   if (emailAccounts.length === 0) {
