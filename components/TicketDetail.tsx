@@ -104,7 +104,7 @@ function parseEmailThread(
 
     const bodyLines: string[] = [];
     for (const line of part.split('\n')) {
-      if (/^\[(Följdmail|Support-svar|Gmail ID|Gmail Thread|Inbox account|Message-Id):/.test(line)) continue;
+      if (/^\[(Följdmail |Support-svar |Gmail ID:|Gmail Thread:|Inbox account:|Message-Id:)/.test(line)) continue;
       if (!isSupportMsg && line.startsWith('>')) continue;
       bodyLines.push(line);
     }
