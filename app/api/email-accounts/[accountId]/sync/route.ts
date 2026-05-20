@@ -126,6 +126,21 @@ export async function POST(
         const customerEmail = emailMatch ? emailMatch[1] : senderRaw.trim();
         const customerName = from.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
 
+        // Skip emails sent by the inbox account itself to prevent support
+        // replies (which Gmail can surface as unread in shared inboxes) from
+        // reopening a just-sent ticket back to in_progress.
+        if (customerEmail.toLowerCase() === emailAccount.email.toLowerCase()) {
+          console.log(`[Email Sync] Skipping self-sent message ${message.id} from ${emailAccount.email}`);
+          try {
+            await gmail.users.messages.modify({
+              userId: 'me',
+              id: message.id!,
+              requestBody: { removeLabelIds: ['UNREAD'] },
+            });
+          } catch {}
+          continue;
+        }
+
         if (isBlocked(customerEmail, blockedPatterns)) {
           console.log(`[Email Sync] Blocked sender ${customerEmail}, skipping ${message.id}`);
           try {
