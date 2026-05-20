@@ -64,6 +64,42 @@ interface TicketDetailProps {
   onSelectTicket?: (ticket: Ticket | null) => void;
 }
 
+interface ParsedEmailMessage {
+  label: string;
+  date: string | null;
+  body: string;
+  isOriginal: boolean;
+}
+
+function parseEmailThread(rawMessage: string): ParsedEmailMessage[] {
+  const parts = rawMessage.split(/\n\n---\n(?=\[Följdmail )/);
+
+  return parts.map((part, idx) => {
+    if (idx === 0) {
+      const body = part
+        .replace(/^\[Gmail Thread: [^\]]+\]\n/gm, '')
+        .replace(/^\[Gmail ID: [^\]]+\]\n/gm, '')
+        .replace(/^\[Inbox account: [^\]]+\]\n/gm, '')
+        .replace(/^\[Message-Id: [^\]]+\]\n/gm, '')
+        .trim();
+      return { label: 'Ursprungligt meddelande', date: null, body, isOriginal: true };
+    }
+
+    const dateMatch = part.match(/^\[Följdmail ([^\]]+)\]/);
+    const date = dateMatch ? dateMatch[1] : null;
+
+    const bodyLines: string[] = [];
+    for (const line of part.split('\n')) {
+      if (/^\[(Följdmail|Gmail ID|Gmail Thread|Inbox account|Message-Id):/.test(line)) continue;
+      if (line.startsWith('>')) continue;
+      bodyLines.push(line);
+    }
+
+    const body = bodyLines.join('\n').trim();
+    return { label: 'Följdmail från kund', date, body, isOriginal: false };
+  });
+}
+
 function sortInvoicesDesc(invoices: any[]): any[] {
   return [...invoices].sort((a, b) => {
     const numA = parseInt(a.number || a.invoiceNumber || '0', 10);
@@ -497,9 +533,48 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
         <div>
-          <h3 className="text-sm font-semibold mb-2 text-slate-700 dark:text-slate-300">Ursprungligt meddelande</h3>
-          <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 text-sm whitespace-pre-wrap text-slate-900 dark:text-slate-100">
-            {ticket.originalMessage}
+          <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">
+            E-postkonversation
+          </h3>
+          <div className="space-y-3">
+            {parseEmailThread(ticket.originalMessage).map((msg, idx, arr) => (
+              <div
+                key={idx}
+                className={`rounded-lg border p-4 ${
+                  msg.isOriginal
+                    ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                    : 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`text-xs font-semibold ${
+                    msg.isOriginal
+                      ? 'text-slate-500 dark:text-slate-400'
+                      : 'text-blue-700 dark:text-blue-300'
+                  }`}>
+                    {msg.label}
+                    {arr.length > 1 && (
+                      <span className="ml-2 text-[10px] font-normal opacity-70">
+                        ({idx + 1}/{arr.length})
+                      </span>
+                    )}
+                  </span>
+                  {msg.date && (
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                      {msg.date}
+                    </span>
+                  )}
+                  {!msg.date && (
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500" suppressHydrationWarning>
+                      {new Date(ticket.createdAt).toLocaleString('sv-SE')}
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm whitespace-pre-wrap text-slate-900 dark:text-slate-100">
+                  {msg.body || <span className="italic text-slate-400">(tomt)</span>}
+                </div>
+              </div>
+            ))}
           </div>
           {ticket.contextData?.attachments && ticket.contextData.attachments.length > 0 && (
             <div className="mt-3">
