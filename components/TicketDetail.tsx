@@ -327,14 +327,11 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     // fails we just keep whatever contextData we already had.
     const refreshContext = async () => {
       try {
-        const res = await fetch(`/api/tickets/${ticket.id}/refresh-context`, {
-          method: 'POST',
-        });
-        if (!res.ok || isCancelled) return;
-        const updated = await res.json();
-        if (!isCancelled) {
-          onUpdate(ticket.id, { contextData: updated.contextData } as any);
-        }
+        await fetch(`/api/tickets/${ticket.id}/refresh-context`, { method: 'POST' });
+        // The endpoint persists contextData via raw SQL without touching
+        // updatedAt. The 3-second poll will pick up the fresh data.
+        // Do NOT call onUpdate here — that triggers a PATCH which bumps
+        // updatedAt and moves this ticket to the top of the sorted list.
       } catch (error) {
         console.error('Error refreshing ticket context:', error);
       }
