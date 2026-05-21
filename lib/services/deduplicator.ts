@@ -60,7 +60,10 @@ export interface UpsertTicketResult {
 export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTicketResult> {
   const normalized = normalizeSubject(input.subject);
   const lockKey = `ticket-dedup:${input.tenantId}:${input.customerEmail.toLowerCase()}:${normalized}`;
-  const since = new Date(Date.now() - DUPLICATE_WINDOW_MS);
+  // Anchor the dedup window to the email's own arrival time so batched
+  // syncs don't miss duplicates that arrived minutes before the sync ran.
+  const refTime = (input.receivedAt ?? new Date()).getTime();
+  const since = new Date(refTime - DUPLICATE_WINDOW_MS);
 
   return await prisma.$transaction(async (tx) => {
     // Serialize all concurrent inserts with the same sender+subject for
@@ -81,7 +84,7 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
         const refreshed = await tx.ticket.findUnique({ where: { id: parent.id } });
         return { ticket: refreshed, created: false };
       }
-      const separator = `\n\n---\n[Följdmail ${(input.receivedAt ?? new Date()).toLocaleString('sv-SE')}]\n`;
+      const separator = `\n\n---\n[Följdmail ${(input.receivedAt ?? new Date()).toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' })}]\n`;
       // input.originalMessage from the sync route already starts with
       // "[Gmail ID: <id>]\n[Inbox account: …]\n\n<body>", so we just
       // append it as-is. Previously we re-prepended the Gmail ID which

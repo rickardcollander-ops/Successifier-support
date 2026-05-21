@@ -306,7 +306,7 @@ export async function POST(
 
     // Append the sent reply to originalMessage so the full conversation
     // thread is preserved and visible in the ticket detail view.
-    const sentTimestamp = new Date().toLocaleString('sv-SE');
+    const sentTimestamp = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' });
     const agentLabel = sentBy ? ` av ${sentBy}` : '';
     const supportSeparator = `\n\n---\n[Support-svar ${sentTimestamp}${agentLabel}]\n`;
     const responseBodyOnly = response.split('[INLINE_IMAGES]')[0].trim();

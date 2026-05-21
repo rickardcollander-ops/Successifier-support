@@ -71,6 +71,7 @@ interface ParsedEmailMessage {
   body: string;
   isOriginal: boolean;
   isSupport: boolean;
+  isComment: boolean;
   sentBy?: string | null;
 }
 
@@ -80,7 +81,7 @@ function parseEmailThread(
   sentAt?: Date | string | null,
   sentBy?: string | null,
 ): ParsedEmailMessage[] {
-  const parts = rawMessage.split(/\n\n---\n(?=\[(Följdmail|Support-svar) )/);
+  const parts = rawMessage.split(/\n\n---\n(?=\[(Följdmail|Support-svar|Intern kommentar) )/);
 
   const messages: ParsedEmailMessage[] = parts.map((part, idx) => {
     if (idx === 0) {
@@ -90,34 +91,35 @@ function parseEmailThread(
         .replace(/^\[Inbox account: [^\]]+\]\n/gm, '')
         .replace(/^\[Message-Id: [^\]]+\]\n/gm, '')
         .trim();
-      return { label: 'Ursprungligt meddelande', date: null, dateRaw: null, body, isOriginal: true, isSupport: false };
+      return { label: 'Ursprungligt meddelande', date: null, dateRaw: null, body, isOriginal: true, isSupport: false, isComment: false };
     }
 
     const isSupportMsg = part.startsWith('[Support-svar ');
-    const markerMatch = part.match(/^\[(Följdmail|Support-svar) ([^\]]+)\]/);
+    const isComment = part.startsWith('[Intern kommentar ');
+    const markerMatch = part.match(/^\[(Följdmail|Support-svar|Intern kommentar) ([^\]]+?)(?:\]| av [^\]]+\])/);
     const dateStr = markerMatch ? markerMatch[2] : null;
     const dateRaw = dateStr ? new Date(dateStr.replace(' ', 'T')) : null;
 
-    // Extract optional "av <agent>" from Support-svar marker
-    const agentMatch = part.match(/^\[Support-svar [^\]]+? av ([^\]]+)\]/);
+    const agentMatch = part.match(/^\[(?:Support-svar|Intern kommentar) [^\]]+ av ([^\]]+)\]/);
     const agent = agentMatch ? agentMatch[1] : null;
 
     const bodyLines: string[] = [];
     for (const line of part.split('\n')) {
-      if (/^\[(Följdmail |Support-svar |Gmail ID:|Gmail Thread:|Inbox account:|Message-Id:)/.test(line)) continue;
-      if (!isSupportMsg && line.startsWith('>')) continue;
+      if (/^\[(Följdmail |Support-svar |Intern kommentar |Gmail ID:|Gmail Thread:|Inbox account:|Message-Id:)/.test(line)) continue;
+      if (!isSupportMsg && !isComment && line.startsWith('>')) continue;
       bodyLines.push(line);
     }
 
     const body = bodyLines.join('\n').trim();
     return {
-      label: isSupportMsg ? 'Svar från support' : 'Följdmail från kund',
+      label: isComment ? 'Intern kommentar' : isSupportMsg ? 'Svar från support' : 'Följdmail från kund',
       date: dateStr,
       dateRaw,
       body,
       isOriginal: false,
       isSupport: isSupportMsg,
-      sentBy: isSupportMsg ? agent : null,
+      isComment,
+      sentBy: (isSupportMsg || isComment) ? agent : null,
     };
   });
 
@@ -132,6 +134,7 @@ function parseEmailThread(
       body: finalResponse,
       isOriginal: false,
       isSupport: true,
+      isComment: false,
       sentBy: sentBy || null,
     });
   }
@@ -177,6 +180,9 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   const [inlineImages, setInlineImages] = useState<Array<{ name: string; dataUrl: string }>>([]);
   const [popoutTicket, setPopoutTicket] = useState<any>(null);
   const [popoutLoading, setPopoutLoading] = useState(false);
+  const [commentText, setCommentText] = useState('');
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [commentSaving, setCommentSaving] = useState(false);
   // Lightbox modal for clicking attached images (replaces window.open which
   // is often blocked by browsers for data: URLs).
   const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
@@ -470,6 +476,26 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     handleStatusChange('closed');
   };
 
+  const handleAddComment = async () => {
+    if (!commentText.trim() || commentSaving) return;
+    setCommentSaving(true);
+    try {
+      const res = await fetch(`/api/tickets/${ticket.id}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: commentText.trim() }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        onUpdate(ticket.id, { originalMessage: updated.originalMessage } as any);
+        setCommentText('');
+        setCommentOpen(false);
+      }
+    } finally {
+      setCommentSaving(false);
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm h-full flex flex-col">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700">
@@ -580,9 +606,35 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
         <div>
-          <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">
-            E-postkonversation
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">E-postkonversation</h3>
+            <button
+              onClick={() => setCommentOpen((v) => !v)}
+              className="px-2.5 py-1 text-xs font-medium rounded-md border border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+            >
+              + Intern kommentar
+            </button>
+          </div>
+          {commentOpen && (
+            <div className="mb-3 rounded-lg border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 p-3">
+              <textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="Skriv intern kommentar (syns inte för kunden)…"
+                className="w-full h-24 text-sm p-2 rounded border border-amber-200 dark:border-amber-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+              <div className="flex justify-end gap-2 mt-2">
+                <button onClick={() => { setCommentOpen(false); setCommentText(''); }} className="px-3 py-1 text-xs text-slate-600 dark:text-slate-400 hover:underline">Avbryt</button>
+                <button
+                  onClick={handleAddComment}
+                  disabled={!commentText.trim() || commentSaving}
+                  className="px-3 py-1 text-xs font-medium rounded-md bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50"
+                >
+                  {commentSaving ? 'Sparar…' : 'Spara kommentar'}
+                </button>
+              </div>
+            </div>
+          )}
           <div className="space-y-3">
             {parseEmailThread(ticket.originalMessage, ticket.finalResponse, ticket.sentAt, ticket.sentBy).map((msg, idx, arr) => (
               <div
@@ -590,6 +642,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 className={`rounded-lg border p-4 ${
                   msg.isOriginal
                     ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                    : msg.isComment
+                    ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-600'
                     : msg.isSupport
                     ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800'
                     : 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800'
@@ -599,6 +653,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   <span className={`text-xs font-semibold ${
                     msg.isOriginal
                       ? 'text-slate-500 dark:text-slate-400'
+                      : msg.isComment
+                      ? 'text-amber-700 dark:text-amber-400'
                       : msg.isSupport
                       ? 'text-green-700 dark:text-green-300'
                       : 'text-blue-700 dark:text-blue-300'

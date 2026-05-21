@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
 
         if (!actualDate) continue;
 
-        const actualTimestamp = actualDate.toLocaleString('sv-SE');
+        const actualTimestamp = actualDate.toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' });
         if (actualTimestamp === currentTimestamp) continue;
 
         // Replace just this one occurrence of the wrong timestamp.
