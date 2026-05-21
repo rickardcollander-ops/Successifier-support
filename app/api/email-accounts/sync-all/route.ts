@@ -372,13 +372,14 @@ async function syncSingleAccount(account: {
 
         generateAIResponse(subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined)
           .then(async ({ response: aiResponse, confidence }) => {
-            await prisma.ticket.update({
-              where: { id: ticket.id },
-              data: {
-                aiResponse,
-                aiConfidence: confidence,
-              },
-            });
+            // Raw SQL so we don't bump updatedAt — AI generation is not
+            // customer activity and should not reorder the ticket list.
+            await prisma.$executeRaw`
+              UPDATE "Ticket"
+              SET "aiResponse" = ${aiResponse},
+                  "aiConfidence" = ${confidence}
+              WHERE id = ${ticket.id}
+            `;
           })
           .catch(console.error);
       } else {
