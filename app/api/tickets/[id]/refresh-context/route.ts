@@ -33,12 +33,17 @@ export async function POST(
       merged.attachments = existing.attachments;
     }
 
-    const updated = await prisma.ticket.update({
-      where: { id },
-      data: { contextData: merged },
-    });
+    // Use raw SQL to update contextData without touching updatedAt.
+    // prisma.ticket.update() would automatically bump the @updatedAt field
+    // which causes the ticket to jump to the top of the "Senaste aktivitet"
+    // sort every time support opens it — confusing and disruptive.
+    await prisma.$executeRaw`
+      UPDATE "Ticket"
+      SET "contextData" = ${JSON.stringify(merged)}::jsonb
+      WHERE id = ${id}
+    `;
 
-    return NextResponse.json(updated);
+    return NextResponse.json({ contextData: merged });
   } catch (error) {
     console.error('Error refreshing ticket context:', error);
     return NextResponse.json(
