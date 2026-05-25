@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Mail, ChevronDown, Search, X, Loader2, Trash2, AlertOctagon, UserCircle2, CheckCircle2 } from 'lucide-react';
 import type { Ticket } from '@/lib/types';
+import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 import { AGENTS, statusLabelSv, agentColor } from '@/lib/constants';
 
 interface ReplyFromAccount {
@@ -85,12 +86,13 @@ function parseEmailThread(
 
   const messages: ParsedEmailMessage[] = parts.map((part, idx) => {
     if (idx === 0) {
-      const body = part
+      const rawBody = part
         .replace(/^\[Gmail Thread: [^\]]+\]\n/gm, '')
         .replace(/^\[Gmail ID: [^\]]+\]\n/gm, '')
         .replace(/^\[Inbox account: [^\]]+\]\n/gm, '')
         .replace(/^\[Message-Id: [^\]]+\]\n/gm, '')
         .trim();
+      const body = isHtml(rawBody) ? htmlToText(rawBody) : rawBody;
       return { label: 'Ursprungligt meddelande', date: null, dateRaw: null, body, isOriginal: true, isSupport: false, isComment: false };
     }
 
@@ -110,7 +112,8 @@ function parseEmailThread(
       bodyLines.push(line);
     }
 
-    const body = bodyLines.join('\n').trim();
+    const rawBody = bodyLines.join('\n').trim();
+    const body = isHtml(rawBody) ? htmlToText(rawBody) : rawBody;
     return {
       label: isComment ? 'Intern kommentar' : isSupportMsg ? 'Svar från support' : 'Följdmail från kund',
       date: dateStr,

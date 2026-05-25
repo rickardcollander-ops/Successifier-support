@@ -7,6 +7,7 @@ import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
 import { sendConfirmationEmail } from '@/lib/services/confirmation-email';
 import { getBlockedPatterns, isBlocked } from '@/lib/services/blocked-senders';
+import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 
 async function syncSingleAccount(account: {
   id: string;
@@ -129,8 +130,9 @@ async function syncSingleAccount(account: {
           if (part.mimeType === 'text/plain' && part.body?.data) {
             text += Buffer.from(part.body.data, 'base64').toString() + '\n\n';
           } else if (part.mimeType === 'text/html' && part.body?.data && !text) {
-            // Fallback to HTML if no plain text found
-            text += Buffer.from(part.body.data, 'base64').toString() + '\n\n';
+            // Fallback to HTML — strip tags so we store readable text.
+            const html = Buffer.from(part.body.data, 'base64').toString();
+            text += htmlToText(html) + '\n\n';
           }
           // Recursively check nested parts
           if (part.parts) {
@@ -167,7 +169,9 @@ async function syncSingleAccount(account: {
 
       let body = '';
       if (msg.data.payload?.body?.data) {
-        body = Buffer.from(msg.data.payload.body.data, 'base64').toString();
+        const raw = Buffer.from(msg.data.payload.body.data, 'base64').toString();
+        // Non-multipart HTML emails arrive here — strip to plain text.
+        body = isHtml(raw) ? htmlToText(raw) : raw;
       } else if (msg.data.payload?.parts) {
         body = extractTextFromParts(msg.data.payload.parts);
       }
