@@ -7,6 +7,7 @@ import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
 import { sendConfirmationEmail } from '@/lib/services/confirmation-email';
 import { getBlockedPatterns, isBlocked } from '@/lib/services/blocked-senders';
+import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 
 export async function POST(
   request: NextRequest,
@@ -155,14 +156,22 @@ export async function POST(
           continue;
         }
 
-        // Get email body
+        // Get email body — prefer plain text; fall back to HTML stripped to text
         let body = '';
         if (msg.data.payload?.body?.data) {
-          body = Buffer.from(msg.data.payload.body.data, 'base64').toString();
+          const raw = Buffer.from(msg.data.payload.body.data, 'base64').toString();
+          body = isHtml(raw) ? htmlToText(raw) : raw;
         } else if (msg.data.payload?.parts) {
           const textPart = msg.data.payload.parts.find(p => p.mimeType === 'text/plain');
           if (textPart?.body?.data) {
             body = Buffer.from(textPart.body.data, 'base64').toString();
+          } else {
+            // No plain-text part — try HTML and convert to text
+            const htmlPart = msg.data.payload.parts.find(p => p.mimeType === 'text/html');
+            if (htmlPart?.body?.data) {
+              const html = Buffer.from(htmlPart.body.data, 'base64').toString();
+              body = htmlToText(html);
+            }
           }
         }
 
@@ -298,13 +307,14 @@ export async function POST(
 
           generateAIResponse(subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined)
             .then(async ({ response, confidence }) => {
-              await prisma.ticket.update({
-                where: { id: ticket.id },
-                data: {
-                  aiResponse: response,
-                  aiConfidence: confidence,
-                },
-              });
+              // Raw SQL so we don't bump updatedAt — AI generation is not
+              // customer activity and should not reorder the ticket list.
+              await prisma.$executeRaw`
+                UPDATE "Ticket"
+                SET "aiResponse" = ${response},
+                    "aiConfidence" = ${confidence}
+                WHERE id = ${ticket.id}
+              `;
             })
             .catch(console.error);
         }

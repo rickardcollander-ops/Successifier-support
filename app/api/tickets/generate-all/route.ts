@@ -35,14 +35,14 @@ export async function POST() {
           tenant.id
         );
 
-        // Update ticket with AI response and confidence
-        await prisma.ticket.update({
-          where: { id: ticket.id },
-          data: {
-            aiResponse,
-            aiConfidence: confidence,
-          },
-        });
+        // Raw SQL so we don't bump updatedAt — AI generation is not
+        // customer activity and should not reorder the ticket list.
+        await prisma.$executeRaw`
+          UPDATE "Ticket"
+          SET "aiResponse" = ${aiResponse},
+              "aiConfidence" = ${confidence}
+          WHERE id = ${ticket.id}
+        `;
 
         results.push({
           ticketId: ticket.id,

@@ -58,20 +58,20 @@ export async function POST(
     );
 
     step = 'save-to-db';
-    // Never change status on regeneration. The auto-gen pipeline leaves
-    // brand-new tickets in Nytt with an AI draft already attached, so
-    // support opening the ticket and clicking "Generera AI" is always a
-    // regeneration from their point of view — it must preserve the
-    // current status, not bounce the ticket back to Granskning.
-    const updatedTicket = await prisma.ticket.update({
-      where: { id },
-      data: {
-        aiResponse,
-        aiConfidence: confidence,
-        contextData: context,
-      },
-    });
+    // Raw SQL so we don't bump updatedAt — AI generation is not customer
+    // activity and should not reorder the ticket list. The manual
+    // "Generera AI" button regenerates a draft without implying new
+    // customer action, so position in the sorted list should stay stable.
+    await prisma.$executeRaw`
+      UPDATE "Ticket"
+      SET "aiResponse" = ${aiResponse},
+          "aiConfidence" = ${confidence},
+          "contextData" = ${JSON.stringify(context)}::jsonb
+      WHERE id = ${id}
+    `;
 
+    // Return the full updated ticket for the frontend to merge into state.
+    const updatedTicket = await prisma.ticket.findUnique({ where: { id } });
     return NextResponse.json(updatedTicket);
   } catch (error) {
     console.error('Error generating AI response:', error);
