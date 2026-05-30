@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { getTenant } from '@/lib/products/tenant';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 
 export async function POST() {
   try {
     // Find tenant
-    const tenant = await prisma.tenant.findUnique({
-      where: { subdomain: 'doldadress' },
-    });
+    const tenant = await getTenant();
 
     if (!tenant) {
       return NextResponse.json(

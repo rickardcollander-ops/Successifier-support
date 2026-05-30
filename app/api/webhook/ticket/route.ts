@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { getTenantId } from '@/lib/products/tenant';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
 
@@ -15,7 +16,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tenantId = 'doldadress';
+    const tenantId = await getTenantId();
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+    }
 
     const integrations = await prisma.integration.findMany({
       where: {

@@ -1,49 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { product } from '@/lib/products';
+import { getTenantId } from '@/lib/products/tenant';
 import { encryptJSON, decryptJSON, isEncrypted } from '@/lib/crypto';
 
-const TENANT_KEY = 'doldadress';
-
-async function resolveTenantId(request: NextRequest) {
-  const host = request.headers.get('host') || request.nextUrl.hostname || '';
-  const subdomain = host
-    .split('.')[0]
-    .replace(':3001', '')
-    .replace(':3000', '')
-    .replace('localhost', TENANT_KEY)
-    .replace('127', TENANT_KEY);
-
-  const tenant = await prisma.tenant.findFirst({
-    where: {
-      OR: [
-        { id: TENANT_KEY },
-        { subdomain: TENANT_KEY },
-        { subdomain },
-      ],
-    },
-    select: { id: true },
-  });
-
-  if (tenant) {
-    return tenant.id;
-  }
+async function resolveTenantId() {
+  const tenantId = await getTenantId();
+  if (tenantId) return tenantId;
 
   // Last-resort fallback for local/dev environments with different seed data
   const firstTenant = await prisma.tenant.findFirst({
     select: { id: true },
     orderBy: { createdAt: 'asc' },
   });
+  if (firstTenant) return firstTenant.id;
 
-  if (firstTenant) {
-    return firstTenant.id;
-  }
-
-  throw new Error(`No tenant found for integration settings (host='${host}', subdomain='${subdomain}')`);
+  throw new Error(`No tenant found for product '${product.key}'`);
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const tenantId = await resolveTenantId(request);
+    const tenantId = await resolveTenantId();
 
     const integrations = await prisma.integration.findMany({
       where: { tenantId },
@@ -87,7 +64,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const tenantId = await resolveTenantId(request);
+    const tenantId = await resolveTenantId();
     const body = await request.json();
     const { type, credentials } = body;
 

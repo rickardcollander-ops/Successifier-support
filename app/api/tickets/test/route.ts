@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { product } from '@/lib/products';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 
 const testTickets = [
@@ -126,11 +127,11 @@ export async function POST() {
   try {
     // First, ensure the tenant exists
     const tenant = await prisma.tenant.upsert({
-      where: { subdomain: 'doldadress' },
+      where: { subdomain: product.key },
       update: {},
       create: {
-        subdomain: 'doldadress',
-        name: 'Doldadress Support',
+        subdomain: product.key,
+        name: `${product.displayName} Support`,
       },
     });
 

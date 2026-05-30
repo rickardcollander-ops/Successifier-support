@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { getTenant } from '@/lib/products/tenant';
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,9 +60,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
 
     // Find tenant
-    const tenant = await prisma.tenant.findUnique({
-      where: { subdomain: 'doldadress' },
-    });
+    const tenant = await getTenant();
 
     if (!tenant) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });

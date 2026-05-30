@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db/client';
+import { getTenant } from '@/lib/products/tenant';
 import { google } from 'googleapis';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
@@ -44,7 +45,7 @@ async function syncSingleAccount(account: {
   });
 
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-  const tenant = await prisma.tenant.findUnique({ where: { subdomain: 'doldadress' } });
+  const tenant = await getTenant();
 
   if (!tenant) {
     throw new Error('Tenant not found');

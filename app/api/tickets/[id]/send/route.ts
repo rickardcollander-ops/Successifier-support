@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { product } from '@/lib/products';
 import { ResendService } from '@/lib/integrations/resend';
 import { google } from 'googleapis';
 import { auth } from '@/lib/auth';
@@ -166,7 +167,7 @@ export async function POST(
       // quoted-printable and was a likely cause of intermittent send
       // failures.
       const boundary = `dadrs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-      const fromValue = `${encodeHeader('Doldadress Kundtjänst')} <${emailAccount.email}>`;
+      const fromValue = `${encodeHeader(product.fromName)} <${emailAccount.email}>`;
       const headers = [
         `From: ${fromValue}`,
         `To: ${recipientEmail || ticket.customerEmail}`,

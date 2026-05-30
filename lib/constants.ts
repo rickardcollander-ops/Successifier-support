@@ -1,29 +1,24 @@
+import { product } from '@/lib/products';
+
 /**
- * Hardcoded list of agents who can be assigned tickets and whose stats
- * are broken out in the reports page. Add new agents here.
+ * List of agents who can be assigned tickets and whose stats are broken
+ * out in the reports page. Defined per product (see lib/products) — add
+ * new agents in the active product's config file.
  *
  * When a user signs in with a name that matches one of these, their work
  * is tracked against that name. Assignments use the same list as the
  * source of truth.
  */
-export const AGENTS: readonly string[] = [
-  'Ida Rosell',
-  'Malin Sundberg',
-  'Filippa Kramp',
-] as const;
+export const AGENTS: readonly string[] = product.agents;
 
 // Per-agent email sign-off. When an agent sends a reply we automatically
-// swap the AI's generic "Doldadress Kundtjänst" sign-off for the agent's
-// personal one so the customer sees who actually answered. The matching
-// is loose (first name) so a Google account showing "Ida Test Rosell" or
-// "ida@doldadress.se" still resolves to Ida's signature.
-export const AGENT_SIGNATURES: Record<string, string> = {
-  'Ida Rosell': 'Vänliga hälsningar,\nIda\nSupportteamet Doldadress.se',
-  'Malin Sundberg': 'Vänliga hälsningar,\nMalin\nSupportteamet Doldadress.se',
-  'Filippa Kramp': 'Vänliga hälsningar,\nFilippa\nSupportteamet Doldadress.se',
-};
+// swap the AI's generic support sign-off (e.g. "Doldadress Kundtjänst")
+// for the agent's personal one so the customer sees who actually answered.
+// The matching is loose (first name) so a Google account showing
+// "Ida Test Rosell" or "ida@doldadress.se" still resolves to Ida's signature.
+export const AGENT_SIGNATURES: Record<string, string> = product.agentSignatures;
 
-const DEFAULT_SIGNATURE = 'Vänliga hälsningar,\nDoldadress Kundtjänst';
+const DEFAULT_SIGNATURE = `Vänliga hälsningar,\n${product.supportName}`;
 
 export function signatureFor(nameOrEmail: string | null | undefined): string {
   if (!nameOrEmail) return DEFAULT_SIGNATURE;
@@ -38,8 +33,13 @@ export function signatureFor(nameOrEmail: string | null | undefined): string {
 }
 
 // Match the generic AI sign-off so we can replace it. The AI is told to
-// always end its replies with this exact pattern (see ai-generator.ts).
-const GENERIC_SIGNOFF_PATTERN = /(?:Vänliga hälsningar,\s*\n\s*Doldadress Kundtjänst|Med vänlig hälsning,\s*\n\s*Doldadress Kundtjänst|Doldadress Kundtjänst)\s*$/i;
+// always end its replies with this exact sign-off (see ai-generator.ts).
+// Built from the active product's support name so it tracks the brand.
+const SUPPORT_NAME_RE = product.supportName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const GENERIC_SIGNOFF_PATTERN = new RegExp(
+  `(?:Vänliga hälsningar,\\s*\\n\\s*${SUPPORT_NAME_RE}|Med vänlig hälsning,\\s*\\n\\s*${SUPPORT_NAME_RE}|${SUPPORT_NAME_RE})\\s*$`,
+  'i',
+);
 
 export function applyAgentSignature(body: string, nameOrEmail: string | null | undefined): string {
   if (!body) return body;
@@ -64,11 +64,7 @@ export interface AgentColor {
   text: string;
 }
 
-const AGENT_COLORS: Record<string, AgentColor> = {
-  'Ida Rosell': { bg: '#DC2626', border: '#B91C1C', text: '#FFFFFF' },
-  'Malin Sundberg': { bg: '#16A34A', border: '#15803D', text: '#FFFFFF' },
-  'Filippa Kramp': { bg: '#2563EB', border: '#1D4ED8', text: '#FFFFFF' },
-};
+const AGENT_COLORS: Record<string, AgentColor> = product.agentColors;
 
 const DEFAULT_AGENT_COLOR: AgentColor = {
   bg: '#7C5CFF',

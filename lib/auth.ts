@@ -2,6 +2,8 @@ import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db/client";
+import { product } from "@/lib/products";
+import { getTenant } from "@/lib/products/tenant";
 
 declare module "next-auth" {
   interface Session {
@@ -20,7 +22,7 @@ const authSecret =
   process.env.NEXTAUTH_SECRET ||
   (process.env.NODE_ENV === "development" ? "local-dev-auth-secret-change-me" : undefined);
 
-const ALLOWED_DOMAINS = ['doldadress.se', 'becomeanon.com'];
+const ALLOWED_DOMAINS = product.allowedDomains;
 const SUPERADMIN_EMAILS = ['rc@successifier.com'];
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -49,8 +51,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async createUser(message) {
       console.log('[NextAuth] createUser event:', JSON.stringify(message, null, 2));
-      // Auto-assign tenant for new users
-      const tenant = await prisma.tenant.findFirst({ where: { subdomain: 'doldadress' } });
+      // Auto-assign the deployment's tenant for new users
+      const tenant = await getTenant();
       if (tenant && message.user?.id) {
         await prisma.user.update({
           where: { id: message.user.id },
