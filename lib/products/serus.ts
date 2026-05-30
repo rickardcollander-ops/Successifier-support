@@ -14,6 +14,8 @@ export const serus: ProductConfig = {
   brandName: 'Serus',
   supportName: 'Serus Kundtjänst',
   fromName: 'Serus Kundtjänst',
+  apiKeyPrefix: 'seru',
+  apiBaseDomain: 'serus.se', // TODO: confirm Serus public domain
   allowedDomains: ['serus.se'], // TODO: confirm Serus sign-in domain(s)
   agents: [], // TODO: add Serus agents (must match how they appear in Google)
   agentSignatures: {

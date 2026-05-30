@@ -44,7 +44,12 @@ Exemplet använder Serus, som redan är scaffoldad i `lib/products/serus.ts`.
    ```
 
 3. **Seed:a tenant-raden.** Skapa tenanten med `id` = `subdomain` = produktnyckeln
-   (samma konvention som Doldadress, så ev. id-baserad kod fortsätter funka):
+   (samma konvention som Doldadress, så ev. id-baserad kod fortsätter funka).
+   Enklast via scriptet (kör mot den nya databasen):
+   ```bash
+   DATABASE_URL="<nya-db-url>" PRODUCT=serus node scripts/seed-tenant.js "Serus"
+   ```
+   Eller med ren SQL:
    ```sql
    INSERT INTO "Tenant" (id, subdomain, name, "createdAt", "updatedAt")
    VALUES ('serus', 'serus', 'Serus', now(), now());

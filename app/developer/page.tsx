@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Key, Copy, Trash2, Plus, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { product } from '@/lib/products';
 
 interface ApiKey {
   id: string;
@@ -154,7 +155,7 @@ export default function DeveloperPage() {
           <p className="text-sm text-slate-600 dark:text-slate-400">Install and use our Node.js SDK</p>
         </a>
         <a
-          href="https://github.com/doldadress/api-examples"
+          href={`https://github.com/${product.key}/api-examples`}
           target="_blank"
           rel="noopener noreferrer"
           className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 hover:border-[#7C5CFF] transition-colors"

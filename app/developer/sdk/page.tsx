@@ -1,10 +1,18 @@
+import { product } from '@/lib/products';
+
 export default function SdkPage() {
+  const pascal = product.displayName.replace(/[^A-Za-z0-9]/g, '');
+  const pkg = `@${product.key}/sdk`;
+  const clientClass = `${pascal}Client`;
+  const errorClass = `${pascal}Error`;
+  const envVar = `${product.key.toUpperCase()}_API_KEY`;
+  const keyExample = `${product.apiKeyPrefix}_your_api_key_here`;
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
         <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">Node.js SDK</h1>
         <p className="text-slate-600 dark:text-slate-400">
-          Official Node.js SDK for the Doldadress Support API
+          Official Node.js SDK for the {product.displayName} Support API
         </p>
       </div>
 
@@ -12,10 +20,10 @@ export default function SdkPage() {
       <section className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">Installation</h2>
         <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
-          <code>{`npm install @doldadress/sdk
+          <code>{`npm install ${pkg}
 
 # or with yarn
-yarn add @doldadress/sdk`}</code>
+yarn add ${pkg}`}</code>
         </pre>
       </section>
 
@@ -23,10 +31,10 @@ yarn add @doldadress/sdk`}</code>
       <section className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">Quick Start</h2>
         <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
-          <code>{`import { DoldadressClient } from '@doldadress/sdk';
+          <code>{`import { ${clientClass} } from '${pkg}';
 
-const client = new DoldadressClient({
-  apiKey: 'dold_your_api_key_here',
+const client = new ${clientClass}({
+  apiKey: '${keyExample}',
   subdomain: 'your-subdomain'
 });
 
@@ -116,7 +124,7 @@ await client.tickets.send('ticket_id', {
 const app = express();
 app.use(express.json());
 
-app.post('/webhooks/doldadress', async (req, res) => {
+app.post('/webhooks/${product.key}', async (req, res) => {
   const event = req.body;
   
   switch (event.type) {
@@ -146,10 +154,10 @@ app.listen(3000);`}</code>
           The SDK is written in TypeScript and includes full type definitions:
         </p>
         <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
-          <code>{`import { DoldadressClient, Ticket, TicketStatus } from '@doldadress/sdk';
+          <code>{`import { ${clientClass}, Ticket, TicketStatus } from '${pkg}';
 
-const client = new DoldadressClient({
-  apiKey: process.env.DOLDADRESS_API_KEY!,
+const client = new ${clientClass}({
+  apiKey: process.env.${envVar}!,
   subdomain: 'your-subdomain'
 });
 
@@ -168,7 +176,7 @@ const status: TicketStatus = ticket.status; // Fully typed!`}</code>
       <section className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">Error Handling</h2>
         <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
-          <code>{`import { DoldadressError } from '@doldadress/sdk';
+          <code>{`import { ${errorClass} } from '${pkg}';
 
 try {
   const ticket = await client.tickets.create({
@@ -177,7 +185,7 @@ try {
     message: 'Test message'
   });
 } catch (error) {
-  if (error instanceof DoldadressError) {
+  if (error instanceof ${errorClass}) {
     console.error('API Error:', error.message);
     console.error('Status Code:', error.statusCode);
     console.error('Error Code:', error.code);
@@ -195,9 +203,9 @@ try {
         <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
           <code>{`const fetch = require('node-fetch');
 
-const apiKey = 'dold_your_api_key_here';
+const apiKey = '${keyExample}';
 const subdomain = 'your-subdomain';
-const baseUrl = \`https://\${subdomain}.doldadress.com/api\`;
+const baseUrl = \`https://\${subdomain}.${product.apiBaseDomain}/api\`;
 
 async function createTicket(data) {
   const response = await fetch(\`\${baseUrl}/tickets\`, {

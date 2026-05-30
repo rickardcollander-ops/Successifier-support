@@ -8,6 +8,8 @@ export const doldadress: ProductConfig = {
   brandName: 'Doldadress',
   supportName: 'Doldadress Kundtjänst',
   fromName: 'Doldadress Kundtjänst',
+  apiKeyPrefix: 'dold',
+  apiBaseDomain: 'doldadress.com',
   allowedDomains: ['doldadress.se', 'becomeanon.com'],
   agents: ['Ida Rosell', 'Malin Sundberg', 'Filippa Kramp'],
   agentSignatures: {

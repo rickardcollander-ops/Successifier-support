@@ -33,6 +33,12 @@ export interface ProductConfig {
   /** Display name used in the From header of outgoing replies. */
   fromName: string;
 
+  /** Prefix for generated API keys (e.g. "dold" → "dold_xxx"). */
+  apiKeyPrefix: string;
+
+  /** Public API base domain shown in the developer docs (e.g. "doldadress.com"). */
+  apiBaseDomain: string;
+
   /** Domains (besides superadmins) allowed to sign in. */
   allowedDomains: string[];
 
