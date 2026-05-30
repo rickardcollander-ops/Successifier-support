@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { product } from '@/lib/products';
 import { generateApiKey } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const host = request.headers.get('host') || '';
-    const subdomain = host.split('.')[0].replace(':3001', '').replace('localhost', 'doldadress');
+    const subdomain = product.key;
     
     const tenant = await prisma.tenant.findUnique({
       where: { subdomain },
@@ -29,8 +29,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const host = request.headers.get('host') || '';
-    const subdomain = host.split('.')[0].replace(':3001', '').replace('localhost', 'doldadress');
+    const subdomain = product.key;
     
     const tenant = await prisma.tenant.findUnique({
       where: { subdomain },

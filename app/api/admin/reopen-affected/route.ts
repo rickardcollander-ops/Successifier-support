@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { getTenant } from '@/lib/products/tenant';
 import { auth } from '@/lib/auth';
 
 // Reopen every ticket that's still sitting in "sent" or "closed" with at
@@ -14,12 +15,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const hostname = request.nextUrl.hostname;
-  const subdomain =
-    hostname === 'localhost' || hostname === '127.0.0.1'
-      ? 'doldadress'
-      : hostname.split('.')[0];
-  const tenant = await prisma.tenant.findUnique({ where: { subdomain } });
+  const tenant = await getTenant();
   if (!tenant) {
     return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
   }

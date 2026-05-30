@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db/client';
+import { getTenantId } from '@/lib/products/tenant';
 import { invalidateBlocklistCache } from '@/lib/services/blocked-senders';
 
-async function resolveTenantId(request: NextRequest): Promise<string | null> {
-  const hostname = request.nextUrl.hostname;
-  const subdomain =
-    hostname === 'localhost' || hostname === '127.0.0.1'
-      ? 'doldadress'
-      : hostname.split('.')[0];
-  const tenant = await prisma.tenant.findUnique({ where: { subdomain } });
-  return tenant?.id ?? null;
+async function resolveTenantId(): Promise<string | null> {
+  return getTenantId();
 }
 
 function normalizePattern(input: string): string {
@@ -22,7 +17,7 @@ export async function GET(request: NextRequest) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const tenantId = await resolveTenantId(request);
+  const tenantId = await resolveTenantId();
   if (!tenantId) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
   const rows = await prisma.blockedSender.findMany({
@@ -37,7 +32,7 @@ export async function POST(request: NextRequest) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const tenantId = await resolveTenantId(request);
+  const tenantId = await resolveTenantId();
   if (!tenantId) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
   const body = await request.json();
@@ -82,7 +77,7 @@ export async function DELETE(request: NextRequest) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const tenantId = await resolveTenantId(request);
+  const tenantId = await resolveTenantId();
   if (!tenantId) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
   const id = request.nextUrl.searchParams.get('id');

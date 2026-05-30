@@ -3,6 +3,7 @@
 import { signIn } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import { product } from '@/lib/products';
 
 function SignInContent() {
   const searchParams = useSearchParams();
@@ -13,7 +14,7 @@ function SignInContent() {
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 w-full max-w-md border border-slate-200 dark:border-slate-700">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-            Doldadress Support
+            {product.displayName} Support
           </h1>
           <p className="text-slate-600 dark:text-slate-400">
             Logga in för att hantera kundärenden
@@ -22,7 +23,7 @@ function SignInContent() {
 
         {error === 'AccessDenied' && (
           <div className="mb-6 p-3 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300 text-center">
-            Åtkomst nekad. Bara @doldadress.se-konton kan logga in.
+            Åtkomst nekad. Bara @{product.allowedDomains[0]}-konton kan logga in.
           </div>
         )}
 

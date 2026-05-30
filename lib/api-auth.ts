@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { product } from '@/lib/products';
 
 export async function validateApiKey(request: NextRequest): Promise<{ valid: boolean; tenantId?: string; error?: string }> {
   const apiKey = request.headers.get('x-api-key') || request.headers.get('authorization')?.replace('Bearer ', '');
@@ -36,7 +37,7 @@ export async function validateApiKey(request: NextRequest): Promise<{ valid: boo
 }
 
 export function generateApiKey(): string {
-  const prefix = 'dold';
+  const prefix = product.apiKeyPrefix;
   const randomPart = Array.from({ length: 32 }, () => 
     'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 62)]
   ).join('');

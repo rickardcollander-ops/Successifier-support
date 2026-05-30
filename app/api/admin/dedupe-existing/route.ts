@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { getTenant } from '@/lib/products/tenant';
 import { auth } from '@/lib/auth';
 
 // Dedup window for existing cleanup. Matches the window enforced for new
@@ -21,9 +22,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { subdomain: 'doldadress' },
-  });
+  const tenant = await getTenant();
   if (!tenant) {
     return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
   }

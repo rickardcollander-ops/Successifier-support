@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { getTenant } from '@/lib/products/tenant';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 
 export async function POST() {
@@ -7,9 +8,7 @@ export async function POST() {
     console.log('🔍 Starting context aggregation for all tickets...');
 
     // Find tenant
-    const tenant = await prisma.tenant.findUnique({
-      where: { subdomain: 'doldadress' },
-    });
+    const tenant = await getTenant();
 
     if (!tenant) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });

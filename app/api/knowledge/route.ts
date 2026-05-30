@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
-
-const TENANT_KEY = 'doldadress';
+import { product } from '@/lib/products';
+import { getTenantId } from '@/lib/products/tenant';
 
 async function resolveTenantId() {
-  const tenant = await prisma.tenant.findFirst({
-    where: {
-      OR: [{ id: TENANT_KEY }, { subdomain: TENANT_KEY }],
-    },
-    select: { id: true },
-  });
-
-  if (!tenant) {
-    throw new Error(`Tenant '${TENANT_KEY}' not found`);
+  const tenantId = await getTenantId();
+  if (!tenantId) {
+    throw new Error(`Tenant '${product.key}' not found`);
   }
-
-  return tenant.id;
+  return tenantId;
 }
 
 export async function GET(request: NextRequest) {

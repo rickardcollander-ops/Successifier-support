@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { getTenant } from '@/lib/products/tenant';
 
 const BILLECTA_BASE_URL = 'https://api.billecta.com';
 
@@ -38,10 +39,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Search query is required' }, { status: 400 });
     }
 
-    const tenant = await prisma.tenant.findUnique({
-      where: { subdomain: 'doldadress' },
-      select: { id: true },
-    });
+    const tenant = await getTenant();
 
     if (!tenant) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });

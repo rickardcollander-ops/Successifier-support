@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { getTenantId } from '@/lib/products/tenant';
 import { GmailService } from '@/lib/integrations/gmail';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
 
 export async function POST(request: NextRequest) {
   try {
-    const tenantId = 'doldadress';
+    const tenantId = await getTenantId();
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+    }
 
     // Get Gmail integration
     const gmailIntegration = await prisma.integration.findFirst({

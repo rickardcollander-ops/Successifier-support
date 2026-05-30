@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { product } from '@/lib/products';
 
 export async function DELETE(
   request: NextRequest,
@@ -7,8 +8,7 @@ export async function DELETE(
 ) {
   try {
     const { keyId } = await params;
-    const host = request.headers.get('host') || '';
-    const subdomain = host.split('.')[0].replace(':3001', '').replace('localhost', 'doldadress');
+    const subdomain = product.key;
     
     const tenant = await prisma.tenant.findUnique({
       where: { subdomain },
@@ -38,8 +38,7 @@ export async function PATCH(
 ) {
   try {
     const { keyId } = await params;
-    const host = request.headers.get('host') || '';
-    const subdomain = host.split('.')[0].replace(':3001', '').replace('localhost', 'doldadress');
+    const subdomain = product.key;
     
     const tenant = await prisma.tenant.findUnique({
       where: { subdomain },

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { product } from "@/lib/products";
 import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { 
@@ -67,12 +68,12 @@ export default function Sidebar() {
       <div className={`flex items-center justify-between px-5 py-5 ${collapsed ? 'flex-col gap-2' : ''}`}>
         <div className={`flex items-center gap-3 ${collapsed ? 'flex-col' : ''}`}>
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#7C5CFF] to-[#9F7BFF]">
-            <span className="text-white font-bold text-lg">D</span>
+            <span className="text-white font-bold text-lg">{product.displayName.charAt(0)}</span>
           </div>
           {!collapsed && (
             <div className="flex flex-col">
               <span className="text-sm font-semibold text-white">
-                Doldadress
+                {product.displayName}
               </span>
               <span className="text-[10px] text-slate-400">
                 Ticket System
@@ -186,9 +187,9 @@ export default function Sidebar() {
         </button>
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#7C5CFF] to-[#9F7BFF]">
-            <span className="text-white font-bold text-xs">D</span>
+            <span className="text-white font-bold text-xs">{product.displayName.charAt(0)}</span>
           </div>
-          <span className="text-sm font-semibold text-white">Doldadress</span>
+          <span className="text-sm font-semibold text-white">{product.displayName}</span>
         </div>
         <div className="w-9" /> {/* Spacer for centering */}
       </header>

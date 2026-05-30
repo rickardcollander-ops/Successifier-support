@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { prisma } from '@/lib/db/client';
+import { product } from '@/lib/products';
 
 // Subject + body of the autoresponder customers receive when they email
 // support and we open a brand-new ticket. Kept short and on-brand so it
@@ -10,12 +11,12 @@ function buildConfirmationEmail(originalSubject: string) {
   const body = [
     'Hej!',
     '',
-    'Tack för att du kontaktar Doldadress Kundtjänst. Vi har tagit emot ditt mejl och återkommer till dig så snart vi kan, vanligen inom 24 timmar på vardagar.',
+    product.confirmation.bodyLine,
     '',
     'Du behöver inte göra något mer just nu — vi hör av oss på den här adressen.',
     '',
     'Vänliga hälsningar,',
-    'Doldadress Kundtjänst',
+    product.confirmation.signoff,
   ].join('\n');
   return { subject, body };
 }

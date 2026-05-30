@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { getTenant } from '@/lib/products/tenant';
 import { auth } from '@/lib/auth';
 import { google } from 'googleapis';
 
@@ -21,13 +22,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const dryRun = body.dryRun === true;
 
-  const hostname = request.nextUrl.hostname;
-  const subdomain =
-    hostname === 'localhost' || hostname === '127.0.0.1'
-      ? 'doldadress'
-      : hostname.split('.')[0];
-
-  const tenant = await prisma.tenant.findUnique({ where: { subdomain } });
+  const tenant = await getTenant();
   if (!tenant) {
     return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
   }

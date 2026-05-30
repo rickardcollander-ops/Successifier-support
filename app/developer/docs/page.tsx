@@ -1,10 +1,14 @@
+import { product } from '@/lib/products';
+
 export default function ApiDocsPage() {
+  const keyExample = `${product.apiKeyPrefix}_your_api_key_here`;
+  const baseUrl = `https://your-subdomain.${product.apiBaseDomain}/api`;
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
         <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">API Documentation</h1>
         <p className="text-slate-600 dark:text-slate-400">
-          Complete reference for the Doldadress Support API
+          Complete reference for the {product.displayName} Support API
         </p>
       </div>
 
@@ -15,10 +19,10 @@ export default function ApiDocsPage() {
           All API requests require authentication using an API key. Include your API key in the request header:
         </p>
         <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
-          <code>{`X-API-Key: dold_your_api_key_here
+          <code>{`X-API-Key: ${keyExample}
 
 # Or using Authorization header
-Authorization: Bearer dold_your_api_key_here`}</code>
+Authorization: Bearer ${keyExample}`}</code>
         </pre>
       </section>
 
@@ -26,7 +30,7 @@ Authorization: Bearer dold_your_api_key_here`}</code>
       <section className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">Base URL</h2>
         <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg">
-          <code>https://your-subdomain.doldadress.com/api</code>
+          <code>{baseUrl}</code>
         </pre>
       </section>
 

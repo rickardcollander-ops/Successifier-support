@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { getTenant } from '@/lib/products/tenant';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { upsertTicket } from '@/lib/services/deduplicator';
 
@@ -11,9 +12,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
 
     // Find tenant by subdomain
-    const tenant = await prisma.tenant.findUnique({
-      where: { subdomain: 'doldadress' },
-    });
+    const tenant = await getTenant();
 
     if (!tenant) {
       return NextResponse.json({ tickets: [] });
@@ -69,9 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Find tenant by subdomain
-    const tenant = await prisma.tenant.findUnique({
-      where: { subdomain: 'doldadress' },
-    });
+    const tenant = await getTenant();
 
     if (!tenant) {
       return NextResponse.json(

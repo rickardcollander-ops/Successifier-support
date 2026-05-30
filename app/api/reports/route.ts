@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { getTenant } from '@/lib/products/tenant';
 import { AGENTS } from '@/lib/constants';
 
 export async function GET(request: NextRequest) {
@@ -7,16 +8,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const range = searchParams.get('range') || '30d';
     
-    // Get tenant from subdomain
-    const hostname = request.nextUrl.hostname;
-    const subdomain =
-      hostname === 'localhost' || hostname === '127.0.0.1'
-        ? 'doldadress'
-        : hostname.split('.')[0];
-    
-    const tenant = await prisma.tenant.findUnique({
-      where: { subdomain },
-    });
+    const tenant = await getTenant();
 
     if (!tenant) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });

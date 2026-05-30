@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "../styles/globals.css";
 import { Providers } from "./providers";
 import AppShell from "@/components/AppShell";
+import { product } from "@/lib/products";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Doldadress - Ticket Management",
+  title: `${product.displayName} - Ticket Management`,
   description: "AI-powered customer support",
 };
 

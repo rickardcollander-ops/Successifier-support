@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { getTenant } from '@/lib/products/tenant';
 
 const BILLECTA_SENDER = 'no-reply@billecta.com';
 
@@ -7,13 +8,7 @@ export async function POST(request: NextRequest) {
   try {
     const { folder } = await request.json();
 
-    const hostname = request.nextUrl.hostname;
-    const subdomain =
-      hostname === 'localhost' || hostname === '127.0.0.1'
-        ? 'doldadress'
-        : hostname.split('.')[0];
-
-    const tenant = await prisma.tenant.findUnique({ where: { subdomain } });
+    const tenant = await getTenant();
     if (!tenant) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }

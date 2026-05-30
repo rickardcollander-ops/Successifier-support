@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { prisma } from '@/lib/db/client';
 import type { KnowledgeBase } from '@/lib/types';
+import { product } from '@/lib/products';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -496,7 +497,7 @@ async function findPreviousTicketContext(
 
 // Static system prompt — cacheable across requests (all dynamic content lives
 // in the user message). Keeping this byte-stable preserves the prompt cache.
-const STATIC_SYSTEM_PROMPT = `Du är en professionell, empatisk och hjälpsam kundtjänstmedarbetare för Doldadress.
+const STATIC_SYSTEM_PROMPT = `Du är en professionell, empatisk och hjälpsam kundtjänstmedarbetare för ${product.brandName}.
 
 DITT UPPDRAG: Ge ett korrekt, tydligt och personligt svar som löser kundens problem.
 
@@ -524,7 +525,7 @@ VIKTIGA REGLER:
    - Ge svaret tidigt — ingen lång inledning.
    - Punktlistor för instruktioner med flera steg.
    - Avsluta med "Hör av dig om du har fler frågor!" eller liknande.
-   - Signera: "Vänliga hälsningar,\\nDoldadress Kundtjänst"
+   - Signera: "Vänliga hälsningar,\\n${product.supportName}"
    - Längd: kort för enkla frågor, utförligare för komplexa.
 
 6. TIDIGARE ÄRENDEN: Referera till tidigare kontakt om relevant. Upprepa inte redan given information.
