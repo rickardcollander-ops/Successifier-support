@@ -45,7 +45,9 @@ export interface TicketContext {
     creditorPublicId?: string;
     invoices?: any[];
   };
-  retool?: any;
+  retool?: {
+    data?: any;
+  };
   resend?: {
     emailsSent?: number;
     recentEmails?: any[];

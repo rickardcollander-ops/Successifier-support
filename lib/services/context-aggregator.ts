@@ -57,7 +57,7 @@ export class ContextAggregator {
             case 'retool':
               const retoolService = new RetoolService(
                 credentials.apiKey,
-                credentials.workspaceUrl
+                credentials.workflowUrl || credentials.workspaceUrl
               );
               const retoolData = await retoolService.getCustomerContext(normalizedEmail);
               if (retoolData) context.retool = retoolData;
@@ -143,6 +143,23 @@ export class ContextAggregator {
         context.resend.recentEmails.slice(0, 5).forEach((email: any) => {
           formatted += `  - ${email.subject} (${new Date(email.createdAt).toLocaleDateString()})\n`;
         });
+      }
+      formatted += '\n';
+    }
+
+    if (context.retool && context.retool.data) {
+      formatted += '=== Retool (Kunddata) ===\n';
+      const data = context.retool.data;
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        for (const [key, value] of Object.entries(data)) {
+          const printable =
+            value !== null && typeof value === 'object'
+              ? JSON.stringify(value)
+              : String(value);
+          formatted += `${key}: ${printable}\n`;
+        }
+      } else {
+        formatted += `${JSON.stringify(data, null, 2)}\n`;
       }
       formatted += '\n';
     }
