@@ -8,15 +8,13 @@ import { product } from '@/lib/products';
 function buildConfirmationEmail(originalSubject: string) {
   const cleanSubject = originalSubject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
   const subject = cleanSubject ? `Re: ${cleanSubject}` : 'Vi har tagit emot ditt mejl';
+  const { greeting, bodyLines, signoff } = product.confirmation;
   const body = [
-    'Hej!',
+    greeting,
     '',
-    product.confirmation.bodyLine,
-    '',
-    'Du behöver inte göra något mer just nu — vi hör av oss på den här adressen.',
-    '',
-    'Vänliga hälsningar,',
-    product.confirmation.signoff,
+    // Each body paragraph followed by a blank line, then the sign-off.
+    ...bodyLines.flatMap((line) => [line, '']),
+    signoff,
   ].join('\n');
   return { subject, body };
 }

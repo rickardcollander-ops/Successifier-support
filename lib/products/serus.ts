@@ -25,8 +25,14 @@ export const serus: ProductConfig = {
     // 'Förnamn Efternamn': { bg: '#2563EB', border: '#1D4ED8', text: '#FFFFFF' },
   },
   confirmation: {
-    bodyLine:
-      'Tack för att du kontaktar Serus Kundtjänst. Vi har tagit emot ditt mejl och återkommer till dig så snart vi kan, vanligen inom 24 timmar på vardagar.',
-    signoff: 'Serus Kundtjänst',
+    greeting: 'Hej,',
+    bodyLines: [
+      'Tack för att du kontaktar oss!',
+      'Vi har tagit emot ditt mejl. Vi hanterar ditt ärende så snart som möjligt och svarar normalt inom 2 arbetsdagar.',
+      // TODO (Serus onboarding): add a "vår supportsida: https://…" line once
+      // the public support URL is confirmed.
+      'Ha en fin dag!',
+    ],
+    signoff: 'Med vänliga hälsningar,\nTeamet på Serus.se',
   },
 };
