@@ -21,6 +21,7 @@ interface ReportData {
     date: string;
     count: number;
   }>;
+  activityInterval?: 'hour' | 'day';
   perUserStats?: AgentStats[];
 }
 
@@ -279,6 +280,7 @@ export default function ReportsPage() {
           const activity = data.recentActivity || [];
           const maxCount = activity.reduce((m, d) => Math.max(m, d.count), 0);
           const totalInRange = activity.reduce((s, d) => s + d.count, 0);
+          const hourly = data.activityInterval === 'hour';
 
           if (activity.length === 0 || totalInRange === 0) {
             return (
@@ -288,31 +290,44 @@ export default function ReportsPage() {
             );
           }
 
+          const formatLabel = (iso: string) =>
+            hourly
+              ? new Date(iso).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
+              : new Date(iso).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' });
+
+          const tooltipFor = (iso: string, count: number) =>
+            `${formatLabel(iso)} – ${count} ärenden`;
+
+          // Hourly view packs 24 bars in; only label every 3rd hour (plus the
+          // last one) so the axis stays readable. Daily views label every bar.
+          const showLabel = (index: number) =>
+            !hourly || index % 3 === 0 || index === activity.length - 1;
+
           return (
-            <div className="flex items-end justify-between h-64 gap-2">
-              {activity.map((day, index) => {
-                // Baseline of 2% so bars are still visible on zero-count days
-                // (makes it clear the chart rendered and isn't just broken).
-                const ratio = day.count / maxCount;
-                const height = day.count === 0 ? 2 : Math.max(ratio * 100, 4);
+            <div className="flex items-end justify-between h-64 gap-1 sm:gap-2">
+              {activity.map((point, index) => {
+                // Baseline of 2% so bars are still visible on zero-count
+                // buckets (makes it clear the chart rendered, not just broke).
+                const ratio = point.count / maxCount;
+                const height = point.count === 0 ? 2 : Math.max(ratio * 100, 4);
                 return (
-                  <div key={index} className="flex-1 flex flex-col items-center">
+                  <div key={index} className="flex-1 flex flex-col items-center min-w-0">
                     <span className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                      {day.count}
+                      {point.count}
                     </span>
                     <div className="w-full flex items-end justify-center h-full">
                       <div
                         className={`w-full rounded-t-lg transition-all hover:brightness-110 ${
-                          day.count === 0
+                          point.count === 0
                             ? 'bg-slate-200 dark:bg-slate-700'
                             : 'bg-gradient-to-t from-[#7C5CFF] to-[#9F7BFF]'
                         }`}
                         style={{ height: `${height}%` }}
-                        title={`${day.count} ärenden`}
+                        title={tooltipFor(point.date, point.count)}
                       />
                     </div>
-                    <span className="text-xs text-slate-600 dark:text-slate-400 mt-2">
-                      {new Date(day.date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })}
+                    <span className="text-xs text-slate-600 dark:text-slate-400 mt-2 truncate w-full text-center">
+                      {showLabel(index) ? formatLabel(point.date) : ' '}
                     </span>
                   </div>
                 );
