@@ -1,8 +1,8 @@
 import type { Ticket } from '@/lib/types';
 import { statusLabelSv, agentColor } from '@/lib/constants';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Pencil } from 'lucide-react';
 
-type PresenceViewer = { name: string; email: string; initials: string };
+type PresenceViewer = { name: string; email: string; initials: string; typing?: boolean };
 type PresenceMap = Record<string, PresenceViewer[]>;
 
 interface TicketListProps {
@@ -54,18 +54,21 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
   // immediately scannable in the list. Red = urgent (akut), orange =
   // high (hög), yellow = normal-with-attention is not used (we keep
   // normal neutral so the warm colors stay meaningful).
+  // Traffic-light ranking: red = high priority (urgent/high), yellow =
+  // normal, green = low. The left-edge stripe makes each customer's rank
+  // scannable at a glance.
   const getPriorityStripe = (priority: string): { stripe: string; chipBg: string; label: string } => {
     switch (priority) {
       case 'urgent':
-        return { stripe: 'bg-red-500', chipBg: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700', label: 'Akut' };
+        return { stripe: 'bg-red-500', chipBg: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700', label: 'Hög' };
       case 'high':
-        return { stripe: 'bg-orange-500', chipBg: 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700', label: 'Hög' };
+        return { stripe: 'bg-red-500', chipBg: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700', label: 'Hög' };
       case 'normal':
-        return { stripe: 'bg-yellow-400', chipBg: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700', label: 'Normal' };
+        return { stripe: 'bg-yellow-400', chipBg: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700', label: 'Medel' };
       case 'low':
-        return { stripe: 'bg-transparent', chipBg: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600', label: 'Låg' };
+        return { stripe: 'bg-green-500', chipBg: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700', label: 'Låg' };
       default:
-        return { stripe: 'bg-transparent', chipBg: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600', label: priority };
+        return { stripe: 'bg-yellow-400', chipBg: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600', label: priority };
     }
   };
 
@@ -116,6 +119,14 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
                   {ticket.subject}
                 </h3>
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  {presence[ticket.id]?.some((v) => v.typing) && (
+                    <span
+                      className="flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+                      title="Någon skriver ett svar just nu"
+                    >
+                      <Pencil className="w-3 h-3 animate-pulse" /> skriver
+                    </span>
+                  )}
                   {presence[ticket.id] && presence[ticket.id].length > 0 && (
                     <div className="flex -space-x-1">
                       {presence[ticket.id].map((viewer, idx) => {

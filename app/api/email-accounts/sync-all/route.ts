@@ -9,6 +9,7 @@ import { upsertTicket } from '@/lib/services/deduplicator';
 import { sendConfirmationEmail } from '@/lib/services/confirmation-email';
 import { getBlockedPatterns, isBlocked } from '@/lib/services/blocked-senders';
 import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
+import { getMessageAttachments } from '@/lib/integrations/gmail-attachments';
 
 async function syncSingleAccount(account: {
   id: string;
@@ -143,31 +144,6 @@ async function syncSingleAccount(account: {
         return text;
       }
 
-      // Extract image attachments from nested parts
-      interface ImageAttachment {
-        filename: string;
-        mimeType: string;
-        attachmentId: string;
-        size: number;
-      }
-      function extractImageAttachments(parts: any[]): ImageAttachment[] {
-        const images: ImageAttachment[] = [];
-        for (const part of parts) {
-          if (part.mimeType?.startsWith('image/') && part.body?.attachmentId) {
-            images.push({
-              filename: part.filename || 'image',
-              mimeType: part.mimeType,
-              attachmentId: part.body.attachmentId,
-              size: part.body.size || 0,
-            });
-          }
-          if (part.parts) {
-            images.push(...extractImageAttachments(part.parts));
-          }
-        }
-        return images;
-      }
-
       let body = '';
       if (msg.data.payload?.body?.data) {
         const raw = Buffer.from(msg.data.payload.body.data, 'base64').toString();
@@ -177,31 +153,9 @@ async function syncSingleAccount(account: {
         body = extractTextFromParts(msg.data.payload.parts);
       }
 
-      // Fetch image attachments (limit to 5, max 2MB each)
-      const imageAttachmentMeta = msg.data.payload?.parts
-        ? extractImageAttachments(msg.data.payload.parts)
-        : [];
-      const attachments: Array<{ filename: string; mimeType: string; dataUrl: string }> = [];
-      for (const img of imageAttachmentMeta.slice(0, 5)) {
-        if (img.size > 2 * 1024 * 1024) continue; // skip > 2MB
-        try {
-          const attachmentRes = await gmail.users.messages.attachments.get({
-            userId: 'me',
-            messageId: message.id!,
-            id: img.attachmentId,
-          });
-          if (attachmentRes.data.data) {
-            const base64Data = attachmentRes.data.data.replace(/-/g, '+').replace(/_/g, '/');
-            attachments.push({
-              filename: img.filename,
-              mimeType: img.mimeType,
-              dataUrl: `data:${img.mimeType};base64,${base64Data}`,
-            });
-          }
-        } catch (err) {
-          console.error(`[Email Sync] Failed to fetch attachment ${img.filename}:`, err);
-        }
-      }
+      // Fetch all attachments (images + PDFs/docs) so support can view them
+      // in-app instead of opening Gmail. The shared helper caps size/count.
+      const attachments = await getMessageAttachments(gmail, message.id!, msg.data.payload || undefined);
 
       const gmailThreadId = msg.data.threadId || null;
 
