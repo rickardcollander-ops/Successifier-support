@@ -55,6 +55,46 @@ export default function SettingsPage() {
   const [affectedLoading, setAffectedLoading] = useState(false);
   const [affectedError, setAffectedError] = useState<string | null>(null);
   const [affectedDeleting, setAffectedDeleting] = useState<string | null>(null);
+  const [affectedDismissing, setAffectedDismissing] = useState(false);
+
+  // Mark affected tickets as "handled" so they leave the list and stop
+  // re-appearing on each scan. Used both per-row and for "rensa hela listan".
+  const dismissAffected = async (ticketIds: string[]) => {
+    if (ticketIds.length === 0 || affectedDismissing) return;
+    setAffectedDismissing(true);
+    try {
+      const res = await fetch('/api/admin/affected-by-closed-reply-bug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketIds }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(`Kunde inte markera som hanterad: ${data?.error || res.status}`);
+        return;
+      }
+      const idSet = new Set(ticketIds);
+      setAffectedReport((prev) => {
+        if (!prev) return prev;
+        const remaining = prev.tickets.filter((t) => !idSet.has(t.id));
+        const remainingEmails = Array.from(
+          new Set(remaining.map((t) => t.customerEmail.toLowerCase()))
+        ).sort();
+        return {
+          ...prev,
+          tickets: remaining,
+          count: remaining.length,
+          uniqueCustomerCount: remainingEmails.length,
+          customerEmails: remainingEmails,
+          totalUnseenReplies: remaining.reduce((s, t) => s + t.repliesAfterOriginal, 0),
+        };
+      });
+    } catch {
+      alert('Nätverksfel');
+    } finally {
+      setAffectedDismissing(false);
+    }
+  };
 
   const openAffectedTicket = (ticketId: string) => {
     // Land on the tickets page with the deep-link query param so the
@@ -433,7 +473,7 @@ export default function SettingsPage() {
               <div className="flex-1">
                 <h3 className="font-medium text-slate-900 dark:text-slate-100">Hitta kunder vars svar hamnade i Stängda</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-                  Listar stängda/skickade ärenden där en kund replierat efteråt. Dessa ärenden bör eventuellt öppnas igen och besvaras.
+                  Listar stängda/skickade ärenden där en kund replierat efteråt. Dessa ärenden bör eventuellt öppnas igen och besvaras. Markera som hanterade för att rensa bort dem ur listan när de är åtgärdade.
                 </p>
               </div>
               <button
@@ -458,12 +498,27 @@ export default function SettingsPage() {
                   <strong>{affectedReport.uniqueCustomerCount}</strong> unika kunder ·{' '}
                   <strong>{affectedReport.totalUnseenReplies}</strong> följdmail totalt
                 </div>
-                <button
-                  onClick={downloadAffectedCsv}
-                  className="text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 whitespace-nowrap"
-                >
-                  Ladda ner CSV
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={downloadAffectedCsv}
+                    className="text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 whitespace-nowrap"
+                  >
+                    Ladda ner CSV
+                  </button>
+                  {affectedReport.tickets.length > 0 && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`Markera alla ${affectedReport.tickets.length} ärenden som hanterade? De försvinner ur listan men raderas inte.`)) {
+                          dismissAffected(affectedReport.tickets.map((t) => t.id));
+                        }
+                      }}
+                      disabled={affectedDismissing}
+                      className="text-xs px-3 py-1.5 rounded-md border border-green-300 dark:border-green-700 bg-white dark:bg-slate-800 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {affectedDismissing ? 'Rensar…' : 'Markera alla som hanterade'}
+                    </button>
+                  )}
+                </div>
               </div>
               {affectedReport.customerEmails.length > 0 && (
                 <div className="p-5 border-b border-slate-100 dark:border-slate-700">
@@ -517,6 +572,19 @@ export default function SettingsPage() {
                                 aria-label="Öppna ärende"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  dismissAffected([t.id]);
+                                }}
+                                disabled={affectedDismissing}
+                                className="p-1.5 rounded-md text-slate-400 hover:text-green-600 hover:bg-green-50 dark:text-slate-500 dark:hover:text-green-400 dark:hover:bg-green-900/20 disabled:opacity-50 transition-colors"
+                                title="Markera som hanterad (dölj ur listan)"
+                                aria-label="Markera som hanterad"
+                              >
+                                <CheckCircle className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 type="button"

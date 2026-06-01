@@ -51,6 +51,9 @@ export async function POST(request: NextRequest) {
 
     for (const email of emails) {
       const context = await contextAggregator.gatherContext(email.from, integrations as any);
+      if (email.attachments && email.attachments.length > 0) {
+        (context as any).attachments = email.attachments;
+      }
 
       const subjectNormalized = email.subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
       const isReply = /^(Re|Sv|Fwd|Fw):/i.test(email.subject);

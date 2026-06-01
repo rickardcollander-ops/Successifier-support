@@ -12,7 +12,7 @@ interface EmailSyncStatus {
   error: string | null;
 }
 
-type PresenceViewer = { name: string; email: string; initials: string };
+type PresenceViewer = { name: string; email: string; initials: string; typing?: boolean };
 type PresenceMap = Record<string, PresenceViewer[]>;
 
 export default function TicketsPage() {
@@ -160,15 +160,24 @@ export default function TicketsPage() {
     }
   };
 
-  // Report presence and fetch other viewers
-  const reportPresence = async (ticketId: string | null) => {
+  // Report presence and fetch other viewers. `typing` powers the
+  // "skrivläge" indicator so colleagues see when someone is composing.
+  const reportPresence = async (ticketId: string | null, typing = false) => {
     try {
       await fetch('/api/tickets/presence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticketId }),
+        body: JSON.stringify({ ticketId, typing }),
       });
     } catch {}
+  };
+
+  // Whether the current agent is composing a reply to the selected ticket.
+  const composingRef = useRef(false);
+  const handleComposingChange = (composing: boolean) => {
+    composingRef.current = composing;
+    const id = selectedTicketIdRef.current;
+    if (id) reportPresence(id, composing);
   };
 
   const fetchPresence = async () => {
@@ -198,7 +207,8 @@ export default function TicketsPage() {
   // Report presence when selected ticket changes
   useEffect(() => {
     selectedTicketIdRef.current = selectedTicket?.id || null;
-    reportPresence(selectedTicket?.id || null);
+    composingRef.current = false;
+    reportPresence(selectedTicket?.id || null, false);
   }, [selectedTicket?.id]);
 
   // Honour the ?ticket=<id> deep link from Settings → Drabbade kunder.
@@ -252,7 +262,7 @@ export default function TicketsPage() {
     // currently-selected ticket, not the one selected at mount time.
     const presenceInterval = setInterval(() => {
       const id = selectedTicketIdRef.current;
-      if (id) reportPresence(id);
+      if (id) reportPresence(id, composingRef.current);
     }, 5000);
 
     return () => {
@@ -818,6 +828,8 @@ export default function TicketsPage() {
                     onDelete={handleDeleteTicket}
                     onSpam={handleSpamTicket}
                     onSelectTicket={setSelectedTicket}
+                    viewers={ticketPresence[selectedTicket.id] || []}
+                    onComposingChange={handleComposingChange}
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
@@ -849,6 +861,8 @@ export default function TicketsPage() {
                 onDelete={handleDeleteTicket}
                 onSpam={handleSpamTicket}
                 onSelectTicket={setSelectedTicket}
+                viewers={ticketPresence[selectedTicket.id] || []}
+                onComposingChange={handleComposingChange}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">

@@ -76,7 +76,7 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
 
     // Helper to merge into an existing parent ticket. Used by both the
     // caller-supplied parent ID path and the Gmail thread-id lookup.
-    const mergeInto = async (parent: { id: string; originalMessage: string; status: string }) => {
+    const mergeInto = async (parent: { id: string; originalMessage: string; status: string; contextData?: any }) => {
       if (
         input.gmailMessageId &&
         parent.originalMessage.includes(`[Gmail ID: ${input.gmailMessageId}]`)
@@ -95,11 +95,40 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
       // reopen it to Öppna so the new follow-up shows up in the active
       // queue instead of being buried. This is the stäng-ärende-buggen.
       const shouldReopen = parent.status === 'sent' || parent.status === 'closed';
+
+      // Carry attachments from the follow-up into the ticket. The merge
+      // path used to ignore contextData entirely, so any image/PDF a
+      // customer sent in a reply was lost and only viewable in Gmail. We
+      // append the new attachments to whatever the parent already had,
+      // de-duplicated by filename+size so the same mail synced twice
+      // doesn't double them up.
+      const incomingAttachments = Array.isArray(input.contextData?.attachments)
+        ? input.contextData.attachments
+        : [];
+      let contextDataUpdate: { contextData?: Prisma.InputJsonValue } = {};
+      if (incomingAttachments.length > 0) {
+        const parentContext = (parent.contextData as Record<string, any> | null) ?? {};
+        const existing = Array.isArray(parentContext.attachments) ? parentContext.attachments : [];
+        const seen = new Set(existing.map((a: any) => `${a.filename}:${a.size ?? ''}`));
+        const additions = incomingAttachments.filter(
+          (a: any) => !seen.has(`${a.filename}:${a.size ?? ''}`),
+        );
+        if (additions.length > 0) {
+          contextDataUpdate = {
+            contextData: {
+              ...parentContext,
+              attachments: [...existing, ...additions],
+            } as Prisma.InputJsonValue,
+          };
+        }
+      }
+
       const updated = await tx.ticket.update({
         where: { id: parent.id },
         data: {
           originalMessage: `${parent.originalMessage}${separator}${appendedBody}`,
           ...(shouldReopen ? { status: 'in_progress' } : {}),
+          ...contextDataUpdate,
         },
       });
       return { ticket: updated, created: false };

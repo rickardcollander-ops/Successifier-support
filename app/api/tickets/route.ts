@@ -6,6 +6,32 @@ import { upsertTicket } from '@/lib/services/deduplicator';
 
 const ZENDESK_IMPORT_MARKER = '[Zendesk Import Source:';
 
+// Strip the heavy attachment `dataUrl` payloads from list responses. The
+// tickets page polls this endpoint every 3 seconds for ALL tickets, so
+// shipping multi-MB image/PDF data URLs each time would be very wasteful.
+// We keep lightweight metadata (filename/mimeType/size) so the UI can show
+// counts and a loading state; the detail view lazy-loads the full bytes
+// from the single-ticket endpoint (/api/tickets/[id]).
+function stripAttachmentData(tickets: any[]): any[] {
+  return tickets.map((t) => {
+    const ctx = t.contextData as Record<string, any> | null;
+    if (!ctx || !Array.isArray(ctx.attachments) || ctx.attachments.length === 0) {
+      return t;
+    }
+    return {
+      ...t,
+      contextData: {
+        ...ctx,
+        attachments: ctx.attachments.map((a: any) => ({
+          filename: a.filename,
+          mimeType: a.mimeType,
+          size: a.size,
+        })),
+      },
+    };
+  });
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -28,7 +54,7 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
         take: 200,
       });
-      return NextResponse.json({ tickets });
+      return NextResponse.json({ tickets: stripAttachmentData(tickets) });
     }
 
     // Default: exclude archived and Zendesk imports (include duplicates so they appear in tab)
@@ -45,7 +71,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ tickets });
+    return NextResponse.json({ tickets: stripAttachmentData(tickets) });
   } catch (error) {
     console.error('Error fetching tickets:', error);
     return NextResponse.json(

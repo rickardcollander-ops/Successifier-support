@@ -40,7 +40,13 @@ export async function GET(request: NextRequest) {
     where: {
       tenantId: tenant.id,
       status: { in: ['sent', 'closed'] },
-      originalMessage: { contains: '[Följdmail' },
+      // Has a buried customer reply, but hasn't been marked as handled.
+      // The "[DrabbadHanterad …]" marker lets support clear the list once
+      // they've dealt with (or dismissed) an entry so it stops re-appearing.
+      AND: [
+        { originalMessage: { contains: '[Följdmail' } },
+        { NOT: { originalMessage: { contains: '[DrabbadHanterad' } } },
+      ],
     },
     select: {
       id: true,
@@ -94,4 +100,57 @@ export async function GET(request: NextRequest) {
     customerEmails: uniqueEmails,
     tickets: affected,
   });
+}
+
+// Mark one or more affected tickets as "handled" so they drop out of the
+// list and stop re-appearing on every scan. Support asked for this because
+// the reply-reopen fix means these customers already land correctly in the
+// inboxes — the diagnostic list is now just noise that should be clearable.
+//
+// We tag the ticket with a hidden "[DrabbadHanterad: <ISO>]" marker rather
+// than deleting anything. The marker is stripped from the conversation view
+// and excluded from the GET query above.
+export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const tenant = await getTenant();
+  if (!tenant) {
+    return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+  }
+
+  let ticketIds: string[] = [];
+  try {
+    const body = await request.json();
+    if (Array.isArray(body?.ticketIds)) {
+      ticketIds = body.ticketIds.filter((x: unknown): x is string => typeof x === 'string');
+    }
+  } catch {
+    // fall through to validation below
+  }
+
+  if (ticketIds.length === 0) {
+    return NextResponse.json({ error: 'ticketIds required' }, { status: 400 });
+  }
+
+  const marker = `\n[DrabbadHanterad: ${new Date().toISOString()} av ${session.user.email}]`;
+
+  let dismissed = 0;
+  for (const id of ticketIds) {
+    // Append the marker only if not already present; scope to this tenant.
+    // Raw SQL so we don't bump updatedAt (these are resolved tickets and
+    // shouldn't jump around in any activity-sorted view).
+    const affectedRows = await prisma.$executeRaw`
+      UPDATE "Ticket"
+      SET "originalMessage" = "originalMessage" || ${marker}
+      WHERE id = ${id}
+        AND "tenantId" = ${tenant.id}
+        AND "originalMessage" NOT LIKE '%[DrabbadHanterad%'
+    `;
+    dismissed += Number(affectedRows) || 0;
+  }
+
+  return NextResponse.json({ dismissed });
 }

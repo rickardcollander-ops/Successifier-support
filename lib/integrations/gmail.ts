@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { getMessageAttachments } from '@/lib/integrations/gmail-attachments';
 
 export class GmailService {
   private gmail;
@@ -84,6 +85,10 @@ export class GmailService {
         body = Buffer.from(message.payload.body.data, 'base64').toString('utf-8');
       }
 
+      // Pull any attachments (images, PDFs, docs) so the inbox-check path
+      // surfaces them in-app rather than forcing support into Gmail.
+      const attachments = await getMessageAttachments(this.gmail, messageId, message.payload || undefined);
+
       return {
         id: messageId,
         from: email,
@@ -92,6 +97,7 @@ export class GmailService {
         body,
         date,
         threadId: message.threadId,
+        attachments,
       };
     } catch (error) {
       console.error(`Error fetching email ${messageId}:`, error);
