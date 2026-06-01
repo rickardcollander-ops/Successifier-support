@@ -55,10 +55,18 @@ export class StripeService {
         ),
       ]);
 
-      const subscriptionsList = subscriptions.data.map(sub => ({
+      const subscriptionsList = subscriptions.data.map(sub => {
+          // As of API version 2025-03-31.basil (we run 2026-01-28.clover),
+          // current_period_end was removed from the Subscription object and
+          // moved onto each subscription item. Read it from the item first
+          // and fall back to the legacy top-level field for safety.
+          const firstItem = sub.items.data[0] as any;
+          const currentPeriodEnd =
+            firstItem?.current_period_end ?? (sub as any).current_period_end ?? null;
+          return {
           id: sub.id,
           status: sub.status,
-          currentPeriodEnd: (sub as any).current_period_end,
+          currentPeriodEnd,
           canceledAt: (sub as any).canceled_at || null,
           endedAt: (sub as any).ended_at || null,
           cancelAt: (sub as any).cancel_at || null,
@@ -66,7 +74,8 @@ export class StripeService {
             price: item.price.unit_amount,
             product: item.price.product,
           })),
-        }));
+        };
+        });
 
       const hasActiveSubscription = subscriptionsList.some(
         sub => sub.status === 'active' || sub.status === 'trialing'
