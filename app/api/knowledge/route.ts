@@ -11,9 +11,27 @@ async function resolveTenantId() {
   return tenantId;
 }
 
+// Auto-lärda artiklar ("Lärda från mail") behålls bara i 30 dagar
+const AUTO_LEARNED_CATEGORY = 'Lärande från skickade svar';
+const AUTO_LEARNED_RETENTION_DAYS = 30;
+
+async function pruneExpiredLearnedArticles(tenantId: string) {
+  const cutoff = new Date(Date.now() - AUTO_LEARNED_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  await prisma.knowledgeBase.deleteMany({
+    where: {
+      tenantId,
+      category: AUTO_LEARNED_CATEGORY,
+      createdAt: { lt: cutoff },
+    },
+  });
+}
+
 export async function GET(request: NextRequest) {
   try {
     const tenantId = await resolveTenantId();
+
+    // Rensa bort lärda-från-mail-artiklar äldre än 30 dagar innan vi hämtar
+    await pruneExpiredLearnedArticles(tenantId);
 
     const articles = await prisma.knowledgeBase.findMany({
       where: { tenantId },
