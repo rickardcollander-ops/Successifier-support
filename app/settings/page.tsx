@@ -652,11 +652,11 @@ export default function SettingsPage() {
         <IntegrationCard
           type="retool"
           name="Retool"
-          description="Connect to your Retool workflows and data"
+          description="Hämta kunddata från en Retool Workflow (per e-postadress)"
           integration={getIntegration('retool')}
           fields={[
-            { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your Retool API key' },
-            { key: 'workspaceUrl', label: 'Workspace URL', type: 'text', placeholder: 'https://yourcompany.retool.com' },
+            { key: 'apiKey', label: 'Workflow API Key', type: 'password', placeholder: 'Din Retool Workflow API-nyckel (X-Workflow-Api-Key)' },
+            { key: 'workflowUrl', label: 'Workflow URL', type: 'text', placeholder: 'https://api.retool.com/v1/workflows/.../startTrigger' },
           ]}
           onSave={handleSave}
           onToggle={handleToggle}
