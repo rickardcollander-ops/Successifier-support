@@ -104,10 +104,15 @@ export class ContextAggregator {
       if (context.stripe.subscriptions && context.stripe.subscriptions.length > 0) {
         formatted += 'Prenumerationer:\n';
         context.stripe.subscriptions.forEach(sub => {
-          formatted += `  - Status: ${sub.status}, Period slutar: ${new Date(sub.currentPeriodEnd * 1000).toLocaleDateString('sv-SE')}`;
-          if (sub.canceledAt) formatted += `, Avslutad: ${new Date(sub.canceledAt * 1000).toLocaleDateString('sv-SE')}`;
+          formatted += `  - Status: ${sub.status}`;
+          if (sub.currentPeriodEnd) formatted += `, Period slutar: ${new Date(sub.currentPeriodEnd * 1000).toLocaleDateString('sv-SE')}`;
+          // canceledAt is when cancellation was requested, not when the
+          // subscription ends. Label it as such and always show the actual
+          // end date (cancelAt/endedAt) so the year isn't read off the
+          // earlier request date.
+          if (sub.canceledAt) formatted += `, Uppsägning begärd: ${new Date(sub.canceledAt * 1000).toLocaleDateString('sv-SE')}`;
           if (sub.endedAt) formatted += `, Upphörd: ${new Date(sub.endedAt * 1000).toLocaleDateString('sv-SE')}`;
-          if (sub.cancelAt && !sub.canceledAt) formatted += `, Avslutas: ${new Date(sub.cancelAt * 1000).toLocaleDateString('sv-SE')}`;
+          else if (sub.cancelAt) formatted += `, Upphör: ${new Date(sub.cancelAt * 1000).toLocaleDateString('sv-SE')}`;
           formatted += '\n';
         });
       }

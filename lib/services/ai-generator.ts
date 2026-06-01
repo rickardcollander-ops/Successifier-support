@@ -378,9 +378,13 @@ function formatContextForPrompt(contextData: any): string {
       subs.forEach((sub: any) => {
         formatted += `  - ${sub.id}: status=${sub.status}`;
         if (sub.currentPeriodEnd) formatted += `, nuvarande period slutar ${fmtIso(sub.currentPeriodEnd)}`;
-        if (sub.canceledAt) formatted += `, uppsagd den ${fmtIso(sub.canceledAt)}`;
+        // canceledAt = the date the customer REQUESTED cancellation (not when
+        // the subscription ends). Label it clearly and always print the actual
+        // scheduled end date (cancelAt) so the AI never reports the request
+        // year as the end year.
+        if (sub.canceledAt) formatted += `, uppsägning begärd ${fmtIso(sub.canceledAt)}`;
         if (sub.endedAt) formatted += `, upphörd ${fmtIso(sub.endedAt)}`;
-        if (sub.cancelAt && !sub.canceledAt) formatted += `, planerat slutdatum ${fmtIso(sub.cancelAt)}`;
+        if (sub.cancelAt) formatted += `, planerat slutdatum ${fmtIso(sub.cancelAt)}`;
         if (sub.items?.[0]?.price) formatted += `, pris=${(sub.items[0].price / 100).toFixed(0)} kr`;
         // Decide which date counts as "when does the subscription end?".
         // cancelAt > endedAt > currentPeriodEnd. Always print the year.
