@@ -34,7 +34,7 @@ const RESPONSE_TOOL: Anthropic.Tool = {
     properties: {
       response: {
         type: 'string',
-        description: 'Hela e-posttexten som ska skickas till kunden, inklusive hälsning och signatur.',
+        description: 'Hela e-posttexten som ska skickas till kunden, inklusive hälsning men UTAN signatur/avslutningshälsning (den läggs till automatiskt vid utskick).',
       },
       confidence: {
         type: 'number',
@@ -378,9 +378,13 @@ function formatContextForPrompt(contextData: any): string {
       subs.forEach((sub: any) => {
         formatted += `  - ${sub.id}: status=${sub.status}`;
         if (sub.currentPeriodEnd) formatted += `, nuvarande period slutar ${fmtIso(sub.currentPeriodEnd)}`;
-        if (sub.canceledAt) formatted += `, uppsagd den ${fmtIso(sub.canceledAt)}`;
+        // canceledAt = the date the customer REQUESTED cancellation (not when
+        // the subscription ends). Label it clearly and always print the actual
+        // scheduled end date (cancelAt) so the AI never reports the request
+        // year as the end year.
+        if (sub.canceledAt) formatted += `, uppsägning begärd ${fmtIso(sub.canceledAt)}`;
         if (sub.endedAt) formatted += `, upphörd ${fmtIso(sub.endedAt)}`;
-        if (sub.cancelAt && !sub.canceledAt) formatted += `, planerat slutdatum ${fmtIso(sub.cancelAt)}`;
+        if (sub.cancelAt) formatted += `, planerat slutdatum ${fmtIso(sub.cancelAt)}`;
         if (sub.items?.[0]?.price) formatted += `, pris=${(sub.items[0].price / 100).toFixed(0)} kr`;
         // Decide which date counts as "when does the subscription end?".
         // cancelAt > endedAt > currentPeriodEnd. Always print the year.
@@ -525,12 +529,12 @@ VIKTIGA REGLER:
    - Ge svaret tidigt — ingen lång inledning.
    - Punktlistor för instruktioner med flera steg.
    - Avsluta med "Hör av dig om du har fler frågor!" eller liknande.
-   - Signera: "Vänliga hälsningar,\\n${product.supportName}"
+   - Skriv INGEN signatur eller avslutningshälsning (t.ex. "Vänliga hälsningar", "Med vänlig hälsning", namn eller företagsnamn). Signaturen läggs till automatiskt vid utskick.
    - Längd: kort för enkla frågor, utförligare för komplexa.
 
 6. TIDIGARE ÄRENDEN: Referera till tidigare kontakt om relevant. Upprepa inte redan given information.
 
-SVARSLEVERANS: Leverera ALLTID ditt svar genom att anropa verktyget submit_customer_response. Hela e-posttexten (inklusive hälsning och signatur) ska ligga i fältet "response".`;
+SVARSLEVERANS: Leverera ALLTID ditt svar genom att anropa verktyget submit_customer_response. Hela e-posttexten (inklusive hälsning men UTAN signatur) ska ligga i fältet "response".`;
 
 export async function generateAIResponse(
   subject: string,

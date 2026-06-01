@@ -66,25 +66,31 @@ async function resendProbe(apiKey: string, fromEmail: string) {
   }
 }
 
-async function retoolProbe(apiKey: string, workspaceUrl: string) {
+async function retoolProbe(apiKey: string, workflowUrl: string, email: string) {
   try {
-    const url = workspaceUrl.replace(/\/$/, '');
-    const res = await fetch(`${url}/api/resources`, {
+    const res = await fetch(workflowUrl, {
+      method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'X-Workflow-Api-Key': apiKey,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ email }),
     });
 
     if (res.ok) {
       return {
         ok: true,
-        message: 'Retool connection successful',
+        message: 'Retool workflow connection successful',
       };
     }
 
+    const bodySnippet = (await res.text().catch(() => '')).slice(0, 200);
     return {
       ok: false,
-      message: `Retool auth failed: HTTP ${res.status}`,
+      message: `Retool workflow failed: HTTP ${res.status}`,
+      ...(process.env.NODE_ENV !== 'production' && bodySnippet
+        ? { upstreamBodySnippet: bodySnippet }
+        : {}),
     };
   } catch (error) {
     return {
@@ -286,11 +292,11 @@ export async function POST(
 
       case 'retool': {
         const apiKey = String(credentials.apiKey || '').trim();
-        const workspaceUrl = String(credentials.workspaceUrl || '').trim();
-        if (!apiKey || !workspaceUrl) {
+        const workflowUrl = String(credentials.workflowUrl || credentials.workspaceUrl || '').trim();
+        if (!apiKey || !workflowUrl) {
           return NextResponse.json({ ok: false, message: 'Missing Retool credentials' }, { status: 400 });
         }
-        result = await retoolProbe(apiKey, workspaceUrl);
+        result = await retoolProbe(apiKey, workflowUrl, email);
         break;
       }
 

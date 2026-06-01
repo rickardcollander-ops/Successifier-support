@@ -14,23 +14,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
-    // Calculate date range. We align startDate to midnight so the activity
-    // chart buckets (one per calendar day) stay consistent with the ticket
-    // filter — otherwise tickets created between midnight and the current
-    // time on the oldest day would be counted in totalTickets but missing
-    // from the chart, which made the chart look broken. The "1d" range
-    // is special-cased to a rolling-24h window: a single bar wouldn't
-    // tell anyone anything, so the chart hides for that range.
+    // Calculate the date range. We align bucket boundaries to the ticket
+    // filter so every ticket counted in totalTickets also maps to exactly
+    // one bar in the activity chart — otherwise the totals and the chart
+    // disagree and the chart looks broken.
+    //
+    // The "1d" range uses HOURLY buckets over the last 24 hours: a single
+    // daily bar tells you nothing, and (worse) the old code anchored that
+    // one bucket at midnight while fetching a rolling 24h window, so
+    // tickets created the previous evening inflated totalTickets but never
+    // showed up in the chart. All other ranges use one bucket per calendar
+    // day anchored on midnight.
+    const HOUR_MS = 60 * 60 * 1000;
+    const DAY_MS = 24 * HOUR_MS;
     const now = new Date();
+    const isHourly = range === '1d';
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Top of the current hour, used to align the 24 hourly buckets.
+    const currentHourStart = new Date(
+      now.getFullYear(), now.getMonth(), now.getDate(), now.getHours()
+    );
     const daysAgo =
-      range === '1d' ? 1 :
       range === '7d' ? 7 :
       range === '30d' ? 30 :
-      90;
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startDate = range === '1d'
-      ? new Date(now.getTime() - 24 * 60 * 60 * 1000)
-      : new Date(todayStart.getTime() - (daysAgo - 1) * 24 * 60 * 60 * 1000);
+      range === '90d' ? 90 :
+      30;
+    const startDate = isHourly
+      // 24 hourly buckets ending with the current (partial) hour.
+      ? new Date(currentHourStart.getTime() - 23 * HOUR_MS)
+      : new Date(todayStart.getTime() - (daysAgo - 1) * DAY_MS);
 
     // Get all tickets in range
     const tickets = await prisma.ticket.findMany({
@@ -60,11 +72,17 @@ export async function GET(request: NextRequest) {
       return acc;
     }, {} as Record<string, number>);
 
-    // Resolved today
-    const resolvedToday = tickets.filter(
-      (t) => (t.status === 'sent' || t.status === 'closed') &&
-      new Date(t.updatedAt) >= todayStart
-    ).length;
+    // Resolved today. This is a "today" metric, independent of the selected
+    // range — a ticket opened last week but closed this morning still counts.
+    // We therefore query it directly rather than filtering the range-limited
+    // `tickets` list (which previously undercounted on short ranges).
+    const resolvedToday = await prisma.ticket.count({
+      where: {
+        tenantId: tenant.id,
+        status: { in: ['sent', 'closed'] },
+        updatedAt: { gte: todayStart },
+      },
+    });
 
     // Pending tickets (new or in_progress)
     const pendingTickets = tickets.filter(
@@ -85,21 +103,35 @@ export async function GET(request: NextRequest) {
         }, 0) / respondedTickets.length
       : 0;
 
-    // Recent activity (tickets per day). Using calendar-day buckets anchored
-    // on todayStart so every ticket in totalTickets maps to exactly one bar.
-    const recentActivity = [];
-    for (let i = daysAgo - 1; i >= 0; i--) {
-      const dayStart = new Date(todayStart.getTime() - i * 24 * 60 * 60 * 1000);
-      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    // Recent activity. Buckets are anchored to the same window as the ticket
+    // filter so every ticket in totalTickets maps to exactly one bar. For the
+    // "1d" range we emit 24 hourly buckets; otherwise one bucket per day.
+    const countBetween = (from: Date, to: Date) =>
+      tickets.filter((t) => {
+        const c = new Date(t.createdAt);
+        return c >= from && c < to;
+      }).length;
 
-      const count = tickets.filter(
-        (t) => new Date(t.createdAt) >= dayStart && new Date(t.createdAt) < dayEnd
-      ).length;
-
-      recentActivity.push({
-        date: dayStart.toISOString().split('T')[0],
-        count,
-      });
+    const recentActivity: Array<{ date: string; count: number }> = [];
+    if (isHourly) {
+      for (let i = 23; i >= 0; i--) {
+        const hourStart = new Date(currentHourStart.getTime() - i * HOUR_MS);
+        const hourEnd = new Date(hourStart.getTime() + HOUR_MS);
+        recentActivity.push({
+          // Full ISO timestamp so the client can render an hour label.
+          date: hourStart.toISOString(),
+          count: countBetween(hourStart, hourEnd),
+        });
+      }
+    } else {
+      for (let i = daysAgo - 1; i >= 0; i--) {
+        const dayStart = new Date(todayStart.getTime() - i * DAY_MS);
+        const dayEnd = new Date(dayStart.getTime() + DAY_MS);
+        recentActivity.push({
+          date: dayStart.toISOString().split('T')[0],
+          count: countBetween(dayStart, dayEnd),
+        });
+      }
     }
 
     // Per-user statistics: count tickets the user was assigned to AND
@@ -152,6 +184,8 @@ export async function GET(request: NextRequest) {
       resolvedToday,
       pendingTickets,
       recentActivity,
+      // Tells the client how to label the activity bars ("14:00" vs "3 jun").
+      activityInterval: isHourly ? 'hour' : 'day',
       perUserStats,
     });
   } catch (error) {

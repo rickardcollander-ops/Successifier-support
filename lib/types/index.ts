@@ -45,7 +45,9 @@ export interface TicketContext {
     creditorPublicId?: string;
     invoices?: any[];
   };
-  retool?: any;
+  retool?: {
+    data?: any;
+  };
   resend?: {
     emailsSent?: number;
     recentEmails?: any[];
@@ -57,7 +59,13 @@ export interface TicketContext {
   attachments?: Array<{
     filename: string;
     mimeType: string;
-    dataUrl: string;
+    // Byte size of the attachment. Present for newly synced mail; older
+    // tickets may omit it.
+    size?: number;
+    // Full data URL with the bytes. Stripped from the ticket-list endpoint
+    // to keep the 3s poll light — the detail view lazy-loads it from the
+    // single-ticket endpoint. May therefore be absent in list payloads.
+    dataUrl?: string;
   }>;
 }
 

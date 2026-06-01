@@ -164,13 +164,27 @@ Navigate to **Settings** (`/settings`) in the dashboard to configure each integr
 **Required credentials:**
 ```json
 {
-  "apiKey": "your_retool_api_key",
-  "workspaceUrl": "https://your-workspace.retool.com"
+  "apiKey": "your_retool_workflow_api_key",
+  "workflowUrl": "https://api.retool.com/v1/workflows/<workflow-id>/startTrigger"
 }
 ```
 
+**How it works:**
+- Data is fetched from a **Retool Workflow** exposed via its webhook/API trigger URL.
+- The workflow is called with `POST` and the Workflow API key in the
+  `X-Workflow-Api-Key` header. The customer email is sent in the JSON body:
+  `{ "email": "customer@example.com" }`.
+- The workflow should look up the customer and return their data. Responses
+  wrapped in `{ "data": ... }` (the public API trigger format) are unwrapped
+  automatically; an empty result is treated as "no customer found".
+
 **What Successifier fetches:**
-- Custom customer data via Retool workflows
+- Custom customer data via Retool workflows (any fields the workflow returns).
+- The data is shown on the ticket's Retool card **and** included in the
+  context passed to the AI when drafting replies.
+
+> Legacy note: the older `workspaceUrl` credential is still accepted as a
+> fallback for `workflowUrl`, but new setups should use `workflowUrl`.
 
 ---
 
@@ -474,7 +488,7 @@ Each integration type requires specific credentials:
 | `billecta` | `apiKey`, `creditorPublicId` |
 | `gmail` | `clientId`, `clientSecret`, `refreshToken` |
 | `resend` | `apiKey`, `fromEmail` |
-| `retool` | `apiKey`, `workspaceUrl` |
+| `retool` | `apiKey`, `workflowUrl` (legacy: `workspaceUrl`) |
 
 ---
 

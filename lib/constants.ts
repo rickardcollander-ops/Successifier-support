@@ -44,13 +44,15 @@ const GENERIC_SIGNOFF_PATTERN = new RegExp(
 export function applyAgentSignature(body: string, nameOrEmail: string | null | undefined): string {
   if (!body) return body;
   const sig = signatureFor(nameOrEmail);
-  if (sig === DEFAULT_SIGNATURE) return body;
   const trimmed = body.replace(/\s+$/, '');
+  // The AI no longer writes its own sign-off, so normally there is nothing
+  // to replace. We still match the legacy generic sign-off (older drafts
+  // may contain it) and swap it for the resolved signature.
   if (GENERIC_SIGNOFF_PATTERN.test(trimmed)) {
     return trimmed.replace(GENERIC_SIGNOFF_PATTERN, sig);
   }
-  // No generic sign-off found — append the agent signature so the
-  // customer still sees who answered.
+  // No sign-off in the body — append the signature so the customer
+  // still sees who answered.
   return `${trimmed}\n\n${sig}`;
 }
 

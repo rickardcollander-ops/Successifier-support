@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 
 // In-memory presence store (cleared on server restart, which is fine for presence)
-const activeViewers = new Map<string, { userId: string; userName: string; userEmail: string; ticketId: string; lastSeen: number }>();
+const activeViewers = new Map<string, { userId: string; userName: string; userEmail: string; ticketId: string; lastSeen: number; typing: boolean }>();
 
 // Clean up stale entries older than 15 seconds
 function cleanupStale() {
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { ticketId } = await request.json();
+    const { ticketId, typing } = await request.json();
 
     if (ticketId) {
       activeViewers.set(session.user.email, {
@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
         userEmail: session.user.email,
         ticketId,
         lastSeen: Date.now(),
+        typing: Boolean(typing),
       });
     } else {
       // User deselected ticket
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     cleanupStale();
 
-    const viewers: Record<string, Array<{ name: string; email: string; initials: string }>> = {};
+    const viewers: Record<string, Array<{ name: string; email: string; initials: string; typing: boolean }>> = {};
 
     for (const [email, entry] of activeViewers.entries()) {
       if (email === session.user.email) continue; // exclude self
@@ -74,6 +75,7 @@ export async function GET(request: NextRequest) {
         name: entry.userName,
         email: entry.userEmail,
         initials,
+        typing: Boolean(entry.typing),
       });
     }
 

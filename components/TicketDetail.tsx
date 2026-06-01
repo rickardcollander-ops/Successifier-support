@@ -1,10 +1,27 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Mail, ChevronDown, Search, X, Loader2, Trash2, AlertOctagon, UserCircle2, CheckCircle2 } from 'lucide-react';
+import { Mail, ChevronDown, Search, X, Loader2, Trash2, AlertOctagon, UserCircle2, CheckCircle2, Download, FileText, Pencil } from 'lucide-react';
 import type { Ticket } from '@/lib/types';
 import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 import { AGENTS, statusLabelSv, agentColor } from '@/lib/constants';
+
+// Three-level "traffic light" priority used to rank customers at a glance.
+// We keep the existing four DB values working but expose only the three
+// colours support asked for. 'high' is treated the same as 'urgent' (red).
+type TrafficLight = { value: 'urgent' | 'normal' | 'low'; label: string; dot: string; ring: string };
+const PRIORITY_LIGHTS: TrafficLight[] = [
+  { value: 'urgent', label: 'Hög', dot: 'bg-red-500', ring: 'ring-red-500' },
+  { value: 'normal', label: 'Medel', dot: 'bg-yellow-400', ring: 'ring-yellow-400' },
+  { value: 'low', label: 'Låg', dot: 'bg-green-500', ring: 'ring-green-500' },
+];
+function priorityToLight(priority: string): 'urgent' | 'normal' | 'low' {
+  if (priority === 'urgent' || priority === 'high') return 'urgent';
+  if (priority === 'low') return 'low';
+  return 'normal';
+}
+
+type DetailViewer = { name: string; email: string; initials: string; typing?: boolean };
 
 interface ReplyFromAccount {
   id: string;
@@ -63,6 +80,11 @@ interface TicketDetailProps {
   onDelete?: (ticketId: string) => void;
   onSpam?: (ticketId: string) => void;
   onSelectTicket?: (ticket: Ticket | null) => void;
+  // Other agents currently on this ticket (for the "skrivläge" indicator).
+  viewers?: DetailViewer[];
+  // Report whether the current agent is actively composing a reply so other
+  // agents see the "skriver…" state.
+  onComposingChange?: (composing: boolean) => void;
 }
 
 interface ParsedEmailMessage {
@@ -91,6 +113,7 @@ function parseEmailThread(
         .replace(/^\[Gmail ID: [^\]]+\]\n/gm, '')
         .replace(/^\[Inbox account: [^\]]+\]\n/gm, '')
         .replace(/^\[Message-Id: [^\]]+\]\n/gm, '')
+        .replace(/\n?\[DrabbadHanterad: [^\]]+\]/g, '')
         .trim();
       const body = isHtml(rawBody) ? htmlToText(rawBody) : rawBody;
       return { label: 'Ursprungligt meddelande', date: null, dateRaw: null, body, isOriginal: true, isSupport: false, isComment: false };
@@ -107,7 +130,7 @@ function parseEmailThread(
 
     const bodyLines: string[] = [];
     for (const line of part.split('\n')) {
-      if (/^\[(Följdmail |Support-svar |Intern kommentar |Gmail ID:|Gmail Thread:|Inbox account:|Message-Id:)/.test(line)) continue;
+      if (/^\[(Följdmail |Support-svar |Intern kommentar |Gmail ID:|Gmail Thread:|Inbox account:|Message-Id:|DrabbadHanterad:)/.test(line)) continue;
       if (!isSupportMsg && !isComment && line.startsWith('>')) continue;
       bodyLines.push(line);
     }
@@ -161,7 +184,7 @@ function sortInvoicesDesc(invoices: any[]): any[] {
   });
 }
 
-export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, onDelete, onSpam, onSelectTicket }: TicketDetailProps) {
+export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, onDelete, onSpam, onSelectTicket, viewers = [], onComposingChange }: TicketDetailProps) {
   const [response, setResponse] = useState(ticket.finalResponse || ticket.aiResponse || '');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -192,6 +215,16 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   // Active integrations so we can always show the Billecta card when the
   // integration exists, even when no auto-match was found for the customer.
   const [hasBillectaIntegration, setHasBillectaIntegration] = useState(false);
+  // Full attachments (with data URLs) for the open ticket. The ticket-list
+  // poll strips data URLs to stay light, so we lazy-load them here from the
+  // single-ticket endpoint when only metadata is present.
+  const [attachments, setAttachments] = useState<Array<{ filename: string; mimeType: string; size?: number; dataUrl?: string }>>([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  // "Skrivläge" — track whether this agent is actively composing so the
+  // parent can broadcast it. We only fire the callback on transitions and
+  // auto-clear after a few seconds of inactivity.
+  const composingRef = useRef(false);
+  const composingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleNavigateToTicket = async (ticketId: string) => {
     setPopoutLoading(true);
@@ -285,6 +318,48 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     setAiSuggestion(ticket.aiResponse || null);
     setRecipientEmail(ticket.customerEmail);
     setInlineImages([]);
+    // Reset composing state when switching tickets. The parent clears the
+    // old ticket's presence on selection change, so we just reset locally.
+    composingRef.current = false;
+    if (composingTimerRef.current) {
+      clearTimeout(composingTimerRef.current);
+      composingTimerRef.current = null;
+    }
+  }, [ticket.id]);
+
+  // Load the customer's attachments for this ticket. The list payload only
+  // carries metadata (no data URLs), so when bytes are missing we fetch the
+  // full ticket once. Keyed on ticket.id so the 3s poll doesn't refetch.
+  useEffect(() => {
+    const meta = ticket.contextData?.attachments;
+    if (!meta || meta.length === 0) {
+      setAttachments([]);
+      return;
+    }
+    // Already have the bytes (e.g. ticket came from a full fetch).
+    if (meta.every((a: any) => a.dataUrl)) {
+      setAttachments(meta as any);
+      return;
+    }
+    let cancelled = false;
+    setAttachmentsLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/tickets/${ticket.id}`);
+        if (!res.ok || cancelled) return;
+        const full = await res.json();
+        const fa = full?.contextData?.attachments;
+        if (!cancelled && Array.isArray(fa)) setAttachments(fa);
+      } catch {
+        // leave as metadata-only; the count still shows
+      } finally {
+        if (!cancelled) setAttachmentsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticket.id]);
 
   // Only clear the send confirmation when switching to a different ticket
@@ -445,6 +520,30 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     onUpdate(ticket.id, { assignedTo: agent || null } as any);
   };
 
+  const handlePriority = (priority: string) => {
+    onUpdate(ticket.id, { priority } as any);
+  };
+
+  const setComposing = (next: boolean) => {
+    if (composingRef.current === next) return;
+    composingRef.current = next;
+    onComposingChange?.(next);
+  };
+  // Called on every keystroke/focus in the reply box. Marks us as composing
+  // and (re)arms an inactivity timer that clears the state after 4s.
+  const noteTyping = () => {
+    setComposing(true);
+    if (composingTimerRef.current) clearTimeout(composingTimerRef.current);
+    composingTimerRef.current = setTimeout(() => setComposing(false), 4000);
+  };
+  const stopComposing = () => {
+    if (composingTimerRef.current) {
+      clearTimeout(composingTimerRef.current);
+      composingTimerRef.current = null;
+    }
+    setComposing(false);
+  };
+
   const handleStatusChange = (status: string) => {
     onUpdate(ticket.id, { status: status as any });
     // Closing a ticket from the detail view should also remove it from our
@@ -533,6 +632,27 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Priority traffic light — rank the customer röd/gul/grön. */}
+            <div className="flex items-center gap-1 pr-1" role="group" aria-label="Prioritet">
+              {PRIORITY_LIGHTS.map((p) => {
+                const active = priorityToLight(ticket.priority) === p.value;
+                return (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => handlePriority(p.value)}
+                    aria-pressed={active}
+                    title={`Prioritet: ${p.label}`}
+                    aria-label={`Sätt prioritet ${p.label}`}
+                    className={`w-5 h-5 rounded-full ${p.dot} transition-all ${
+                      active
+                        ? `ring-2 ring-offset-1 ${p.ring} ring-offset-white dark:ring-offset-slate-800`
+                        : 'opacity-30 hover:opacity-70'
+                    }`}
+                  />
+                );
+              })}
+            </div>
             <div className="flex items-center gap-1.5">
               <UserCircle2 className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               {(() => {
@@ -605,6 +725,25 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
       </div>
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
+        {viewers.length > 0 && (() => {
+          const typing = viewers.filter((v) => v.typing);
+          const firstNames = (list: DetailViewer[]) =>
+            list.map((v) => v.name?.split(' ')[0] || v.email).join(', ');
+          if (typing.length > 0) {
+            return (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 text-sm">
+                <Pencil className="w-4 h-4 animate-pulse flex-shrink-0" />
+                <span><strong>{firstNames(typing)}</strong> skriver just nu ett svar till kunden…</span>
+              </div>
+            );
+          }
+          return (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-sm">
+              <UserCircle2 className="w-4 h-4 flex-shrink-0" />
+              <span><strong>{firstNames(viewers)}</strong> tittar också på det här ärendet just nu.</span>
+            </div>
+          );
+        })()}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">E-postkonversation</h3>
@@ -681,26 +820,53 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
           </div>
           {ticket.contextData?.attachments && ticket.contextData.attachments.length > 0 && (
             <div className="mt-3">
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Bifogade bilder ({ticket.contextData.attachments.length})</p>
-              <div className="flex flex-wrap gap-3">
-                {ticket.contextData.attachments.map((att: any, idx: number) => (
-                  <div key={idx} className="relative group">
-                    <button
-                      type="button"
-                      onClick={() => setLightboxImage({ src: att.dataUrl, alt: att.filename })}
-                      className="block focus:outline-none focus:ring-2 focus:ring-[#7C5CFF] rounded-lg"
-                      aria-label={`Öppna bild ${att.filename}`}
-                    >
-                      <img
-                        src={att.dataUrl}
-                        alt={att.filename}
-                        className="max-w-[200px] max-h-[200px] rounded-lg border border-slate-200 dark:border-slate-700 object-cover cursor-zoom-in hover:shadow-lg hover:border-[#7C5CFF]/40 transition-all"
-                      />
-                    </button>
-                    <p className="text-[10px] text-slate-400 mt-1 truncate max-w-[200px]">{att.filename}</p>
-                  </div>
-                ))}
-              </div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+                Bifogade filer ({ticket.contextData.attachments.length})
+              </p>
+              {attachmentsLoading && attachments.length === 0 ? (
+                <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Laddar bifogade filer…
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {attachments.map((att, idx: number) => {
+                    const isImage = att.mimeType?.startsWith('image/') && att.dataUrl;
+                    if (isImage) {
+                      return (
+                        <div key={idx} className="relative group">
+                          <button
+                            type="button"
+                            onClick={() => att.dataUrl && setLightboxImage({ src: att.dataUrl, alt: att.filename })}
+                            className="block focus:outline-none focus:ring-2 focus:ring-[#7C5CFF] rounded-lg"
+                            aria-label={`Öppna bild ${att.filename}`}
+                          >
+                            <img
+                              src={att.dataUrl}
+                              alt={att.filename}
+                              className="max-w-[200px] max-h-[200px] rounded-lg border border-slate-200 dark:border-slate-700 object-cover cursor-zoom-in hover:shadow-lg hover:border-[#7C5CFF]/40 transition-all"
+                            />
+                          </button>
+                          <p className="text-[10px] text-slate-400 mt-1 truncate max-w-[200px]">{att.filename}</p>
+                        </div>
+                      );
+                    }
+                    // Non-image file (PDF, doc, …) — offer a download.
+                    return (
+                      <a
+                        key={idx}
+                        href={att.dataUrl}
+                        download={att.filename}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 hover:border-[#7C5CFF]/40 hover:shadow-sm transition-all max-w-[240px]"
+                        title={`Ladda ner ${att.filename}`}
+                      >
+                        <FileText className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                        <span className="text-xs text-slate-700 dark:text-slate-300 truncate flex-1">{att.filename}</span>
+                        <Download className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -965,7 +1131,9 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
           </div>
           <textarea
             value={response}
-            onChange={(e) => setResponse(e.target.value)}
+            onChange={(e) => { setResponse(e.target.value); noteTyping(); }}
+            onFocus={noteTyping}
+            onBlur={stopComposing}
             className="w-full h-64 p-4 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
             placeholder="Skriv ditt svar eller generera ett med AI…"
           />
@@ -1396,16 +1564,22 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                         </div>
                         <div className="flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-300">
                           {sub.currentPeriodEnd && (
-                            <span>Nuvarande period slutar: {new Date(sub.currentPeriodEnd * 1000).toISOString().split('T')[0]}</span>
+                            <span>Nuvarande period slutar: {new Date(sub.currentPeriodEnd * 1000).toLocaleDateString('sv-SE')}</span>
                           )}
                           {sub.canceledAt && (
-                            <span className="text-red-600 dark:text-red-400">Uppsagd den: {new Date(sub.canceledAt * 1000).toISOString().split('T')[0]}</span>
+                            <span className="text-red-600 dark:text-red-400">Uppsägning begärd: {new Date(sub.canceledAt * 1000).toLocaleDateString('sv-SE')}</span>
                           )}
-                          {sub.endedAt && (
-                            <span className="text-red-600 dark:text-red-400">Upphörd: {new Date(sub.endedAt * 1000).toISOString().split('T')[0]}</span>
-                          )}
-                          {sub.cancelAt && !sub.canceledAt && (
-                            <span className="text-amber-600 dark:text-amber-400 font-semibold">Slutdatum: {new Date(sub.cancelAt * 1000).toISOString().split('T')[0]}</span>
+                          {/* The actual end date the customer cares about: when it
+                              already ended (endedAt), otherwise the scheduled end
+                              (cancelAt), otherwise the current period end. Always
+                              show it when the sub is cancelled — previously this was
+                              hidden whenever canceledAt was set, so agents saw only
+                              the (earlier) request date and read the wrong year. */}
+                          {(sub.endedAt || sub.cancelAt) && (
+                            <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                              {sub.endedAt ? 'Upphörde: ' : 'Upphör: '}
+                              {new Date((sub.endedAt || sub.cancelAt) * 1000).toLocaleDateString('sv-SE')}
+                            </span>
                           )}
                           {sub.items?.map((item: any, i: number) => (
                             <span key={i}>Pris: {item.price ? `${(item.price / 100).toFixed(2)} kr` : '-'}</span>
@@ -1680,30 +1854,48 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">Kundens meddelande</p>
                 <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 text-sm whitespace-pre-wrap text-slate-900 dark:text-slate-100 max-h-[300px] overflow-auto">
-                  {popoutTicket.originalMessage?.replace(/\[Gmail ID:.*?\]\n?\[Inbox account:.*?\]\n?\n?/g, '').trim() || 'Inget meddelande'}
+                  {popoutTicket.originalMessage?.replace(/\[Gmail ID:.*?\]\n?\[Inbox account:.*?\]\n?\n?/g, '').replace(/\n?\[DrabbadHanterad: [^\]]+\]/g, '').trim() || 'Inget meddelande'}
                 </div>
               </div>
 
               {/* Attachments */}
               {popoutTicket.contextData?.attachments && popoutTicket.contextData.attachments.length > 0 && (
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">Bifogade bilder</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">Bifogade filer</p>
                   <div className="flex flex-wrap gap-3">
-                    {popoutTicket.contextData.attachments.map((att: any, idx: number) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setLightboxImage({ src: att.dataUrl, alt: att.filename })}
-                        className="block focus:outline-none focus:ring-2 focus:ring-[#7C5CFF] rounded-lg"
-                        aria-label={`Öppna bild ${att.filename}`}
-                      >
-                        <img
-                          src={att.dataUrl}
-                          alt={att.filename}
-                          className="max-w-[180px] max-h-[180px] rounded-lg border border-slate-200 dark:border-slate-700 object-cover cursor-zoom-in hover:shadow-lg hover:border-[#7C5CFF]/40 transition-all"
-                        />
-                      </button>
-                    ))}
+                    {popoutTicket.contextData.attachments.map((att: any, idx: number) => {
+                      const isImage = att.mimeType?.startsWith('image/') && att.dataUrl;
+                      if (isImage) {
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setLightboxImage({ src: att.dataUrl, alt: att.filename })}
+                            className="block focus:outline-none focus:ring-2 focus:ring-[#7C5CFF] rounded-lg"
+                            aria-label={`Öppna bild ${att.filename}`}
+                          >
+                            <img
+                              src={att.dataUrl}
+                              alt={att.filename}
+                              className="max-w-[180px] max-h-[180px] rounded-lg border border-slate-200 dark:border-slate-700 object-cover cursor-zoom-in hover:shadow-lg hover:border-[#7C5CFF]/40 transition-all"
+                            />
+                          </button>
+                        );
+                      }
+                      return (
+                        <a
+                          key={idx}
+                          href={att.dataUrl}
+                          download={att.filename}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 hover:border-[#7C5CFF]/40 transition-all max-w-[240px]"
+                          title={`Ladda ner ${att.filename}`}
+                        >
+                          <FileText className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate flex-1">{att.filename}</span>
+                          <Download className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
               )}

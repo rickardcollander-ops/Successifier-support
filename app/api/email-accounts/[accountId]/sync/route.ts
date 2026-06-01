@@ -10,6 +10,7 @@ import { sendConfirmationEmail } from '@/lib/services/confirmation-email';
 import { getBlockedPatterns, isBlocked } from '@/lib/services/blocked-senders';
 import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 import { parseFramerForm } from '@/lib/services/inbound-forms';
+import { getMessageAttachments } from '@/lib/integrations/gmail-attachments';
 
 export async function POST(
   request: NextRequest,
@@ -245,6 +246,14 @@ export async function POST(
         }
 
         const contextData = await contextAggregator.gatherContext(customerEmail, integrations as any);
+
+        // Fetch attachments (images + PDFs/docs) so they show up in-app.
+        // Previously this route extracted none, so customers' images were
+        // invisible whenever the per-account sync ran.
+        const attachments = await getMessageAttachments(gmail, message.id!, msg.data.payload || undefined);
+        if (attachments.length > 0) {
+          (contextData as any).attachments = attachments;
+        }
 
         const subjectNormalized = subject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
         const isReply = /^(Re|Sv|Fwd|Fw):/i.test(subject);
