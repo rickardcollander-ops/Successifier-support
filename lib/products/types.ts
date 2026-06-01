@@ -53,9 +53,14 @@ export interface ProductConfig {
 
   /** Copy for the "we received your email" autoresponder. */
   confirmation: {
-    /** Body line containing the brand, e.g. "Tack för att du kontaktar …". */
-    bodyLine: string;
-    /** Sign-off name at the end of the autoresponder. */
+    /** Greeting line, e.g. "Hej,". */
+    greeting: string;
+    /**
+     * Paragraphs shown between the greeting and the sign-off, in order.
+     * Each entry is rendered as its own paragraph (blank line between).
+     */
+    bodyLines: string[];
+    /** Sign-off block at the end (may span multiple lines). */
     signoff: string;
   };
 }

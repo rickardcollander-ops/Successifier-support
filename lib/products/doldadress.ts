@@ -23,8 +23,13 @@ export const doldadress: ProductConfig = {
     'Filippa Kramp': { bg: '#2563EB', border: '#1D4ED8', text: '#FFFFFF' },
   },
   confirmation: {
-    bodyLine:
-      'Tack för att du kontaktar Doldadress Kundtjänst. Vi har tagit emot ditt mejl och återkommer till dig så snart vi kan, vanligen inom 24 timmar på vardagar.',
-    signoff: 'Doldadress Kundtjänst',
+    greeting: 'Hej,',
+    bodyLines: [
+      'Tack för att du kontaktar oss! 🛡️',
+      'Vi har tagit emot ditt mejl. Vi hanterar ditt ärende så snart som möjligt och svarar normalt inom 2 arbetsdagar.',
+      'Om du vill ha svar direkt kan du hitta våra vanligaste frågor och guider på vår supportsida: https://www.doldadress.se/support',
+      'Ha en fin dag!',
+    ],
+    signoff: 'Med vänliga hälsningar,\nTeamet på Doldadress.se',
   },
 };
