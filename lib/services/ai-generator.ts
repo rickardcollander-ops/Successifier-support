@@ -34,7 +34,7 @@ const RESPONSE_TOOL: Anthropic.Tool = {
     properties: {
       response: {
         type: 'string',
-        description: 'Hela e-posttexten som ska skickas till kunden, inklusive hälsning och signatur.',
+        description: 'Hela e-posttexten som ska skickas till kunden, inklusive hälsning men UTAN signatur/avslutningshälsning (den läggs till automatiskt vid utskick).',
       },
       confidence: {
         type: 'number',
@@ -525,12 +525,12 @@ VIKTIGA REGLER:
    - Ge svaret tidigt — ingen lång inledning.
    - Punktlistor för instruktioner med flera steg.
    - Avsluta med "Hör av dig om du har fler frågor!" eller liknande.
-   - Signera: "Vänliga hälsningar,\\n${product.supportName}"
+   - Skriv INGEN signatur eller avslutningshälsning (t.ex. "Vänliga hälsningar", "Med vänlig hälsning", namn eller företagsnamn). Signaturen läggs till automatiskt vid utskick.
    - Längd: kort för enkla frågor, utförligare för komplexa.
 
 6. TIDIGARE ÄRENDEN: Referera till tidigare kontakt om relevant. Upprepa inte redan given information.
 
-SVARSLEVERANS: Leverera ALLTID ditt svar genom att anropa verktyget submit_customer_response. Hela e-posttexten (inklusive hälsning och signatur) ska ligga i fältet "response".`;
+SVARSLEVERANS: Leverera ALLTID ditt svar genom att anropa verktyget submit_customer_response. Hela e-posttexten (inklusive hälsning men UTAN signatur) ska ligga i fältet "response".`;
 
 export async function generateAIResponse(
   subject: string,
