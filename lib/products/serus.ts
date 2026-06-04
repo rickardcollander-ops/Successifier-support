@@ -21,6 +21,12 @@ export const serus: ProductConfig = {
   // Serus vill inte skicka något automatiskt bekräftelsemail till kunden
   // när ett nytt ärende öppnas.
   sendConfirmation: false,
+  // Serus använder Stripe (inte Billecta) som betalleverantör — samla
+  // automatiska mejl från Stripe i en egen "Stripe"-mapp.
+  vendorFolder: {
+    label: 'Stripe',
+    senders: ['no-reply@stripe.com', 'support@stripe.com'],
+  },
   allowedDomains: ['serus.ai'],
   agents: [], // TODO: add Serus agents (must match how they appear in Google)
   agentSignatures: {

@@ -13,6 +13,10 @@ export const doldadress: ProductConfig = {
   integrations: ['stripe', 'billecta', 'retool', 'resend', 'gmail', 'postman'],
   showAffectedCustomersTool: true,
   sendConfirmation: true,
+  vendorFolder: {
+    label: 'Billecta',
+    senders: ['no-reply@billecta.com'],
+  },
   allowedDomains: ['doldadress.se', 'becomeanon.com'],
   agents: ['Ida Rosell', 'Malin Sundberg', 'Filippa Kramp'],
   agentSignatures: {
