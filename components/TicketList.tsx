@@ -1,5 +1,6 @@
 import type { Ticket } from '@/lib/types';
 import { statusLabelSv, agentColor } from '@/lib/constants';
+import { t } from '@/lib/i18n';
 import { Trash2, Pencil } from 'lucide-react';
 
 type PresenceViewer = { name: string; email: string; initials: string; typing?: boolean };
@@ -60,13 +61,13 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
   const getPriorityStripe = (priority: string): { stripe: string; chipBg: string; label: string } => {
     switch (priority) {
       case 'urgent':
-        return { stripe: 'bg-red-500', chipBg: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700', label: 'Hög' };
+        return { stripe: 'bg-red-500', chipBg: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700', label: t('Hög') };
       case 'high':
-        return { stripe: 'bg-red-500', chipBg: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700', label: 'Hög' };
+        return { stripe: 'bg-red-500', chipBg: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700', label: t('Hög') };
       case 'normal':
-        return { stripe: 'bg-yellow-400', chipBg: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700', label: 'Medel' };
+        return { stripe: 'bg-yellow-400', chipBg: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700', label: t('Medel') };
       case 'low':
-        return { stripe: 'bg-green-500', chipBg: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700', label: 'Låg' };
+        return { stripe: 'bg-green-500', chipBg: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700', label: t('Låg') };
       default:
         return { stripe: 'bg-yellow-400', chipBg: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600', label: priority };
     }
@@ -75,13 +76,13 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Ärenden</h2>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{tickets.length} totalt</p>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Ärenden')}</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{tickets.length} {t('totalt')}</p>
       </div>
       <div className="divide-y divide-slate-200 dark:divide-slate-700 max-h-[calc(100vh-12rem)] overflow-y-auto">
         {tickets.length === 0 ? (
           <div className="p-8 text-center text-slate-500 dark:text-slate-400">
-            Inga ärenden ännu
+            {t('Inga ärenden ännu')}
           </div>
         ) : (
           tickets.map((ticket) => {
@@ -96,7 +97,7 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
             const handleTrashClick = (e: React.MouseEvent) => {
               e.stopPropagation();
               if (!onDelete) return;
-              if (confirm('Ta bort detta ärende? Detta kan inte ångras.')) {
+              if (confirm(t('Ta bort detta ärende? Detta kan inte ångras.'))) {
                 onDelete(ticket.id);
               }
             };
@@ -122,9 +123,9 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
                   {presence[ticket.id]?.some((v) => v.typing) && (
                     <span
                       className="flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400"
-                      title="Någon skriver ett svar just nu"
+                      title={t('Någon skriver ett svar just nu')}
                     >
-                      <Pencil className="w-3 h-3 animate-pulse" /> skriver
+                      <Pencil className="w-3 h-3 animate-pulse" /> {t('skriver')}
                     </span>
                   )}
                   {presence[ticket.id] && presence[ticket.id].length > 0 && (
@@ -149,8 +150,8 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
                       type="button"
                       onClick={handleTrashClick}
                       className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:text-slate-500 dark:hover:text-red-400 dark:hover:bg-red-900/20 transition-colors"
-                      title="Ta bort ärende"
-                      aria-label="Ta bort ärende"
+                      title={t('Ta bort ärende')}
+                      aria-label={t('Ta bort ärende')}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -166,7 +167,7 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
                     on follow-up mails). Show "uppdaterad" only when
                     there's a real gap so the row stays clean for fresh
                     tickets. */}
-                <span suppressHydrationWarning title="Inkommet">
+                <span suppressHydrationWarning title={t('Inkommet')}>
                   {new Date(ticket.createdAt).toLocaleString('sv-SE')}
                 </span>
                 {(() => {
@@ -179,10 +180,10 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
                       <span>•</span>
                       <span
                         suppressHydrationWarning
-                        title="Senaste aktivitet"
+                        title={t('Senaste aktivitet')}
                         className="text-amber-700 dark:text-amber-400 font-medium"
                       >
-                        Uppdaterad {new Date(ticket.updatedAt).toLocaleString('sv-SE')}
+                        {t('Uppdaterad')} {new Date(ticket.updatedAt).toLocaleString('sv-SE')}
                       </span>
                     </>
                   );

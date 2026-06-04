@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { product } from "@/lib/products";
+import { t } from "@/lib/i18n";
 import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { 
@@ -86,7 +87,7 @@ export default function Sidebar() {
           <button
             onClick={toggleCollapsed}
             className="hidden md:block p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-            title={collapsed ? 'Expandera meny' : 'Minimera meny'}
+            title={collapsed ? t('Expandera meny') : t('Minimera meny')}
           >
             <Menu className="h-5 w-5 text-slate-400" />
           </button>
@@ -161,10 +162,10 @@ export default function Sidebar() {
         <button
           onClick={() => signOut({ callbackUrl: "/auth/signin" })}
           className={`w-full flex items-center ${collapsed ? 'justify-center' : 'gap-2'} px-3 py-2 text-xs text-slate-400 hover:text-white hover:bg-[#1E2648] rounded-lg transition-colors`}
-          title={collapsed ? 'Logga ut' : ''}
+          title={collapsed ? t('Logga ut') : ''}
         >
           <LogOut className="w-4 h-4" />
-          {!collapsed && 'Logga ut'}
+          {!collapsed && t('Logga ut')}
         </button>
         {!collapsed && (
           <div className="text-center text-[10px] text-slate-600">

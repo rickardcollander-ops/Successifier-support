@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import KnowledgeList from '@/components/KnowledgeList';
 import KnowledgeEditor from '@/components/KnowledgeEditor';
+import { t } from '@/lib/i18n';
 import type { KnowledgeBase } from '@/lib/types';
 
 export default function KnowledgePage() {
@@ -61,7 +62,7 @@ export default function KnowledgePage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Är du säker på att du vill ta bort denna artikel?')) return;
+    if (!confirm(t('Är du säker på att du vill ta bort denna artikel?'))) return;
 
     try {
       const response = await fetch(`/api/knowledge/${id}`, {
@@ -87,7 +88,7 @@ export default function KnowledgePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-600 dark:text-slate-400">Laddar kunskapsbas…</div>
+        <div className="text-slate-600 dark:text-slate-400">{t('Laddar kunskapsbas…')}</div>
       </div>
     );
   }
@@ -112,7 +113,7 @@ export default function KnowledgePage() {
           />
         ) : (
           <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
-            Välj en artikel eller skapa en ny
+            {t('Välj en artikel eller skapa en ny')}
           </div>
         )}
       </div>
