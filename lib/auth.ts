@@ -23,7 +23,10 @@ const authSecret =
   (process.env.NODE_ENV === "development" ? "local-dev-auth-secret-change-me" : undefined);
 
 const ALLOWED_DOMAINS = product.allowedDomains;
-const SUPERADMIN_EMAILS = ['rc@successifier.com'];
+// Emails that may sign in regardless of allowedDomains AND are granted admin
+// (superadmin) access on every deployment — see the jwt callback, which forces
+// role = 'superadmin' for these regardless of the per-product User.role.
+const SUPERADMIN_EMAILS = ['rc@successifier.com', 'mc@successifier.com'];
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: authSecret,
@@ -91,6 +94,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         } catch {
           token.role = 'agent';
         }
+      }
+      // Allowlisted superadmins get admin access on every deployment,
+      // regardless of the per-product User.role in that product's database.
+      const email = (user?.email || (token.email as string) || '').toLowerCase();
+      if (email && SUPERADMIN_EMAILS.includes(email)) {
+        token.role = 'superadmin';
       }
       return token;
     },
