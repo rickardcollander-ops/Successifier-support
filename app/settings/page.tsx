@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Mail, ExternalLink, RefreshCw, CheckCircle, AlertCircle, Ban, X, AlertTriangle, Trash2 } from 'lucide-react';
 import IntegrationCard from '@/components/IntegrationCard';
 import type { Integration } from '@/lib/types';
+import { product } from '@/lib/products';
 
 interface BlockedSender {
   id: string;
@@ -371,6 +372,8 @@ export default function SettingsPage() {
   }
 
   const getIntegration = (type: string) => integrations.find(i => i.type === type);
+  // Only show the integrations this product uses (see lib/products).
+  const showIntegration = (type: string) => product.integrations.includes(type);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -690,6 +693,7 @@ export default function SettingsPage() {
 
       <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Integrationer</h2>
       <div className="space-y-6">
+        {showIntegration('stripe') && (
         <IntegrationCard
           type="stripe"
           name="Stripe"
@@ -702,7 +706,24 @@ export default function SettingsPage() {
           onToggle={handleToggle}
           onTestConnection={handleTestConnection}
         />
+        )}
 
+        {showIntegration('clerk') && (
+        <IntegrationCard
+          type="clerk"
+          name="Clerk"
+          description="Slå upp kundens användarkonto (skapat, senaste inloggning, verifiering, plan)"
+          integration={getIntegration('clerk')}
+          fields={[
+            { key: 'secretKey', label: 'Secret Key', type: 'password', placeholder: 'sk_live_...' },
+          ]}
+          onSave={handleSave}
+          onToggle={handleToggle}
+          onTestConnection={handleTestConnection}
+        />
+        )}
+
+        {showIntegration('billecta') && (
         <IntegrationCard
           type="billecta"
           name="Billecta"
@@ -716,7 +737,9 @@ export default function SettingsPage() {
           onToggle={handleToggle}
           onTestConnection={handleTestConnection}
         />
+        )}
 
+        {showIntegration('retool') && (
         <IntegrationCard
           type="retool"
           name="Retool"
@@ -730,7 +753,9 @@ export default function SettingsPage() {
           onToggle={handleToggle}
           onTestConnection={handleTestConnection}
         />
+        )}
 
+        {showIntegration('resend') && (
         <IntegrationCard
           type="resend"
           name="Resend"
@@ -744,7 +769,9 @@ export default function SettingsPage() {
           onToggle={handleToggle}
           onTestConnection={handleTestConnection}
         />
+        )}
 
+        {showIntegration('gmail') && (
         <IntegrationCard
           type="gmail"
           name="Gmail"
@@ -759,7 +786,9 @@ export default function SettingsPage() {
           onToggle={handleToggle}
           onTestConnection={handleTestConnection}
         />
+        )}
 
+        {showIntegration('postman') && (
         <IntegrationCard
           type="postman"
           name="Postman"
@@ -773,6 +802,7 @@ export default function SettingsPage() {
           onToggle={handleToggle}
           onTestConnection={handleTestConnection}
         />
+        )}
       </div>
     </div>
   );

@@ -1066,6 +1066,31 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-2">Klicka för detaljer</p>
                 </div>
               )}
+              {ticket.contextData?.clerk && (
+                <div className="bg-gradient-to-br from-sky-50 to-sky-100 dark:from-sky-950 dark:to-sky-900 rounded-lg p-4 border border-sky-200 dark:border-sky-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-sky-600 flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">C</span>
+                    </div>
+                    <p className="text-sm font-semibold text-sky-900 dark:text-sky-100">Clerk</p>
+                    {ticket.contextData.clerk.plan && (
+                      <span className="text-[9px] text-sky-600 dark:text-sky-400 ml-auto">{ticket.contextData.clerk.plan}</span>
+                    )}
+                  </div>
+                  <div className="space-y-1 text-xs text-sky-800 dark:text-sky-200">
+                    <p>👤 Konto finns{ticket.contextData.clerk.emailVerified ? ' · verifierad' : ' · ej verifierad'}</p>
+                    {ticket.contextData.clerk.createdAt && (
+                      <p>📅 Skapat {new Date(ticket.contextData.clerk.createdAt).toLocaleDateString('sv-SE')}</p>
+                    )}
+                    {ticket.contextData.clerk.lastSignInAt && (
+                      <p>🔑 Senaste inloggning {new Date(ticket.contextData.clerk.lastSignInAt).toLocaleDateString('sv-SE')}</p>
+                    )}
+                    {(ticket.contextData.clerk.banned || ticket.contextData.clerk.locked) && (
+                      <p className="text-red-600 dark:text-red-400">⚠️ {ticket.contextData.clerk.banned ? 'Bannat' : 'Låst'} konto</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

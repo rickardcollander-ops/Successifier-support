@@ -16,6 +16,7 @@ export const serus: ProductConfig = {
   fromName: 'Serus Kundtjänst',
   apiKeyPrefix: 'seru',
   apiBaseDomain: 'serus.ai',
+  integrations: ['stripe', 'clerk'],
   allowedDomains: ['serus.ai'],
   agents: [], // TODO: add Serus agents (must match how they appear in Google)
   agentSignatures: {

@@ -10,6 +10,7 @@ export const doldadress: ProductConfig = {
   fromName: 'Doldadress Kundtjänst',
   apiKeyPrefix: 'dold',
   apiBaseDomain: 'doldadress.com',
+  integrations: ['stripe', 'billecta', 'retool', 'resend', 'gmail', 'postman'],
   allowedDomains: ['doldadress.se', 'becomeanon.com'],
   agents: ['Ida Rosell', 'Malin Sundberg', 'Filippa Kramp'],
   agentSignatures: {

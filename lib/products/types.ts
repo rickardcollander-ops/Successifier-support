@@ -39,6 +39,9 @@ export interface ProductConfig {
   /** Public API base domain shown in the developer docs (e.g. "doldadress.com"). */
   apiBaseDomain: string;
 
+  /** Integration types offered in Settings for this product (cards shown). */
+  integrations: string[];
+
   /** Domains (besides superadmins) allowed to sign in. */
   allowedDomains: string[];
 
