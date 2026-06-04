@@ -9,6 +9,7 @@ import { upsertTicket } from '@/lib/services/deduplicator';
 import { sendConfirmationEmail } from '@/lib/services/confirmation-email';
 import { getBlockedPatterns, isBlocked } from '@/lib/services/blocked-senders';
 import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
+import { parseFramerForm } from '@/lib/services/inbound-forms';
 import { getMessageAttachments } from '@/lib/integrations/gmail-attachments';
 
 async function syncSingleAccount(account: {
@@ -91,8 +92,8 @@ async function syncSingleAccount(account: {
       const rfcMessageId = rfcMessageIdRaw.trim().replace(/^<|>$/g, '');
       const senderRaw = replyTo || from;
       const emailMatch = senderRaw.match(/<([^>]+)>/);
-      const customerEmail = emailMatch ? emailMatch[1] : senderRaw.trim();
-      const customerName = from.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
+      let customerEmail = emailMatch ? emailMatch[1] : senderRaw.trim();
+      let customerName = from.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
 
       // Skip emails sent by the inbox account itself (e.g. support replies
       // that Gmail puts back in the inbox on shared/Workspace accounts).
@@ -157,7 +158,21 @@ async function syncSingleAccount(account: {
       // in-app instead of opening Gmail. The shared helper caps size/count.
       const attachments = await getMessageAttachments(gmail, message.id!, msg.data.payload || undefined);
 
-      const gmailThreadId = msg.data.threadId || null;
+      let gmailThreadId = msg.data.threadId || null;
+
+      // Website contact-form notifications (e.g. Framer on serus.ai) come
+      // from a no-reply address with the real customer in the body, and
+      // every submission shares one Gmail thread. Rewrite the ticket to the
+      // real customer and drop the shared thread id so different customers
+      // don't collapse into one ticket — and so replies go to the customer,
+      // not to the form's no-reply address.
+      const formSubmission = parseFramerForm({ from, subject, body });
+      if (formSubmission) {
+        customerEmail = formSubmission.customerEmail;
+        customerName = formSubmission.customerName ?? customerName;
+        body = formSubmission.message || body;
+        gmailThreadId = null;
+      }
 
       // Cross-account dedup. The RFC 2822 Message-Id is preserved
       // across every Gmail inbox that received this email; the

@@ -4,6 +4,7 @@ import { getTenantId } from '@/lib/products/tenant';
 import { GmailService } from '@/lib/integrations/gmail';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
+import { parseFramerForm } from '@/lib/services/inbound-forms';
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,7 +51,20 @@ export async function POST(request: NextRequest) {
     const contextAggregator = new ContextAggregator();
 
     for (const email of emails) {
-      const context = await contextAggregator.gatherContext(email.from, integrations as any);
+      // Website contact-form notifications (e.g. Framer on serus.ai) carry
+      // the real customer in the body — rewrite to them so the ticket and
+      // any reply target the customer, not the form's no-reply address.
+      let customerEmail = email.from;
+      let customerName = email.name;
+      let body = email.body;
+      const formSubmission = parseFramerForm({ from: email.from, subject: email.subject, body: email.body });
+      if (formSubmission) {
+        customerEmail = formSubmission.customerEmail;
+        customerName = formSubmission.customerName ?? customerName;
+        body = formSubmission.message || body;
+      }
+
+      const context = await contextAggregator.gatherContext(customerEmail, integrations as any);
       if (email.attachments && email.attachments.length > 0) {
         (context as any).attachments = email.attachments;
       }
@@ -61,7 +75,7 @@ export async function POST(request: NextRequest) {
         const priorTicket = await prisma.ticket.findFirst({
           where: {
             tenantId,
-            customerEmail: email.from,
+            customerEmail,
             status: { notIn: ['duplicate', 'archived'] },
             subject: {
               contains: subjectNormalized.substring(0, 50),
@@ -79,10 +93,10 @@ export async function POST(request: NextRequest) {
 
       const { ticket, created } = await upsertTicket({
         tenantId,
-        customerEmail: email.from,
-        customerName: email.name,
+        customerEmail,
+        customerName,
         subject: email.subject,
-        originalMessage: email.body,
+        originalMessage: body,
         status: isReply ? 'in_progress' : 'new',
         priority: 'normal',
         contextData: context,
