@@ -2,43 +2,149 @@
   {
     "title": "What is Serus?",
     "category": "About",
-    "tags": ["about", "company", "product"],
+    "tags": [
+      "about",
+      "company",
+      "product"
+    ],
     "content": "Serus is your AI privacy assistant — built to help you regain control of your personal information online. Serus scans both the surface web and the dark web to map where your personal information appears, combining agentic search intelligence with OSINT to surface profiles, reposts, leaks and mentions across the open web, then organizes it into one clear dashboard.\n\nSerus was founded in Sweden and grew out of frustration with invasive data collection. The team previously launched DoldAdress.se, which helped tens of thousands of Swedes remove personal information from search engines and people-search sites. Serus is backed by pre-seed and seed funding and is led by Filip Landgren (CEO & Co-Founder) and Anthon Wansland (Head of Product & Co-Founder), supported by a team of engineers, designers and legal specialists."
   },
   {
     "title": "Pricing and plans",
     "category": "Pricing",
-    "tags": ["pricing", "plans", "billing", "refund"],
+    "tags": [
+      "pricing",
+      "plans",
+      "billing",
+      "refund"
+    ],
     "content": "Serus has three plans:\n\n- Free — $0/month. Includes protection, Autopilot (automated removals), 5 data removal requests/day, a limited Serus AI assistant, dark web and surface web surveillance, limited footprint improvements, limited alerts & monitoring, and Intelligence Tools with 0 monthly credits.\n- Pro — $12/month. Includes protection, Autopilot, unlimited data removals, full Serus AI assistant, dark web and surface web surveillance, footprint improvements, real-time alerts & monitoring, and Intelligence Tools with 500 monthly credits.\n- Premium — $19/month. Same as Pro but with Intelligence Tools at 2,500 monthly credits.\n\nBilling: 70% off the first month, a 30-day money-back guarantee, and you can cancel anytime — no lock-ins. Business pricing is available via the sales/contact page."
   },
   {
     "title": "How Serus finds your exposed information",
     "category": "How it works",
-    "tags": ["scan", "dark web", "osint", "exposure"],
+    "tags": [
+      "scan",
+      "dark web",
+      "osint",
+      "exposure"
+    ],
     "content": "Serus scans both the surface web and the dark web to map where your personal information appears online. It combines agentic search intelligence with OSINT (open-source intelligence) to surface profiles, reposts, leaks and mentions across the open web, then organizes everything into one clear view so you can see your exposure and act on it."
   },
   {
     "title": "How we handle your data (security & privacy)",
     "category": "Security & privacy",
-    "tags": ["security", "privacy", "data", "encryption", "retention", "deletion"],
+    "tags": [
+      "security",
+      "privacy",
+      "data",
+      "encryption",
+      "retention",
+      "deletion"
+    ],
     "content": "Your data is protected with strong security controls:\n\n- Encryption at rest: all datastores are encrypted, and sensitive data has additional app-level encryption.\n- Encryption in transit: Serus uses TLS 1.3 or higher to encrypt every transmission.\n- Backups: Serus keeps point-in-time backups of all data via its hosting provider.\n- Access controls: unique authentication, restricted encryption keys and strict access controls protect the infrastructure.\n- Privacy controls: clear data retention, deletion when you leave, and data classification policies keep you in control of your information."
   },
   {
     "title": "Autopilot: automated data removals",
     "category": "How it works",
-    "tags": ["autopilot", "removals", "data brokers", "requests"],
+    "tags": [
+      "autopilot",
+      "removals",
+      "data brokers",
+      "requests"
+    ],
     "content": "Autopilot continuously scans data broker sites and automatically submits removal requests on your behalf, handling the tedious work of tracking down and removing your personal information. You typically see noticeable results within 30-60 days.\n\nWhen setting up, you can tailor the scope: focus only on data brokers, only on surface-web search results, or choose comprehensive coverage across all identified exposures. The Requests section lets you track submission dates, processing timelines and completion status for each removal.\n\nThe number of removals depends on your plan (the Free plan includes a limited number of removal requests per day; Pro and Premium include unlimited removals). Getting started requires an account via Google or email, after which Serus handles removals automatically and continuously."
   },
   {
     "title": "How to remove search results about you from Google",
     "category": "Guides",
-    "tags": ["google", "search results", "removal", "right to be forgotten"],
+    "tags": [
+      "google",
+      "search results",
+      "removal",
+      "right to be forgotten"
+    ],
     "content": "Steps to remove search results about you from Google:\n\n1. Choose the right form. EU citizens: use Google's legal troubleshooter (Google Search → Legal Reasons → Personal Data/Privacy → Right to be forgotten). Non-EU residents: use Google's content removal form directly.\n2. Identify the unwanted links. Search your name in different combinations (full name, with middle name, name + address) and confirm the results are actually about you, focusing on pages showing personal details like address, phone, or email.\n3. Collect the URLs. Copy the full URL of each problematic result into one document to avoid duplicates.\n4. Submit your request with the required details.\n5. Expect processing time: links are removed in about 13 days on average (some in ~4 days, others up to 8 weeks).\n\nNote: personal addresses and photos are usually removable, but \"public interest\" content — official records, business information and news of broader importance — generally cannot be removed."
   },
   {
     "title": "Helpful guides on the Serus blog",
     "category": "Guides",
-    "tags": ["blog", "guides", "links"],
+    "tags": [
+      "blog",
+      "guides",
+      "links"
+    ],
     "content": "More in-depth guides are available on the Serus blog (https://www.serus.ai/blog):\n\n- Using Autopilot: https://www.serus.ai/blog/using-autopilot\n- How to Remove Search Results About You from Google: https://www.serus.ai/blog/how-to-remove-search-results-from-google\n- Guide: How to Delete Yourself from the Internet: https://www.serus.ai/blog/how-to-delete-yourself-from-the-internet\n- How to Get My Information Off the Dark Web: https://www.serus.ai/blog/how-to-get-my-information-off-the-dark-web\n- What Happens If Your Email Is on the Dark Web: https://www.serus.ai/blog/what-happens-if-your-email-is-on-the-dark-web\n- How to Protect Your Digital Footprint – 10 Easy Ways: https://www.serus.ai/blog/how-to-protect-your-digital-footprint-–-10-easy-ways\n- How to Protect Yourself and Your Data from Internet Hackers: https://www.serus.ai/blog/how-to-protect-my-data-from-hackers\n- How to Prevent Data Breaches in 8 Ways: https://www.serus.ai/blog/how-to-prevent-data-breaches\n- Understand the Different Types of Exposure: https://www.serus.ai/blog/understand-your-exposure\n- Dark Web Definition: What is It and How Does it Work?: https://www.serus.ai/blog/dark-web-definition\n- How to Know if Your Phone Is Hacked – 10 Signs: https://www.serus.ai/blog/how-to-know-if-your-phone-is-hacked"
+  },
+  {
+    "title": "How can Serus find so much information?",
+    "category": "FAQ",
+    "tags": [
+      "faq",
+      "search",
+      "osint"
+    ],
+    "content": "Serus scans both the surface web and dark web to map where your personal information appears online. We combine agentic search intelligence with OSINT to surface profiles, reposts, leaks, and mentions across the open web — then organize it into one clear view."
+  },
+  {
+    "title": "Does Serus track a reputation Score?",
+    "category": "FAQ",
+    "tags": [
+      "faq",
+      "reputation score"
+    ],
+    "content": "Yes. Serus compiles a reputation score for you and every member of your team. By scanning online mentions, public records, and your broader digital footprint, it aggregates everything into a comprehensive reputation profile — then distills it into a single score that reflects how you and your team are perceived online."
+  },
+  {
+    "title": "Is my data safe?",
+    "category": "FAQ",
+    "tags": [
+      "faq",
+      "security",
+      "privacy",
+      "data"
+    ],
+    "content": "Yes. Your data is encrypted in transit and at rest, and handled in accordance with applicable laws. We never expose or share information from our user database, your searches don't reveal other users' data. We only collect what's necessary to run monitoring and removal requests, and we keep access tightly controlled with minimal retention. We never sell your information—ever."
+  },
+  {
+    "title": "What intelligence tools do you offer?",
+    "category": "FAQ",
+    "tags": [
+      "faq",
+      "intelligence tools",
+      "credits"
+    ],
+    "content": "Serus provides curated API solutions and intelligence accounts tailored to your organization's needs. Each account comes topped up with credits that are shared across all members of your organization, giving your team flexible access to the tools they need without managing individual subscriptions."
+  },
+  {
+    "title": "Are there limits to what you can find?",
+    "category": "FAQ",
+    "tags": [
+      "faq",
+      "coverage",
+      "search"
+    ],
+    "content": "If it exists on the internet, we will most likely find it. Serus scans across the surface web, indexed data sources, the dark web, data broker databases, and runs broad OSINT scans to identify potential exposures wherever they may appear. Our coverage is designed to be as comprehensive as possible, leaving very few blind spots."
+  },
+  {
+    "title": "What type of information do you protect?",
+    "category": "FAQ",
+    "tags": [
+      "faq",
+      "protection",
+      "monitoring"
+    ],
+    "content": "Serus gives you control through visibility. Exposure is inevitable — our goal is to make sure you see it first, before attackers do. We monitor and protect all the details your organization signs up with, from your domains and keywords to the individual names of your employees. The more detail you provide, the more thorough your coverage becomes."
+  },
+  {
+    "title": "How do I sign up my organization?",
+    "category": "FAQ",
+    "tags": [
+      "faq",
+      "signup",
+      "organization",
+      "sales"
+    ],
+    "content": "Getting started is straightforward. Contact our sales team to request a demo, and we'll walk you through the full setup process. From there, onboarding is quick and easy, and your organization can be up and running in no time."
   }
 ]

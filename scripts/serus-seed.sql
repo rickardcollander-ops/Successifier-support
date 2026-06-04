@@ -77,4 +77,32 @@ SELECT gen_random_uuid()::text, 'serus', 'Helpful guides on the Serus blog', 'Mo
 - How to Know if Your Phone Is Hacked – 10 Signs: https://www.serus.ai/blog/how-to-know-if-your-phone-is-hacked', 'Guides', ARRAY['blog','guides','links']::text[], true, now(), now()
 WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'Helpful guides on the Serus blog');
 
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'How can Serus find so much information?', 'Serus scans both the surface web and dark web to map where your personal information appears online. We combine agentic search intelligence with OSINT to surface profiles, reposts, leaks, and mentions across the open web — then organize it into one clear view.', 'FAQ', ARRAY['faq','search','osint']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'How can Serus find so much information?');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'Does Serus track a reputation Score?', 'Yes. Serus compiles a reputation score for you and every member of your team. By scanning online mentions, public records, and your broader digital footprint, it aggregates everything into a comprehensive reputation profile — then distills it into a single score that reflects how you and your team are perceived online.', 'FAQ', ARRAY['faq','reputation score']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'Does Serus track a reputation Score?');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'Is my data safe?', 'Yes. Your data is encrypted in transit and at rest, and handled in accordance with applicable laws. We never expose or share information from our user database, your searches don''t reveal other users'' data. We only collect what''s necessary to run monitoring and removal requests, and we keep access tightly controlled with minimal retention. We never sell your information—ever.', 'FAQ', ARRAY['faq','security','privacy','data']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'Is my data safe?');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'What intelligence tools do you offer?', 'Serus provides curated API solutions and intelligence accounts tailored to your organization''s needs. Each account comes topped up with credits that are shared across all members of your organization, giving your team flexible access to the tools they need without managing individual subscriptions.', 'FAQ', ARRAY['faq','intelligence tools','credits']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'What intelligence tools do you offer?');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'Are there limits to what you can find?', 'If it exists on the internet, we will most likely find it. Serus scans across the surface web, indexed data sources, the dark web, data broker databases, and runs broad OSINT scans to identify potential exposures wherever they may appear. Our coverage is designed to be as comprehensive as possible, leaving very few blind spots.', 'FAQ', ARRAY['faq','coverage','search']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'Are there limits to what you can find?');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'What type of information do you protect?', 'Serus gives you control through visibility. Exposure is inevitable — our goal is to make sure you see it first, before attackers do. We monitor and protect all the details your organization signs up with, from your domains and keywords to the individual names of your employees. The more detail you provide, the more thorough your coverage becomes.', 'FAQ', ARRAY['faq','protection','monitoring']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'What type of information do you protect?');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'How do I sign up my organization?', 'Getting started is straightforward. Contact our sales team to request a demo, and we''ll walk you through the full setup process. From there, onboarding is quick and easy, and your organization can be up and running in no time.', 'FAQ', ARRAY['faq','signup','organization','sales']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'How do I sign up my organization?');
+
 COMMIT;
