@@ -1,0 +1,44 @@
+[
+  {
+    "title": "What is Serus?",
+    "category": "About",
+    "tags": ["about", "company", "product"],
+    "content": "Serus is your AI privacy assistant — built to help you regain control of your personal information online. Serus scans both the surface web and the dark web to map where your personal information appears, combining agentic search intelligence with OSINT to surface profiles, reposts, leaks and mentions across the open web, then organizes it into one clear dashboard.\n\nSerus was founded in Sweden and grew out of frustration with invasive data collection. The team previously launched DoldAdress.se, which helped tens of thousands of Swedes remove personal information from search engines and people-search sites. Serus is backed by pre-seed and seed funding and is led by Filip Landgren (CEO & Co-Founder) and Anthon Wansland (Head of Product & Co-Founder), supported by a team of engineers, designers and legal specialists."
+  },
+  {
+    "title": "Pricing and plans",
+    "category": "Pricing",
+    "tags": ["pricing", "plans", "billing", "refund"],
+    "content": "Serus has three plans:\n\n- Free — $0/month. Includes protection, Autopilot (automated removals), 5 data removal requests/day, a limited Serus AI assistant, dark web and surface web surveillance, limited footprint improvements, limited alerts & monitoring, and Intelligence Tools with 0 monthly credits.\n- Pro — $12/month. Includes protection, Autopilot, unlimited data removals, full Serus AI assistant, dark web and surface web surveillance, footprint improvements, real-time alerts & monitoring, and Intelligence Tools with 500 monthly credits.\n- Premium — $19/month. Same as Pro but with Intelligence Tools at 2,500 monthly credits.\n\nBilling: 70% off the first month, a 30-day money-back guarantee, and you can cancel anytime — no lock-ins. Business pricing is available via the sales/contact page."
+  },
+  {
+    "title": "How Serus finds your exposed information",
+    "category": "How it works",
+    "tags": ["scan", "dark web", "osint", "exposure"],
+    "content": "Serus scans both the surface web and the dark web to map where your personal information appears online. It combines agentic search intelligence with OSINT (open-source intelligence) to surface profiles, reposts, leaks and mentions across the open web, then organizes everything into one clear view so you can see your exposure and act on it."
+  },
+  {
+    "title": "How we handle your data (security & privacy)",
+    "category": "Security & privacy",
+    "tags": ["security", "privacy", "data", "encryption", "retention", "deletion"],
+    "content": "Your data is protected with strong security controls:\n\n- Encryption at rest: all datastores are encrypted, and sensitive data has additional app-level encryption.\n- Encryption in transit: Serus uses TLS 1.3 or higher to encrypt every transmission.\n- Backups: Serus keeps point-in-time backups of all data via its hosting provider.\n- Access controls: unique authentication, restricted encryption keys and strict access controls protect the infrastructure.\n- Privacy controls: clear data retention, deletion when you leave, and data classification policies keep you in control of your information."
+  },
+  {
+    "title": "Autopilot: automated data removals",
+    "category": "How it works",
+    "tags": ["autopilot", "removals", "data brokers", "requests"],
+    "content": "Autopilot continuously scans data broker sites and automatically submits removal requests on your behalf, handling the tedious work of tracking down and removing your personal information. You typically see noticeable results within 30-60 days.\n\nWhen setting up, you can tailor the scope: focus only on data brokers, only on surface-web search results, or choose comprehensive coverage across all identified exposures. The Requests section lets you track submission dates, processing timelines and completion status for each removal.\n\nThe number of removals depends on your plan (the Free plan includes a limited number of removal requests per day; Pro and Premium include unlimited removals). Getting started requires an account via Google or email, after which Serus handles removals automatically and continuously."
+  },
+  {
+    "title": "How to remove search results about you from Google",
+    "category": "Guides",
+    "tags": ["google", "search results", "removal", "right to be forgotten"],
+    "content": "Steps to remove search results about you from Google:\n\n1. Choose the right form. EU citizens: use Google's legal troubleshooter (Google Search → Legal Reasons → Personal Data/Privacy → Right to be forgotten). Non-EU residents: use Google's content removal form directly.\n2. Identify the unwanted links. Search your name in different combinations (full name, with middle name, name + address) and confirm the results are actually about you, focusing on pages showing personal details like address, phone, or email.\n3. Collect the URLs. Copy the full URL of each problematic result into one document to avoid duplicates.\n4. Submit your request with the required details.\n5. Expect processing time: links are removed in about 13 days on average (some in ~4 days, others up to 8 weeks).\n\nNote: personal addresses and photos are usually removable, but \"public interest\" content — official records, business information and news of broader importance — generally cannot be removed."
+  },
+  {
+    "title": "Helpful guides on the Serus blog",
+    "category": "Guides",
+    "tags": ["blog", "guides", "links"],
+    "content": "More in-depth guides are available on the Serus blog (https://www.serus.ai/blog):\n\n- Using Autopilot: https://www.serus.ai/blog/using-autopilot\n- How to Remove Search Results About You from Google: https://www.serus.ai/blog/how-to-remove-search-results-from-google\n- Guide: How to Delete Yourself from the Internet: https://www.serus.ai/blog/how-to-delete-yourself-from-the-internet\n- How to Get My Information Off the Dark Web: https://www.serus.ai/blog/how-to-get-my-information-off-the-dark-web\n- What Happens If Your Email Is on the Dark Web: https://www.serus.ai/blog/what-happens-if-your-email-is-on-the-dark-web\n- How to Protect Your Digital Footprint – 10 Easy Ways: https://www.serus.ai/blog/how-to-protect-your-digital-footprint-–-10-easy-ways\n- How to Protect Yourself and Your Data from Internet Hackers: https://www.serus.ai/blog/how-to-protect-my-data-from-hackers\n- How to Prevent Data Breaches in 8 Ways: https://www.serus.ai/blog/how-to-prevent-data-breaches\n- Understand the Different Types of Exposure: https://www.serus.ai/blog/understand-your-exposure\n- Dark Web Definition: What is It and How Does it Work?: https://www.serus.ai/blog/dark-web-definition\n- How to Know if Your Phone Is Hacked – 10 Signs: https://www.serus.ai/blog/how-to-know-if-your-phone-is-hacked"
+  }
+]
