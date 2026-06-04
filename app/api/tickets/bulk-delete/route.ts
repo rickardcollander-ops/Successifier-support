@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
-
-const BILLECTA_SENDER = 'no-reply@billecta.com';
+import { product } from '@/lib/products';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,7 +15,8 @@ export async function POST(request: NextRequest) {
     let where: any;
     switch (folder) {
       case 'billecta':
-        where = { tenantId: tenant.id, customerEmail: BILLECTA_SENDER };
+        // The "vendor" folder (Billecta for Doldadress, Stripe for Serus).
+        where = { tenantId: tenant.id, customerEmail: { in: product.vendorFolder.senders } };
         break;
       case 'duplicate':
         where = { tenantId: tenant.id, status: 'duplicate' };
