@@ -29,6 +29,33 @@ async function stripeProbe(apiKey: string) {
   }
 }
 
+async function clerkProbe(secretKey: string) {
+  try {
+    const res = await fetch('https://api.clerk.com/v1/users?limit=1', {
+      headers: {
+        'Authorization': `Bearer ${secretKey}`,
+      },
+    });
+
+    if (res.ok) {
+      return {
+        ok: true,
+        message: 'Clerk connection successful',
+      };
+    }
+
+    return {
+      ok: false,
+      message: `Clerk auth failed: HTTP ${res.status}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: 'Clerk connection error',
+    };
+  }
+}
+
 async function resendProbe(apiKey: string, fromEmail: string) {
   try {
     const res = await fetch('https://api.resend.com/emails', {
@@ -318,6 +345,15 @@ export async function POST(
           return NextResponse.json({ ok: false, message: 'Missing Postman credentials' }, { status: 400 });
         }
         result = await postmanProbe(apiKey, workspaceId);
+        break;
+      }
+
+      case 'clerk': {
+        const secretKey = String(credentials.secretKey || '').trim();
+        if (!secretKey) {
+          return NextResponse.json({ ok: false, message: 'Missing Clerk secret key' }, { status: 400 });
+        }
+        result = await clerkProbe(secretKey);
         break;
       }
 

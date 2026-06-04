@@ -3,6 +3,7 @@ import { BillectaService } from '../integrations/billecta';
 import { RetoolService } from '../integrations/retool';
 import { ResendService } from '../integrations/resend';
 import { GmailService } from '../integrations/gmail';
+import { ClerkService } from '../integrations/clerk';
 import type { Integration, TicketContext } from '../types';
 import { decryptJSON, isEncrypted } from '../crypto';
 
@@ -81,6 +82,12 @@ export class ContextAggregator {
               const gmailData = await gmailService.getCustomerContext(normalizedEmail);
               if (gmailData) context.gmail = gmailData;
               break;
+
+            case 'clerk':
+              const clerkService = new ClerkService(credentials.secretKey);
+              const clerkData = await clerkService.getCustomerContext(normalizedEmail);
+              if (clerkData) context.clerk = clerkData;
+              break;
           }
         } catch (error) {
           console.error(`Error gathering context from ${integration.type}:`, error);
@@ -149,6 +156,19 @@ export class ContextAggregator {
           formatted += `  - ${email.subject} (${new Date(email.createdAt).toLocaleDateString()})\n`;
         });
       }
+      formatted += '\n';
+    }
+
+    if (context.clerk) {
+      formatted += '=== Clerk (Användarkonto) ===\n';
+      formatted += `Konto finns (user-id: ${context.clerk.userId})\n`;
+      if (context.clerk.name) formatted += `Namn: ${context.clerk.name}\n`;
+      if (context.clerk.createdAt) formatted += `Konto skapat: ${new Date(context.clerk.createdAt).toLocaleDateString('sv-SE')}\n`;
+      if (context.clerk.lastSignInAt) formatted += `Senaste inloggning: ${new Date(context.clerk.lastSignInAt).toLocaleDateString('sv-SE')}\n`;
+      formatted += `E-post verifierad: ${context.clerk.emailVerified ? 'ja' : 'nej'}\n`;
+      if (context.clerk.plan) formatted += `Plan: ${context.clerk.plan}\n`;
+      if (context.clerk.banned) formatted += `⚠️ Kontot är bannat\n`;
+      if (context.clerk.locked) formatted += `⚠️ Kontot är låst\n`;
       formatted += '\n';
     }
 

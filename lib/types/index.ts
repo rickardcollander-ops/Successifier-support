@@ -56,6 +56,16 @@ export interface TicketContext {
     totalEmails?: number;
     recentEmails?: any[];
   };
+  clerk?: {
+    userId?: string;
+    name?: string | null;
+    createdAt?: number | null;
+    lastSignInAt?: number | null;
+    emailVerified?: boolean;
+    banned?: boolean;
+    locked?: boolean;
+    plan?: string | null;
+  };
   attachments?: Array<{
     filename: string;
     mimeType: string;
@@ -84,7 +94,7 @@ export interface KnowledgeBase {
 export interface Integration {
   id: string;
   tenantId: string;
-  type: 'stripe' | 'billecta' | 'retool' | 'resend' | 'gmail';
+  type: 'stripe' | 'billecta' | 'retool' | 'resend' | 'gmail' | 'clerk';
   name: string;
   credentials: Record<string, string>;
   isActive: boolean;
