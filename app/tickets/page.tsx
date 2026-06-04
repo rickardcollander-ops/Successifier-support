@@ -82,7 +82,7 @@ export default function TicketsPage() {
   const emptyCurrentFolder = async () => {
     if (emptyingFolder) return;
     const folderLabels: Record<string, string> = {
-      billecta: 'Billecta',
+      billecta: product.vendorFolder.label,
       duplicate: t('Dubletter'),
       bounce: t('Studsade'),
     };
@@ -677,7 +677,7 @@ export default function TicketsPage() {
     { id: 'sent', label: t('Skickade'), count: statusCounts.sent },
     { id: 'closed', label: t('Stängda'), count: statusCounts.closed },
     { id: 'all', label: t('Alla'), count: statusCounts.all },
-    { id: 'billecta', label: 'Billecta', count: statusCounts.billecta },
+    { id: 'billecta', label: product.vendorFolder.label, count: statusCounts.billecta },
     { id: 'bounce', label: t('Studsade'), count: statusCounts.bounce },
     { id: 'duplicate', label: t('Dubletter'), count: statusCounts.duplicate },
     { id: 'archived', label: t('Arkiverade'), count: archivedTickets.length || '...' },
@@ -745,7 +745,7 @@ export default function TicketsPage() {
           {/* Dedupe button + Email Sync Status */}
           <div className="flex items-center gap-2">
             {(activeStatus === 'billecta' || activeStatus === 'duplicate' || activeStatus === 'bounce') && (() => {
-              const folderName = activeStatus === 'billecta' ? 'Billecta'
+              const folderName = activeStatus === 'billecta' ? product.vendorFolder.label
                 : activeStatus === 'duplicate' ? t('Dubletter')
                 : t('Studsade');
               return (
