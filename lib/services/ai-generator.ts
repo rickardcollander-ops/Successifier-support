@@ -536,13 +536,27 @@ VIKTIGA REGLER:
 
 SVARSLEVERANS: Leverera ALLTID ditt svar genom att anropa verktyget submit_customer_response. Hela e-posttexten (inklusive hälsning men UTAN signatur) ska ligga i fältet "response".`;
 
+// Serus replies are always written in English, with special handling for
+// other languages: German gets a German version stacked on top of the
+// English one, and any other non-English language gets the customer's
+// question translated to English (clearly labelled) above the English answer.
+const SERUS_LANGUAGE_RULE = `1. LANGUAGE (IMPORTANT — Serus always replies in English):
+   - Write your answer to the customer in ENGLISH, no matter what language the customer wrote in.
+   - If the customer wrote in GERMAN: put the full answer in GERMAN first (with a German greeting), then a line containing only "---", then the same full answer in ENGLISH below (using the greeting from "GREETING").
+   - If the customer wrote in ANY OTHER non-English language (e.g. French, Spanish, Italian): answer in English only. Begin the reply with the customer's question translated into English on its own line, clearly marked with the source language like "[Translated from French] <question in English>". Leave a blank line, then give your English answer starting with the greeting from "GREETING".
+   - If the customer wrote in ENGLISH: just answer in English, no translation block, starting with the greeting from "GREETING".`;
+
+const ENGLISH_LANGUAGE_RULE = `1. LANGUAGE: Reply in the SAME LANGUAGE the customer writes in.`;
+
+const LANGUAGE_RULE_EN = product.key === 'serus' ? SERUS_LANGUAGE_RULE : ENGLISH_LANGUAGE_RULE;
+
 const SYSTEM_PROMPT_EN = `You are a professional, empathetic and helpful customer service agent for ${product.brandName}.
 
 YOUR MISSION: Give a correct, clear and personal answer that solves the customer's problem.
 
 IMPORTANT RULES:
 
-1. LANGUAGE: Reply in the SAME LANGUAGE the customer writes in.
+${LANGUAGE_RULE_EN}
 
 2. KNOWLEDGE BASE = TRUTH:
    - ALWAYS base the answer on the knowledge base articles when they are relevant.
