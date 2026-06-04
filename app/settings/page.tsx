@@ -703,7 +703,7 @@ export default function SettingsPage() {
           description="Access customer payment history, subscriptions, and invoices"
           integration={getIntegration('stripe')}
           fields={[
-            { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk_live_...' },
+            { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk_live_… or rk_live_… (restricted key)' },
           ]}
           onSave={handleSave}
           onToggle={handleToggle}

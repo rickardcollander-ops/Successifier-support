@@ -4,7 +4,10 @@ import { decryptJSON, isEncrypted } from '@/lib/crypto';
 
 async function stripeProbe(apiKey: string) {
   try {
-    const res = await fetch('https://api.stripe.com/v1/balance', {
+    // Probe Customers (what we actually read) rather than /v1/balance, so a
+    // restricted key (rk_…) scoped only for customers/subscriptions/invoices
+    // passes the test instead of failing on a missing Balance scope.
+    const res = await fetch('https://api.stripe.com/v1/customers?limit=1', {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
       },

@@ -43,7 +43,11 @@ export class StripeService {
       const customer = await this.getCustomerByEmail(email);
       if (!customer) return null;
 
-      const [subscriptions, invoices, charges] = await Promise.all([
+      // Use allSettled so a Stripe restricted key (rk_…) that lacks scope for
+      // one resource (e.g. no Charges read) still returns whatever it CAN
+      // read, instead of wiping out all Stripe context. The customer lookup
+      // above already requires Customers read — that's the minimum scope.
+      const results = await Promise.allSettled([
         this.withRetry('subscriptions.list', () =>
           this.stripe.subscriptions.list({ customer: customer.id, limit: 10 })
         ),
@@ -54,8 +58,17 @@ export class StripeService {
           this.stripe.charges.list({ customer: customer.id, limit: 10 })
         ),
       ]);
+      const pick = (i: number, label: string): any[] => {
+        const r = results[i];
+        if (r.status === 'fulfilled') return (r.value as any).data;
+        console.warn(`Stripe ${label} unavailable (missing scope on restricted key?):`, (r.reason as any)?.message || r.reason);
+        return [];
+      };
+      const subscriptionsData = pick(0, 'subscriptions');
+      const invoicesData = pick(1, 'invoices');
+      const chargesData = pick(2, 'charges');
 
-      const subscriptionsList = subscriptions.data.map(sub => {
+      const subscriptionsList = subscriptionsData.map((sub: any) => {
           // As of API version 2025-03-31.basil (we run 2026-01-28.clover),
           // current_period_end was removed from the Subscription object and
           // moved onto each subscription item. Read it from the item first
@@ -70,7 +83,7 @@ export class StripeService {
           canceledAt: (sub as any).canceled_at || null,
           endedAt: (sub as any).ended_at || null,
           cancelAt: (sub as any).cancel_at || null,
-          items: sub.items.data.map(item => ({
+          items: sub.items.data.map((item: any) => ({
             price: item.price.unit_amount,
             product: item.price.product,
           })),
@@ -89,14 +102,14 @@ export class StripeService {
         customerId: customer.id,
         accountClosed,
         subscriptions: subscriptionsList,
-        invoices: invoices.data.map(inv => ({
+        invoices: invoicesData.map((inv: any) => ({
           id: inv.id,
           status: inv.status,
           amount: inv.amount_due,
           dueDate: inv.due_date,
           paid: inv.status === 'paid',
         })),
-        charges: charges.data.map(charge => ({
+        charges: chargesData.map((charge: any) => ({
           id: charge.id,
           amount: charge.amount,
           status: charge.status,
