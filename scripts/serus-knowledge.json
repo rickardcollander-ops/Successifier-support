@@ -18,7 +18,7 @@
       "billing",
       "refund"
     ],
-    "content": "Serus has three plans:\n\n- Free — $0/month. Includes protection, Autopilot (automated removals), 5 data removal requests/day, a limited Serus AI assistant, dark web and surface web surveillance, limited footprint improvements, limited alerts & monitoring, and Intelligence Tools with 0 monthly credits.\n- Pro — $12/month. Includes protection, Autopilot, unlimited data removals, full Serus AI assistant, dark web and surface web surveillance, footprint improvements, real-time alerts & monitoring, and Intelligence Tools with 500 monthly credits.\n- Premium — $19/month. Same as Pro but with Intelligence Tools at 2,500 monthly credits.\n\nBilling: 70% off the first month, a 30-day money-back guarantee, and you can cancel anytime — no lock-ins. Business pricing is available via the sales/contact page."
+    "content": "Serus has three plans:\n\n- Free — $0/month. Includes protection, 5 data removal requests/day, a limited Serus AI assistant, dark web and surface web surveillance, limited footprint improvements, limited alerts & monitoring, and Intelligence Tools with 0 monthly credits.\n- Pro — $12/month. Includes protection, unlimited data removals, full Serus AI assistant, dark web and surface web surveillance, footprint improvements, real-time alerts & monitoring, and Intelligence Tools with 500 monthly credits.\n- Premium — $19/month. Same as Pro, plus Autopilot (automated removals) and Intelligence Tools with 2,500 monthly credits.\n\nBilling: 70% off the first month, a 30-day money-back guarantee, and you can cancel anytime — no lock-ins. Business pricing is available via the sales/contact page."
   },
   {
     "title": "How Serus finds your exposed information",
@@ -53,7 +53,7 @@
       "data brokers",
       "requests"
     ],
-    "content": "Autopilot continuously scans data broker sites and automatically submits removal requests on your behalf, handling the tedious work of tracking down and removing your personal information. You typically see noticeable results within 30-60 days.\n\nWhen setting up, you can tailor the scope: focus only on data brokers, only on surface-web search results, or choose comprehensive coverage across all identified exposures. The Requests section lets you track submission dates, processing timelines and completion status for each removal.\n\nThe number of removals depends on your plan (the Free plan includes a limited number of removal requests per day; Pro and Premium include unlimited removals). Getting started requires an account via Google or email, after which Serus handles removals automatically and continuously."
+    "content": "Autopilot continuously scans data broker sites and automatically submits removal requests on your behalf, handling the tedious work of tracking down and removing your personal information. You typically see noticeable results within 30-60 days.\n\nWhen setting up, you can tailor the scope: focus only on data brokers, only on surface-web search results, or choose comprehensive coverage across all identified exposures. The Requests section lets you track submission dates, processing timelines and completion status for each removal.\n\nAutopilot is available on the Premium plan; it is not included in the Free or Pro plans. To activate it, go to Settings > Subscription > Upgrade to Premium. Getting started requires an account via Google or email, after which Serus handles removals automatically and continuously."
   },
   {
     "title": "How to remove search results about you from Google",
@@ -146,5 +146,132 @@
       "sales"
     ],
     "content": "Getting started is straightforward. Contact our sales team to request a demo, and we'll walk you through the full setup process. From there, onboarding is quick and easy, and your organization can be up and running in no time."
+  },
+  {
+    "title": "How to delete your account and personal data",
+    "category": "Account",
+    "tags": [
+      "account",
+      "delete",
+      "data deletion",
+      "gdpr",
+      "unsubscribe"
+    ],
+    "content": "To delete your account and permanently remove all associated personal data, follow these steps:\n\n1. Log in to your Serus account.\n2. Go to Settings.\n3. Select Delete Account and follow the prompts to confirm.\n\nPlease note that this action is permanent and cannot be undone. For a more detailed step-by-step guide, see https://www.serus.ai/contact/support/delete-account\n\nOnce the request has been processed, your account and all associated personal data are permanently deleted from our servers."
+  },
+  {
+    "title": "How to stop emails and manage notification preferences",
+    "category": "Account",
+    "tags": [
+      "notifications",
+      "email",
+      "unsubscribe",
+      "alerts",
+      "preferences"
+    ],
+    "content": "You can manage your email preferences directly within your account. Go to Settings > Notifications, where you can toggle off specific alerts or unsubscribe from all notifications entirely."
+  },
+  {
+    "title": "Charged after cancelling your subscription",
+    "category": "Billing",
+    "tags": [
+      "billing",
+      "subscription",
+      "cancellation",
+      "refund",
+      "charge"
+    ],
+    "content": "When you cancel a subscription, it stays active until the end of your current billing period, and the cancellation takes effect from its scheduled date. If a payment falls due before that scheduled cancellation date, the system may automatically attempt to process it.\n\nIf you were charged, or see a pending charge, after cancelling, contact support. We can look into your account, manually end your plan immediately, and cancel any pending charge so that no payment is taken."
+  },
+  {
+    "title": "How to view and edit your account details (name & surveilled information)",
+    "category": "Account",
+    "tags": [
+      "account",
+      "settings",
+      "profile",
+      "name",
+      "surname",
+      "edit"
+    ],
+    "content": "To view or edit the information linked to your account, go to Settings and select the \"Your Surveilled Information\" section. From there you can update the relevant details — for example your first name, middle name or surname — and save the changes.\n\nIf you can't find this section, reply to support and we'll be happy to guide you further."
+  },
+  {
+    "title": "Can I change the email address on my account?",
+    "category": "Account",
+    "tags": [
+      "account",
+      "email",
+      "change email"
+    ],
+    "content": "At this time it is not possible to change the email address associated with an existing account. To use a different email address, you would need to delete your current account and create a new one using your preferred email address.\n\nWe appreciate this feedback and have shared the ability to update email addresses on existing accounts with our team for future consideration."
+  },
+  {
+    "title": "Why does Serus need my home address?",
+    "category": "Security & privacy",
+    "tags": [
+      "privacy",
+      "home address",
+      "matching",
+      "data"
+    ],
+    "content": "Serus uses your home address only to accurately match and locate the online sources that currently hold your data, ensuring we don't accidentally request the removal of someone else's profile with a similar name.\n\nIf you don't feel comfortable providing it, that's completely fine — you can choose to skip it, and we'll still do our best to help you with the information you have provided."
+  },
+  {
+    "title": "What is an exposure, and what do the categories mean?",
+    "category": "FAQ",
+    "tags": [
+      "faq",
+      "exposure",
+      "dashboard",
+      "data brokers",
+      "dark web"
+    ],
+    "content": "An exposure means Serus has found your personal information in a place where it shouldn't be, or where it might pose a risk to your privacy. Think of it as a digital footprint that could make you vulnerable to things like spam, unwanted tracking, or identity theft.\n\nExposures are grouped into four main areas on your dashboard:\n\n- Data Brokers: companies that collect and sell your personal details (like your name, address, or phone number).\n- Dark Web Breaches: leaked databases from hacked websites where your credentials (like emails or passwords) might have appeared.\n- Surface Web: public mentions of your information on regular websites or search results.\n- Compromised Accounts: specific online accounts that show signs of security risks or unauthorized access.\n\nLog in to your dashboard to review the specific findings, see exactly what information was found, and take the steps needed to secure or remove it."
+  },
+  {
+    "title": "How to check if your information was breached, and what to do",
+    "category": "Guides",
+    "tags": [
+      "breach",
+      "dark web scan",
+      "monitoring",
+      "passwords",
+      "security"
+    ],
+    "content": "To check whether any of your email addresses or contact details have appeared in a known data breach, use the Dark Web Scan feature in the Investigate tab. For ongoing protection, add your details to our monitoring service so you're notified immediately as soon as we detect any new breach involving your information.\n\nIf a breach is found, we recommend the following steps to help contain and prevent further harm:\n\n- Change compromised passwords immediately, especially if they were reused across multiple services.\n- Delete accounts on services you no longer use or recognize.\n- Review the exposed data carefully — we show exactly what information was involved (e.g. email, password, phone number).\n- If a stealer log is detected, this may indicate malware on your device; run a full antivirus/anti-malware scan to remove any threats.\n\nTaking these steps quickly can significantly reduce the risk of further damage."
+  },
+  {
+    "title": "How name variations affect monitoring",
+    "category": "How it works",
+    "tags": [
+      "monitoring",
+      "name",
+      "surface web",
+      "profile"
+    ],
+    "content": "A difference in how your name is written will not affect Dark Web, compromised-account, or data broker monitoring. However, it does affect Surface Web monitoring, because that process specifically checks for the name exactly as entered in your profile.\n\nTo have a specific name variation monitored on the Surface Web (for example \"Daniel J du Plessis\"), update your account details under Settings → \"Your Surveilled Information\". You can enter \"Daniel J\" in the First Name field and \"du Plessis\" in the Surname field, or enter \"J du\" in the Middle Name field."
+  },
+  {
+    "title": "How to access the founder offer",
+    "category": "FAQ",
+    "tags": [
+      "faq",
+      "founder offer",
+      "onboarding",
+      "free scan"
+    ],
+    "content": "If the founder offer is active on your account, continue through the onboarding process and proceed with a free scan. The offer becomes available once the onboarding flow is completed, so there is no need to delete your data to access it.\n\nIf you experience any issues during the process, contact support and we'll be happy to assist."
+  },
+  {
+    "title": "How to upgrade to Autopilot",
+    "category": "How it works",
+    "tags": [
+      "autopilot",
+      "upgrade",
+      "premium",
+      "subscription"
+    ],
+    "content": "Autopilot (automated removals) is available on the Premium plan; it is not included in the Free or Pro plans. To activate it, go to Settings > Subscription > Upgrade to Premium.\n\nFor more details on how the feature works, see https://www.serus.ai/blog/using-autopilot"
   }
 ]

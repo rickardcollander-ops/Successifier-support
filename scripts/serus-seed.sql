@@ -20,9 +20,9 @@ WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND t
 INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
 SELECT gen_random_uuid()::text, 'serus', 'Pricing and plans', 'Serus has three plans:
 
-- Free — $0/month. Includes protection, Autopilot (automated removals), 5 data removal requests/day, a limited Serus AI assistant, dark web and surface web surveillance, limited footprint improvements, limited alerts & monitoring, and Intelligence Tools with 0 monthly credits.
-- Pro — $12/month. Includes protection, Autopilot, unlimited data removals, full Serus AI assistant, dark web and surface web surveillance, footprint improvements, real-time alerts & monitoring, and Intelligence Tools with 500 monthly credits.
-- Premium — $19/month. Same as Pro but with Intelligence Tools at 2,500 monthly credits.
+- Free — $0/month. Includes protection, 5 data removal requests/day, a limited Serus AI assistant, dark web and surface web surveillance, limited footprint improvements, limited alerts & monitoring, and Intelligence Tools with 0 monthly credits.
+- Pro — $12/month. Includes protection, unlimited data removals, full Serus AI assistant, dark web and surface web surveillance, footprint improvements, real-time alerts & monitoring, and Intelligence Tools with 500 monthly credits.
+- Premium — $19/month. Same as Pro, plus Autopilot (automated removals) and Intelligence Tools with 2,500 monthly credits.
 
 Billing: 70% off the first month, a 30-day money-back guarantee, and you can cancel anytime — no lock-ins. Business pricing is available via the sales/contact page.', 'Pricing', ARRAY['pricing','plans','billing','refund']::text[], true, now(), now()
 WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'Pricing and plans');
@@ -46,7 +46,7 @@ SELECT gen_random_uuid()::text, 'serus', 'Autopilot: automated data removals', '
 
 When setting up, you can tailor the scope: focus only on data brokers, only on surface-web search results, or choose comprehensive coverage across all identified exposures. The Requests section lets you track submission dates, processing timelines and completion status for each removal.
 
-The number of removals depends on your plan (the Free plan includes a limited number of removal requests per day; Pro and Premium include unlimited removals). Getting started requires an account via Google or email, after which Serus handles removals automatically and continuously.', 'How it works', ARRAY['autopilot','removals','data brokers','requests']::text[], true, now(), now()
+Autopilot is available on the Premium plan; it is not included in the Free or Pro plans. To activate it, go to Settings > Subscription > Upgrade to Premium. Getting started requires an account via Google or email, after which Serus handles removals automatically and continuously.', 'How it works', ARRAY['autopilot','removals','data brokers','requests']::text[], true, now(), now()
 WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'Autopilot: automated data removals');
 
 INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
@@ -104,5 +104,90 @@ WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND t
 INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
 SELECT gen_random_uuid()::text, 'serus', 'How do I sign up my organization?', 'Getting started is straightforward. Contact our sales team to request a demo, and we''ll walk you through the full setup process. From there, onboarding is quick and easy, and your organization can be up and running in no time.', 'FAQ', ARRAY['faq','signup','organization','sales']::text[], true, now(), now()
 WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'How do I sign up my organization?');
+
+-- 3) Supportbaserade FAQ-artiklar (vanliga kundärenden)
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'How to delete your account and personal data', 'To delete your account and permanently remove all associated personal data, follow these steps:
+
+1. Log in to your Serus account.
+2. Go to Settings.
+3. Select Delete Account and follow the prompts to confirm.
+
+Please note that this action is permanent and cannot be undone. For a more detailed step-by-step guide, see https://www.serus.ai/contact/support/delete-account
+
+Once the request has been processed, your account and all associated personal data are permanently deleted from our servers.', 'Account', ARRAY['account','delete','data deletion','gdpr','unsubscribe']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'How to delete your account and personal data');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'How to stop emails and manage notification preferences', 'You can manage your email preferences directly within your account. Go to Settings > Notifications, where you can toggle off specific alerts or unsubscribe from all notifications entirely.', 'Account', ARRAY['notifications','email','unsubscribe','alerts','preferences']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'How to stop emails and manage notification preferences');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'Charged after cancelling your subscription', 'When you cancel a subscription, it stays active until the end of your current billing period, and the cancellation takes effect from its scheduled date. If a payment falls due before that scheduled cancellation date, the system may automatically attempt to process it.
+
+If you were charged, or see a pending charge, after cancelling, contact support. We can look into your account, manually end your plan immediately, and cancel any pending charge so that no payment is taken.', 'Billing', ARRAY['billing','subscription','cancellation','refund','charge']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'Charged after cancelling your subscription');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'How to view and edit your account details (name & surveilled information)', 'To view or edit the information linked to your account, go to Settings and select the "Your Surveilled Information" section. From there you can update the relevant details — for example your first name, middle name or surname — and save the changes.
+
+If you can''t find this section, reply to support and we''ll be happy to guide you further.', 'Account', ARRAY['account','settings','profile','name','surname','edit']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'How to view and edit your account details (name & surveilled information)');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'Can I change the email address on my account?', 'At this time it is not possible to change the email address associated with an existing account. To use a different email address, you would need to delete your current account and create a new one using your preferred email address.
+
+We appreciate this feedback and have shared the ability to update email addresses on existing accounts with our team for future consideration.', 'Account', ARRAY['account','email','change email']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'Can I change the email address on my account?');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'Why does Serus need my home address?', 'Serus uses your home address only to accurately match and locate the online sources that currently hold your data, ensuring we don''t accidentally request the removal of someone else''s profile with a similar name.
+
+If you don''t feel comfortable providing it, that''s completely fine — you can choose to skip it, and we''ll still do our best to help you with the information you have provided.', 'Security & privacy', ARRAY['privacy','home address','matching','data']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'Why does Serus need my home address?');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'What is an exposure, and what do the categories mean?', 'An exposure means Serus has found your personal information in a place where it shouldn''t be, or where it might pose a risk to your privacy. Think of it as a digital footprint that could make you vulnerable to things like spam, unwanted tracking, or identity theft.
+
+Exposures are grouped into four main areas on your dashboard:
+
+- Data Brokers: companies that collect and sell your personal details (like your name, address, or phone number).
+- Dark Web Breaches: leaked databases from hacked websites where your credentials (like emails or passwords) might have appeared.
+- Surface Web: public mentions of your information on regular websites or search results.
+- Compromised Accounts: specific online accounts that show signs of security risks or unauthorized access.
+
+Log in to your dashboard to review the specific findings, see exactly what information was found, and take the steps needed to secure or remove it.', 'FAQ', ARRAY['faq','exposure','dashboard','data brokers','dark web']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'What is an exposure, and what do the categories mean?');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'How to check if your information was breached, and what to do', 'To check whether any of your email addresses or contact details have appeared in a known data breach, use the Dark Web Scan feature in the Investigate tab. For ongoing protection, add your details to our monitoring service so you''re notified immediately as soon as we detect any new breach involving your information.
+
+If a breach is found, we recommend the following steps to help contain and prevent further harm:
+
+- Change compromised passwords immediately, especially if they were reused across multiple services.
+- Delete accounts on services you no longer use or recognize.
+- Review the exposed data carefully — we show exactly what information was involved (e.g. email, password, phone number).
+- If a stealer log is detected, this may indicate malware on your device; run a full antivirus/anti-malware scan to remove any threats.
+
+Taking these steps quickly can significantly reduce the risk of further damage.', 'Guides', ARRAY['breach','dark web scan','monitoring','passwords','security']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'How to check if your information was breached, and what to do');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'How name variations affect monitoring', 'A difference in how your name is written will not affect Dark Web, compromised-account, or data broker monitoring. However, it does affect Surface Web monitoring, because that process specifically checks for the name exactly as entered in your profile.
+
+To have a specific name variation monitored on the Surface Web (for example "Daniel J du Plessis"), update your account details under Settings → "Your Surveilled Information". You can enter "Daniel J" in the First Name field and "du Plessis" in the Surname field, or enter "J du" in the Middle Name field.', 'How it works', ARRAY['monitoring','name','surface web','profile']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'How name variations affect monitoring');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'How to access the founder offer', 'If the founder offer is active on your account, continue through the onboarding process and proceed with a free scan. The offer becomes available once the onboarding flow is completed, so there is no need to delete your data to access it.
+
+If you experience any issues during the process, contact support and we''ll be happy to assist.', 'FAQ', ARRAY['faq','founder offer','onboarding','free scan']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'How to access the founder offer');
+
+INSERT INTO "KnowledgeBase" (id, "tenantId", title, content, category, tags, "isActive", "createdAt", "updatedAt")
+SELECT gen_random_uuid()::text, 'serus', 'How to upgrade to Autopilot', 'Autopilot (automated removals) is available on the Premium plan; it is not included in the Free or Pro plans. To activate it, go to Settings > Subscription > Upgrade to Premium.
+
+For more details on how the feature works, see https://www.serus.ai/blog/using-autopilot', 'How it works', ARRAY['autopilot','upgrade','premium','subscription']::text[], true, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM "KnowledgeBase" WHERE "tenantId" = 'serus' AND title = 'How to upgrade to Autopilot');
 
 COMMIT;
