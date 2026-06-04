@@ -19,6 +19,15 @@ export const serus: ProductConfig = {
   apiBaseDomain: 'serus.ai',
   integrations: ['stripe', 'clerk'],
   showAffectedCustomersTool: false,
+  // Serus vill inte skicka något automatiskt bekräftelsemail till kunden
+  // när ett nytt ärende öppnas.
+  sendConfirmation: false,
+  // Serus använder Stripe (inte Billecta) som betalleverantör — samla
+  // automatiska mejl från Stripe i en egen "Stripe"-mapp.
+  vendorFolder: {
+    label: 'Stripe',
+    senders: ['no-reply@stripe.com', 'support@stripe.com'],
+  },
   allowedDomains: ['serus.ai'],
   // Same support team as Doldadress, plus Anthon Wansland and Argjent Sahiti.
   // Names must match how the agents appear in their Google accounts.

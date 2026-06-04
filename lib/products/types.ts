@@ -65,6 +65,27 @@ export interface ProductConfig {
   /** Per-agent avatar/label colors. */
   agentColors: Record<string, AgentColor>;
 
+  /**
+   * Whether to send the "we received your email" autoresponder when a
+   * brand-new ticket is opened. Off for products that don't want an
+   * automatic acknowledgement (e.g. Serus).
+   */
+  sendConfirmation: boolean;
+
+  /**
+   * A dedicated inbox folder that groups automated mail from a billing/
+   * payment vendor so it doesn't clutter the normal customer queue
+   * (Billecta for Doldadress, Stripe for Serus). The folder's internal
+   * tab id stays "billecta" for backwards compatibility, but its label
+   * and the sender addresses routed into it are product-specific.
+   */
+  vendorFolder: {
+    /** Tab label shown in the ticket list (e.g. "Billecta", "Stripe"). */
+    label: string;
+    /** Lowercased sender addresses routed into this folder. */
+    senders: string[];
+  };
+
   /** Copy for the "we received your email" autoresponder. */
   confirmation: {
     /** Greeting line, e.g. "Hej,". */

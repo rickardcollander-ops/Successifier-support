@@ -5,6 +5,7 @@ import TicketList from '@/components/TicketList';
 import TicketDetail from '@/components/TicketDetail';
 import { t } from '@/lib/i18n';
 import type { Ticket } from '@/lib/types';
+import { product } from '@/lib/products';
 
 interface EmailSyncStatus {
   lastSyncAt: Date | null;
@@ -560,7 +561,11 @@ export default function TicketsPage() {
     }
   };
 
-  const billectaTickets = tickets.filter(t => t.customerEmail.toLowerCase() === 'no-reply@billecta.com');
+  // Senders routed into the product's vendor folder (Billecta for
+  // Doldadress, Stripe for Serus). Matched case-insensitively.
+  const isVendorTicket = (t: Ticket) =>
+    product.vendorFolder.senders.includes(t.customerEmail.toLowerCase());
+  const billectaTickets = tickets.filter(isVendorTicket);
 
   // Bounces (mailer-daemon, postmaster, delivery-status-notification…)
   // get their own folder so they don't clutter the inbox. Match on
@@ -591,14 +596,14 @@ export default function TicketsPage() {
   // folder per user request. Bounces are excluded from every "normal" tab
   // and only appear under the "Studsade" tab.
   let statusFilteredTickets = activeStatus === 'all'
-    ? tickets.filter(t => t.customerEmail.toLowerCase() !== 'no-reply@billecta.com' && t.status !== 'duplicate' && !isBounceTicket(t))
+    ? tickets.filter(t => !isVendorTicket(t) && t.status !== 'duplicate' && !isBounceTicket(t))
     : activeStatus === 'billecta'
     ? billectaTickets
     : activeStatus === 'duplicate'
     ? tickets.filter(t => t.status === 'duplicate')
     : activeStatus === 'bounce'
     ? bounceTickets
-    : tickets.filter(t => t.status === activeStatus && t.customerEmail.toLowerCase() !== 'no-reply@billecta.com' && !isBounceTicket(t));
+    : tickets.filter(t => t.status === activeStatus && !isVendorTicket(t) && !isBounceTicket(t));
 
   // Apply search filter
   const searchFilteredTickets = searchQuery
@@ -651,7 +656,7 @@ export default function TicketsPage() {
   // Excludes Billecta, bounces and dubletter from "normal" counters so
   // the status tabs stay focused on real customer mail.
   const isExcludedFromNormal = (t: Ticket) =>
-    t.customerEmail.toLowerCase() === 'no-reply@billecta.com' || isBounceTicket(t);
+    isVendorTicket(t) || isBounceTicket(t);
 
   const statusCounts = {
     all: tickets.filter(t => !isExcludedFromNormal(t) && t.status !== 'duplicate').length,
