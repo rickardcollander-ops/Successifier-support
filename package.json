@@ -7,6 +7,7 @@
     "build": "prisma migrate deploy && prisma generate && next build",
     "start": "next start -p 3001",
     "lint": "next lint",
+    "setup:product": "prisma migrate deploy && node scripts/seed-tenant.js && node scripts/import-serus-knowledge.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {
