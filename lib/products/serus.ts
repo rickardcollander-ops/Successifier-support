@@ -12,8 +12,9 @@ export const serus: ProductConfig = {
   key: 'serus',
   displayName: 'Serus',
   brandName: 'Serus',
-  supportName: 'Serus Kundtjänst',
-  fromName: 'Serus Kundtjänst',
+  language: 'en',
+  supportName: 'Serus Support',
+  fromName: 'Serus Support',
   apiKeyPrefix: 'seru',
   apiBaseDomain: 'serus.ai',
   integrations: ['stripe', 'clerk'],
@@ -22,22 +23,30 @@ export const serus: ProductConfig = {
   // när ett nytt ärende öppnas.
   sendConfirmation: false,
   allowedDomains: ['serus.ai'],
-  agents: [], // TODO: add Serus agents (must match how they appear in Google)
+  // Same support team as Doldadress, plus Anthon Wansland and Argjent Sahiti.
+  // Names must match how the agents appear in their Google accounts.
+  agents: ['Ida Rosell', 'Malin Sundberg', 'Filippa Kramp', 'Anthon Wansland', 'Argjent Sahiti'],
   agentSignatures: {
-    // 'Förnamn Efternamn': 'Vänliga hälsningar,\nFörnamn\nSupportteamet Serus.se',
+    'Ida Rosell': 'Best regards,\nIda\nThe Serus Team',
+    'Malin Sundberg': 'Best regards,\nMalin\nThe Serus Team',
+    'Filippa Kramp': 'Best regards,\nFilippa\nThe Serus Team',
+    'Anthon Wansland': 'Best regards,\nAnthon\nThe Serus Team',
+    'Argjent Sahiti': 'Best regards,\nArgjent\nThe Serus Team',
   },
   agentColors: {
-    // 'Förnamn Efternamn': { bg: '#2563EB', border: '#1D4ED8', text: '#FFFFFF' },
+    'Ida Rosell': { bg: '#DC2626', border: '#B91C1C', text: '#FFFFFF' },
+    'Malin Sundberg': { bg: '#16A34A', border: '#15803D', text: '#FFFFFF' },
+    'Filippa Kramp': { bg: '#2563EB', border: '#1D4ED8', text: '#FFFFFF' },
+    'Anthon Wansland': { bg: '#7C3AED', border: '#6D28D9', text: '#FFFFFF' },
+    'Argjent Sahiti': { bg: '#D97706', border: '#B45309', text: '#FFFFFF' },
   },
   confirmation: {
-    greeting: 'Hej,',
+    greeting: 'Hi,',
     bodyLines: [
-      'Tack för att du kontaktar oss!',
-      'Vi har tagit emot ditt mejl. Vi hanterar ditt ärende så snart som möjligt och svarar normalt inom 2 arbetsdagar.',
-      // TODO (Serus onboarding): add a "vår supportsida: https://…" line once
-      // the public support URL is confirmed.
-      'Ha en fin dag!',
+      'Thanks for reaching out to Serus!',
+      'We have received your email and will get back to you as soon as possible, usually within 2 business days.',
+      'Have a great day!',
     ],
-    signoff: 'Med vänliga hälsningar,\nTeamet på Serus.se',
+    signoff: 'Best regards,\nThe Serus Team',
   },
 };

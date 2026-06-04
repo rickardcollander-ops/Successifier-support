@@ -6,6 +6,7 @@ export const doldadress: ProductConfig = {
   key: 'doldadress',
   displayName: 'Doldadress',
   brandName: 'Doldadress',
+  language: 'sv',
   supportName: 'Doldadress Kundtjänst',
   fromName: 'Doldadress Kundtjänst',
   apiKeyPrefix: 'dold',

@@ -27,6 +27,10 @@ export interface ProductConfig {
   /** Brand name injected into the AI system prompt ("…medarbetare för X"). */
   brandName: string;
 
+  /** Primary language for customer-facing output (AI replies, greeting,
+   *  signature, autoresponder). 'sv' = Swedish, 'en' = English. */
+  language: 'sv' | 'en';
+
   /** Generic support sign-off name, e.g. "Doldadress Kundtjänst". */
   supportName: string;
 
