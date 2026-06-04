@@ -55,6 +55,12 @@ export async function sendConfirmationEmail(opts: {
   originalSubject: string;
 }): Promise<void> {
   try {
+    // Some products (e.g. Serus) don't want an automatic acknowledgement
+    // at all — bail before doing any work.
+    if (!product.sendConfirmation) {
+      console.log('[Confirmation] Autoresponder disabled for this product — skipping');
+      return;
+    }
     // Don't autoreply to no-reply@/postmaster@/mailer-daemon@ etc. —
     // these either bounce immediately or generate noise notifications
     // that come back into our own inbox.
