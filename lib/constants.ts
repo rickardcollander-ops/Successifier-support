@@ -18,7 +18,8 @@ export const AGENTS: readonly string[] = product.agents;
 // "Ida Test Rosell" or "ida@doldadress.se" still resolves to Ida's signature.
 export const AGENT_SIGNATURES: Record<string, string> = product.agentSignatures;
 
-const DEFAULT_SIGNATURE = `Vänliga hälsningar,\n${product.supportName}`;
+const SIGNOFF_GREETING = product.language === 'en' ? 'Best regards,' : 'Vänliga hälsningar,';
+const DEFAULT_SIGNATURE = `${SIGNOFF_GREETING}\n${product.supportName}`;
 
 export function signatureFor(nameOrEmail: string | null | undefined): string {
   if (!nameOrEmail) return DEFAULT_SIGNATURE;

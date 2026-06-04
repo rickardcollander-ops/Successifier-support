@@ -7,7 +7,9 @@ import { product } from '@/lib/products';
 // doesn't read like a marketing blast.
 function buildConfirmationEmail(originalSubject: string) {
   const cleanSubject = originalSubject.replace(/^(Re|Sv|Fwd|Fw):\s*/i, '').trim();
-  const subject = cleanSubject ? `Re: ${cleanSubject}` : 'Vi har tagit emot ditt mejl';
+  const subject = cleanSubject
+    ? `Re: ${cleanSubject}`
+    : (product.language === 'en' ? 'We have received your email' : 'Vi har tagit emot ditt mejl');
   const { greeting, bodyLines, signoff } = product.confirmation;
   const body = [
     greeting,
