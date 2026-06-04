@@ -59,12 +59,24 @@ export interface TicketContext {
   clerk?: {
     userId?: string;
     name?: string | null;
+    username?: string | null;
+    primaryEmail?: string | null;
+    emailVerified?: boolean;
+    emails?: Array<{ email: string; verified: boolean; primary: boolean }>;
+    phone?: string | null;
+    phoneVerified?: boolean;
     createdAt?: number | null;
     lastSignInAt?: number | null;
-    emailVerified?: boolean;
+    lastActiveAt?: number | null;
+    passwordEnabled?: boolean;
+    twoFactorEnabled?: boolean;
+    socialAccounts?: string[];
     banned?: boolean;
     locked?: boolean;
+    lockoutExpiresInSeconds?: number | null;
     plan?: string | null;
+    metadata?: Record<string, unknown> | null;
+    organizations?: Array<{ name: string; role: string }>;
   };
   attachments?: Array<{
     filename: string;

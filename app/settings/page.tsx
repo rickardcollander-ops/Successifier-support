@@ -464,7 +464,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Affected by closed-reply bug (diagnostic) */}
+      {/* Affected by closed-reply bug (diagnostic) — Doldadress-specific cleanup */}
+      {product.showAffectedCustomersTool && (
       <div className="mb-8">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Drabbade kunder (stängd-ärende-buggen)</h2>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
@@ -614,6 +615,7 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+      )}
 
       {/* Blocked senders */}
       <div className="mb-8">

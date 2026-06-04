@@ -5,6 +5,7 @@ import { Mail, ChevronDown, Search, X, Loader2, Trash2, AlertOctagon, UserCircle
 import type { Ticket } from '@/lib/types';
 import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 import { AGENTS, statusLabelSv, agentColor } from '@/lib/constants';
+import { product } from '@/lib/products';
 
 // Three-level "traffic light" priority used to rank customers at a glance.
 // We keep the existing four DB values working but expose only the three
@@ -980,7 +981,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-2">Klicka för detaljer</p>
                 </div>
               )}
-              {(ticket.contextData?.billecta || customerHistory?.billecta || hasBillectaIntegration) && (() => {
+              {product.integrations.includes('billecta') && (ticket.contextData?.billecta || customerHistory?.billecta || hasBillectaIntegration) && (() => {
                 const bc = ticket.contextData?.billecta;
                 const hb = customerHistory?.billecta;
                 const invoices = bc?.invoices || hb?.invoicesPreview || [];
@@ -1078,12 +1079,27 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     )}
                   </div>
                   <div className="space-y-1 text-xs text-sky-800 dark:text-sky-200">
-                    <p>👤 Konto finns{ticket.contextData.clerk.emailVerified ? ' · verifierad' : ' · ej verifierad'}</p>
+                    <p>👤 Konto finns{ticket.contextData.clerk.emailVerified ? ' · e-post verifierad' : ' · e-post EJ verifierad'}</p>
+                    {(() => {
+                      const c = ticket.contextData.clerk;
+                      const methods = [
+                        ...(c.passwordEnabled ? ['lösenord'] : []),
+                        ...((c.socialAccounts as string[] | undefined) || []),
+                      ];
+                      return methods.length > 0 ? <p>🔓 Inloggning: {methods.join(', ')}</p> : null;
+                    })()}
+                    <p>🛡️ 2FA: {ticket.contextData.clerk.twoFactorEnabled ? 'på' : 'av'}</p>
+                    {ticket.contextData.clerk.phone && (
+                      <p>📱 {ticket.contextData.clerk.phone}{ticket.contextData.clerk.phoneVerified ? '' : ' (ej verifierad)'}</p>
+                    )}
                     {ticket.contextData.clerk.createdAt && (
                       <p>📅 Skapat {new Date(ticket.contextData.clerk.createdAt).toLocaleDateString('sv-SE')}</p>
                     )}
                     {ticket.contextData.clerk.lastSignInAt && (
                       <p>🔑 Senaste inloggning {new Date(ticket.contextData.clerk.lastSignInAt).toLocaleDateString('sv-SE')}</p>
+                    )}
+                    {ticket.contextData.clerk.organizations && ticket.contextData.clerk.organizations.length > 0 && (
+                      <p>🏢 {ticket.contextData.clerk.organizations.map((o: any) => o.name + (o.role ? ` (${o.role})` : '')).join(', ')}</p>
                     )}
                     {(ticket.contextData.clerk.banned || ticket.contextData.clerk.locked) && (
                       <p className="text-red-600 dark:text-red-400">⚠️ {ticket.contextData.clerk.banned ? 'Bannat' : 'Låst'} konto</p>
@@ -1290,7 +1306,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
       </div>
 
       {/* Billecta Search Modal */}
-      {billectaModalOpen && (
+      {product.integrations.includes('billecta') && billectaModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setBillectaModalOpen(false)}>
           <div
             className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col mx-4"
