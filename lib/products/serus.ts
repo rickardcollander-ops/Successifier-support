@@ -18,6 +18,9 @@ export const serus: ProductConfig = {
   apiBaseDomain: 'serus.ai',
   integrations: ['stripe', 'clerk'],
   showAffectedCustomersTool: false,
+  // Serus vill inte skicka något automatiskt bekräftelsemail till kunden
+  // när ett nytt ärende öppnas.
+  sendConfirmation: false,
   allowedDomains: ['serus.ai'],
   agents: [], // TODO: add Serus agents (must match how they appear in Google)
   agentSignatures: {

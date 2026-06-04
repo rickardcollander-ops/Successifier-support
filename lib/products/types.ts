@@ -61,6 +61,13 @@ export interface ProductConfig {
   /** Per-agent avatar/label colors. */
   agentColors: Record<string, AgentColor>;
 
+  /**
+   * Whether to send the "we received your email" autoresponder when a
+   * brand-new ticket is opened. Off for products that don't want an
+   * automatic acknowledgement (e.g. Serus).
+   */
+  sendConfirmation: boolean;
+
   /** Copy for the "we received your email" autoresponder. */
   confirmation: {
     /** Greeting line, e.g. "Hej,". */
