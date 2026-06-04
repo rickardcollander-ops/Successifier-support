@@ -42,6 +42,13 @@ export interface ProductConfig {
   /** Integration types offered in Settings for this product (cards shown). */
   integrations: string[];
 
+  /**
+   * Show the "Drabbade kunder (stängd-ärende-buggen)" cleanup tool in Settings.
+   * This is a Doldadress-specific diagnostic for a historical bug; off for
+   * newer products that never had it.
+   */
+  showAffectedCustomersTool: boolean;
+
   /** Domains (besides superadmins) allowed to sign in. */
   allowedDomains: string[];
 

@@ -5,6 +5,7 @@ import { Mail, ChevronDown, Search, X, Loader2, Trash2, AlertOctagon, UserCircle
 import type { Ticket } from '@/lib/types';
 import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 import { AGENTS, statusLabelSv, agentColor } from '@/lib/constants';
+import { product } from '@/lib/products';
 
 // Three-level "traffic light" priority used to rank customers at a glance.
 // We keep the existing four DB values working but expose only the three
@@ -980,7 +981,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-2">Klicka för detaljer</p>
                 </div>
               )}
-              {(ticket.contextData?.billecta || customerHistory?.billecta || hasBillectaIntegration) && (() => {
+              {product.integrations.includes('billecta') && (ticket.contextData?.billecta || customerHistory?.billecta || hasBillectaIntegration) && (() => {
                 const bc = ticket.contextData?.billecta;
                 const hb = customerHistory?.billecta;
                 const invoices = bc?.invoices || hb?.invoicesPreview || [];
@@ -1305,7 +1306,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
       </div>
 
       {/* Billecta Search Modal */}
-      {billectaModalOpen && (
+      {product.integrations.includes('billecta') && billectaModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setBillectaModalOpen(false)}>
           <div
             className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col mx-4"
