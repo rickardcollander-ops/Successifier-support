@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import TicketList from '@/components/TicketList';
 import TicketDetail from '@/components/TicketDetail';
+import { t } from '@/lib/i18n';
 import type { Ticket } from '@/lib/types';
 import { product } from '@/lib/products';
 
@@ -58,21 +59,21 @@ export default function TicketsPage() {
 
   const reopenAffectedTickets = async () => {
     if (reopeningAffected) return;
-    if (!confirm('Återöppna alla ärenden där en kund svarade efter att ärendet markerats som löst/skickat? De flyttas tillbaka till Öppna så ni kan följa upp.')) return;
+    if (!confirm(t('Återöppna alla ärenden där en kund svarade efter att ärendet markerats som löst/skickat? De flyttas tillbaka till Öppna så ni kan följa upp.'))) return;
     setReopeningAffected(true);
     setReopenResult(null);
     try {
       const res = await fetch('/api/admin/reopen-affected', { method: 'POST' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setReopenResult(`Fel: ${err.error || res.status}`);
+        setReopenResult(`${t('Fel:')} ${err.error || res.status}`);
         return;
       }
       const data = await res.json();
-      setReopenResult(`Återöppnade ${data.reopened} ärenden — finns nu i Öppna.`);
+      setReopenResult(`${t('Återöppnade')} ${data.reopened} ${t('ärenden — finns nu i Öppna.')}`);
       await fetchTickets();
     } catch (error) {
-      setReopenResult('Nätverksfel vid återöppning');
+      setReopenResult(t('Nätverksfel vid återöppning'));
     } finally {
       setReopeningAffected(false);
     }
@@ -81,13 +82,13 @@ export default function TicketsPage() {
   const emptyCurrentFolder = async () => {
     if (emptyingFolder) return;
     const folderLabels: Record<string, string> = {
-      billecta: product.vendorFolder.label,
-      duplicate: 'Dubletter',
-      bounce: 'Studsade',
+      billecta: 'Billecta',
+      duplicate: t('Dubletter'),
+      bounce: t('Studsade'),
     };
     const label = folderLabels[activeStatus];
     if (!label) return;
-    if (!confirm(`Är du säker på att du vill tömma hela ${label}-inkorgen? Alla ärenden i mappen kommer att raderas permanent och detta kan inte ångras.`)) return;
+    if (!confirm(`${t('Är du säker på att du vill tömma hela')} ${label}${t('-inkorgen? Alla ärenden i mappen kommer att raderas permanent och detta kan inte ångras.')}`)) return;
     setEmptyingFolder(true);
     try {
       const res = await fetch('/api/tickets/bulk-delete', {
@@ -97,13 +98,13 @@ export default function TicketsPage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(`Fel vid tömning: ${err.error || res.status}`);
+        alert(`${t('Fel vid tömning:')} ${err.error || res.status}`);
         return;
       }
       if (selectedTicket) setSelectedTicket(null);
       await fetchTickets();
     } catch (error) {
-      alert('Nätverksfel vid tömning av mapp');
+      alert(t('Nätverksfel vid tömning av mapp'));
     } finally {
       setEmptyingFolder(false);
     }
@@ -111,21 +112,21 @@ export default function TicketsPage() {
 
   const runDedupeExisting = async () => {
     if (dedupeRunning) return;
-    if (!confirm('Scanna igenom alla ärenden och flytta dubletter (samma avsändare + ämne inom 10 min) till fliken Dubletter?')) return;
+    if (!confirm(t('Scanna igenom alla ärenden och flytta dubletter (samma avsändare + ämne inom 10 min) till fliken Dubletter?'))) return;
     setDedupeRunning(true);
     setDedupeResult(null);
     try {
       const res = await fetch('/api/admin/dedupe-existing', { method: 'POST' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setDedupeResult(`Fel: ${err.error || res.status}`);
+        setDedupeResult(`${t('Fel:')} ${err.error || res.status}`);
         return;
       }
       const data = await res.json();
-      setDedupeResult(`Flyttade ${data.markedAsDuplicate} ärenden i ${data.groups} grupper till Dubletter.`);
+      setDedupeResult(`${t('Flyttade')} ${data.markedAsDuplicate} ${t('ärenden i')} ${data.groups} ${t('grupper till Dubletter.')}`);
       await fetchTickets();
     } catch (error) {
-      setDedupeResult('Nätverksfel vid rensning');
+      setDedupeResult(t('Nätverksfel vid rensning'));
     } finally {
       setDedupeRunning(false);
     }
@@ -495,7 +496,7 @@ export default function TicketsPage() {
       return { ok: false, error: data?.error || `HTTP ${res.status}` };
     } catch (error: any) {
       console.error('Error sending response:', error);
-      return { ok: false, error: error?.message || 'Nätverksfel' };
+      return { ok: false, error: error?.message || t('Nätverksfel') };
     }
   };
 
@@ -539,7 +540,7 @@ export default function TicketsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-600 dark:text-slate-400">Laddar ärenden…</div>
+        <div className="text-slate-600 dark:text-slate-400">{t('Laddar ärenden…')}</div>
       </div>
     );
   }
@@ -670,16 +671,16 @@ export default function TicketsPage() {
   };
 
   const tabs = [
-    { id: 'new', label: 'Nya', count: statusCounts.new },
-    { id: 'in_progress', label: 'Öppna', count: statusCounts.in_progress },
-    { id: 'review', label: 'Granskning', count: statusCounts.review },
-    { id: 'sent', label: 'Skickade', count: statusCounts.sent },
-    { id: 'closed', label: 'Stängda', count: statusCounts.closed },
-    { id: 'all', label: 'Alla', count: statusCounts.all },
-    { id: 'billecta', label: product.vendorFolder.label, count: statusCounts.billecta },
-    { id: 'bounce', label: 'Studsade', count: statusCounts.bounce },
-    { id: 'duplicate', label: 'Dubletter', count: statusCounts.duplicate },
-    { id: 'archived', label: 'Arkiverade', count: archivedTickets.length || '...' },
+    { id: 'new', label: t('Nya'), count: statusCounts.new },
+    { id: 'in_progress', label: t('Öppna'), count: statusCounts.in_progress },
+    { id: 'review', label: t('Granskning'), count: statusCounts.review },
+    { id: 'sent', label: t('Skickade'), count: statusCounts.sent },
+    { id: 'closed', label: t('Stängda'), count: statusCounts.closed },
+    { id: 'all', label: t('Alla'), count: statusCounts.all },
+    { id: 'billecta', label: 'Billecta', count: statusCounts.billecta },
+    { id: 'bounce', label: t('Studsade'), count: statusCounts.bounce },
+    { id: 'duplicate', label: t('Dubletter'), count: statusCounts.duplicate },
+    { id: 'archived', label: t('Arkiverade'), count: archivedTickets.length || '...' },
   ];
 
   return (
@@ -688,7 +689,7 @@ export default function TicketsPage() {
       <div className="mb-3 flex items-center gap-3">
         <input
           type="text"
-          placeholder="Sök ärenden (ämne, email, namn, meddelande)..."
+          placeholder={t('Sök ärenden (ämne, email, namn, meddelande)...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="flex-1 px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
@@ -698,16 +699,16 @@ export default function TicketsPage() {
           onChange={(e) => setSortBy(e.target.value as 'activity' | 'received' | 'priority' | 'status' | 'email')}
           className="px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
         >
-          <option value="activity">Sortera: Senaste aktivitet</option>
-          <option value="received">Sortera: Inkommet</option>
-          <option value="priority">Sortera: Prioritet</option>
-          <option value="status">Sortera: Status</option>
-          <option value="email">Sortera: E-post</option>
+          <option value="activity">{t('Sortera: Senaste aktivitet')}</option>
+          <option value="received">{t('Sortera: Inkommet')}</option>
+          <option value="priority">{t('Sortera: Prioritet')}</option>
+          <option value="status">{t('Sortera: Status')}</option>
+          <option value="email">{t('Sortera: E-post')}</option>
         </select>
         <button
           onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
           className="px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-          title={sortOrder === 'asc' ? 'Stigande' : 'Fallande'}
+          title={sortOrder === 'asc' ? t('Stigande') : t('Fallande')}
         >
           {sortOrder === 'asc' ? '↑' : '↓'}
         </button>
@@ -744,17 +745,17 @@ export default function TicketsPage() {
           {/* Dedupe button + Email Sync Status */}
           <div className="flex items-center gap-2">
             {(activeStatus === 'billecta' || activeStatus === 'duplicate' || activeStatus === 'bounce') && (() => {
-              const folderName = activeStatus === 'billecta' ? product.vendorFolder.label
-                : activeStatus === 'duplicate' ? 'Dubletter'
-                : 'Studsade';
+              const folderName = activeStatus === 'billecta' ? 'Billecta'
+                : activeStatus === 'duplicate' ? t('Dubletter')
+                : t('Studsade');
               return (
                 <button
                   onClick={emptyCurrentFolder}
                   disabled={emptyingFolder || filteredTickets.length === 0}
                   className="text-xs px-3 py-1.5 rounded-md border border-red-300 dark:border-red-700 bg-white dark:bg-slate-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50 whitespace-nowrap"
-                  title={`Radera alla ärenden i ${folderName}-mappen`}
+                  title={`${t('Radera alla ärenden i')} ${folderName}${t('-mappen')}`}
                 >
-                  {emptyingFolder ? 'Tömmer…' : `Töm ${folderName}`}
+                  {emptyingFolder ? t('Tömmer…') : `${t('Töm')} ${folderName}`}
                 </button>
               );
             })()}
@@ -762,17 +763,17 @@ export default function TicketsPage() {
               onClick={runDedupeExisting}
               disabled={dedupeRunning}
               className="text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 whitespace-nowrap"
-              title="Scanna befintliga ärenden och flytta dubletter till fliken Dubletter"
+              title={t('Scanna befintliga ärenden och flytta dubletter till fliken Dubletter')}
             >
-              {dedupeRunning ? 'Rensar…' : 'Rensa dubletter'}
+              {dedupeRunning ? t('Rensar…') : t('Rensa dubletter')}
             </button>
             <button
               onClick={reopenAffectedTickets}
               disabled={reopeningAffected}
               className="text-xs px-3 py-1.5 rounded-md border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 disabled:opacity-50 whitespace-nowrap"
-              title="Hitta ärenden där kunden svarade efter att supporten markerat som klart, och flytta tillbaka dem till Öppna"
+              title={t('Hitta ärenden där kunden svarade efter att supporten markerat som klart, och flytta tillbaka dem till Öppna')}
             >
-              {reopeningAffected ? 'Återöppnar…' : 'Återöppna drabbade'}
+              {reopeningAffected ? t('Återöppnar…') : t('Återöppna drabbade')}
             </button>
             {(dedupeResult || reopenResult) && (
               <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
@@ -788,9 +789,9 @@ export default function TicketsPage() {
                 <span>{emailSyncStatus.error}</span>
               ) : (
                 <span>
-                  Synk: {emailSyncStatus.lastSyncAt ? emailSyncStatus.lastSyncAt.toLocaleTimeString('sv-SE') : 'inte körd'}
-                  {' '}• {emailSyncStatus.totalNewTickets} nya
-                  {' '}• {emailSyncStatus.syncedAccounts} konton
+                  {t('Synk:')} {emailSyncStatus.lastSyncAt ? emailSyncStatus.lastSyncAt.toLocaleTimeString('sv-SE') : t('inte körd')}
+                  {' '}• {emailSyncStatus.totalNewTickets} {t('nya')}
+                  {' '}• {emailSyncStatus.syncedAccounts} {t('konton')}
                 </span>
               )}
             </div>
@@ -803,7 +804,7 @@ export default function TicketsPage() {
           <div className="mb-4">
             <input
               type="text"
-              placeholder="Sök i arkiverade ärenden (ämne, e-post, namn)..."
+              placeholder={t('Sök i arkiverade ärenden (ämne, e-post, namn)...')}
               value={archivedSearch}
               onChange={(e) => setArchivedSearch(e.target.value)}
               className="w-full px-4 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]/50"
@@ -811,7 +812,7 @@ export default function TicketsPage() {
           </div>
           {loadingArchived ? (
             <div className="flex items-center justify-center h-32">
-              <div className="text-slate-500 dark:text-slate-400">Laddar arkiverade ärenden...</div>
+              <div className="text-slate-500 dark:text-slate-400">{t('Laddar arkiverade ärenden...')}</div>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">
@@ -838,7 +839,7 @@ export default function TicketsPage() {
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
-                    Välj ett arkiverat ärende för att visa detaljer
+                    {t('Välj ett arkiverat ärende för att visa detaljer')}
                   </div>
                 )}
               </div>
@@ -871,7 +872,7 @@ export default function TicketsPage() {
               />
             ) : (
               <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
-                Välj ett ärende för att visa detaljer
+                {t('Välj ett ärende för att visa detaljer')}
               </div>
             )}
           </div>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { KnowledgeBase } from '@/lib/types';
+import { t } from '@/lib/i18n';
 
 interface KnowledgeListProps {
   articles: KnowledgeBase[];
@@ -60,7 +61,7 @@ export default function KnowledgeList({
               ? 'text-[#7C5CFF] border-b-2 border-[#7C5CFF] bg-[#7C5CFF]/5'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
           }`}
-          title="Manuellt skapade artiklar från hemsida/FAQ"
+          title={t('Manuellt skapade artiklar från hemsida/FAQ')}
         >
           Manuella
           <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
@@ -80,7 +81,7 @@ export default function KnowledgeList({
               ? 'text-[#7C5CFF] border-b-2 border-[#7C5CFF] bg-[#7C5CFF]/5'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
           }`}
-          title="Automatiskt lärda från skickade mail"
+          title={t('Automatiskt lärda från skickade mail')}
         >
           Lärda från mail
           <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${

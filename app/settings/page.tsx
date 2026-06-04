@@ -6,6 +6,7 @@ import { Mail, ExternalLink, RefreshCw, CheckCircle, AlertCircle, Ban, X, AlertT
 import IntegrationCard from '@/components/IntegrationCard';
 import type { Integration } from '@/lib/types';
 import { product } from '@/lib/products';
+import { t } from '@/lib/i18n';
 
 interface BlockedSender {
   id: string;
@@ -71,7 +72,7 @@ export default function SettingsPage() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(`Kunde inte markera som hanterad: ${data?.error || res.status}`);
+        alert(`${t('Kunde inte markera som hanterad:')} ${data?.error || res.status}`);
         return;
       }
       const idSet = new Set(ticketIds);
@@ -91,7 +92,7 @@ export default function SettingsPage() {
         };
       });
     } catch {
-      alert('Nätverksfel');
+      alert(t('Nätverksfel'));
     } finally {
       setAffectedDismissing(false);
     }
@@ -105,13 +106,13 @@ export default function SettingsPage() {
 
   const deleteAffectedTicket = async (ticketId: string) => {
     if (affectedDeleting) return;
-    if (!confirm('Ta bort detta ärende? Detta kan inte ångras.')) return;
+    if (!confirm(t('Ta bort detta ärende? Detta kan inte ångras.'))) return;
     setAffectedDeleting(ticketId);
     try {
       const res = await fetch(`/api/tickets/${ticketId}/delete`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(`Kunde inte radera: ${data?.error || res.status}`);
+        alert(`${t('Kunde inte radera:')} ${data?.error || res.status}`);
         return;
       }
       // Remove the row from the local report and recompute the summary
@@ -132,7 +133,7 @@ export default function SettingsPage() {
         };
       });
     } catch (e) {
-      alert('Nätverksfel vid radering');
+      alert(t('Nätverksfel vid radering'));
     } finally {
       setAffectedDeleting(null);
     }
@@ -151,13 +152,13 @@ export default function SettingsPage() {
       const res = await fetch('/api/admin/affected-by-closed-reply-bug');
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setAffectedError(data?.error || `Fel: ${res.status}`);
+        setAffectedError(data?.error || `${t('Fel:')} ${res.status}`);
         return;
       }
       const data = await res.json();
       setAffectedReport(data);
     } catch (e: any) {
-      setAffectedError(e?.message || 'Nätverksfel');
+      setAffectedError(e?.message || t('Nätverksfel'));
     } finally {
       setAffectedLoading(false);
     }
@@ -217,21 +218,21 @@ export default function SettingsPage() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setBlockedError(data.error || `Fel: ${res.status}`);
+        setBlockedError(data.error || `${t('Fel:')} ${res.status}`);
         return;
       }
       setBlockedInput('');
       setBlockedReason('');
       await fetchBlockedSenders();
     } catch (error) {
-      setBlockedError('Nätverksfel');
+      setBlockedError(t('Nätverksfel'));
     } finally {
       setBlockedSubmitting(false);
     }
   };
 
   const removeBlockedSender = async (id: string) => {
-    if (!confirm('Ta bort denna blockering?')) return;
+    if (!confirm(t('Ta bort denna blockering?'))) return;
     try {
       await fetch(`/api/blocked-senders?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
       await fetchBlockedSenders();
@@ -384,7 +385,7 @@ export default function SettingsPage() {
 
       {/* Connected Gmail Accounts Section */}
       <div className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">E-postkonton (Gmail)</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('E-postkonton (Gmail)')}</h2>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
             <div className="flex items-start gap-3">
@@ -392,9 +393,9 @@ export default function SettingsPage() {
                 <Mail className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="font-medium text-slate-900 dark:text-slate-100">Kopplade Gmail-konton</h3>
+                <h3 className="font-medium text-slate-900 dark:text-slate-100">{t('Kopplade Gmail-konton')}</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-                  Dessa konton bevakas aktivt. Nya inkommande mail skapas automatiskt som tickets i inkorgen.
+                  {t('Dessa konton bevakas aktivt. Nya inkommande mail skapas automatiskt som tickets i inkorgen.')}
                 </p>
               </div>
             </div>
@@ -402,12 +403,12 @@ export default function SettingsPage() {
 
           {emailAccounts.length === 0 ? (
             <div className="p-6 text-center">
-              <p className="text-slate-500 dark:text-slate-400 text-sm mb-3">Inga Gmail-konton kopplade ännu.</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-3">{t('Inga Gmail-konton kopplade ännu.')}</p>
               <a
                 href="/settings/email-accounts"
                 className="inline-flex items-center gap-2 text-sm font-medium text-[#7C5CFF] hover:text-[#9F7BFF] transition-colors"
               >
-                Lägg till konto <ExternalLink className="w-3.5 h-3.5" />
+                {t('Lägg till konto')} <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
           ) : (
@@ -422,22 +423,22 @@ export default function SettingsPage() {
                       <p className="font-medium text-slate-900 dark:text-slate-100 text-sm">{account.email}</p>
                       {account.user?.name && (
                         <p className="text-xs text-slate-500 dark:text-slate-400">
-                          Kopplat av {account.user.name}
+                          {t('Kopplat av')} {account.user.name}
                         </p>
                       )}
                       <div className="flex items-center gap-2 mt-0.5">
                         {account.isActive ? (
                           <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                            <CheckCircle className="w-3 h-3" /> Aktiv — synkas till inkorgen
+                            <CheckCircle className="w-3 h-3" /> {t('Aktiv — synkas till inkorgen')}
                           </span>
                         ) : (
                           <span className="flex items-center gap-1 text-xs text-slate-500">
-                            <AlertCircle className="w-3 h-3" /> Inaktiv
+                            <AlertCircle className="w-3 h-3" /> {t('Inaktiv')}
                           </span>
                         )}
                         {account.lastSyncAt && (
                           <span className="text-xs text-slate-400" suppressHydrationWarning>
-                            · Senast synkad {new Date(account.lastSyncAt).toLocaleString('sv-SE')}
+                            · {t('Senast synkad')} {new Date(account.lastSyncAt).toLocaleString('sv-SE')}
                           </span>
                         )}
                       </div>
@@ -451,13 +452,13 @@ export default function SettingsPage() {
           <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30">
             <div className="flex items-center justify-between">
               <div className="text-xs text-slate-500 dark:text-slate-400">
-                <strong>Vad styr detta?</strong> Varje kopplat konto bevakas för nya mail. När ett mail kommer in skapas det som ett ärende i tickets-vyn med AI-genererat svar.
+                <strong>{t('Vad styr detta?')}</strong> {t('Varje kopplat konto bevakas för nya mail. När ett mail kommer in skapas det som ett ärende i tickets-vyn med AI-genererat svar.')}
               </div>
               <a
                 href="/settings/email-accounts"
                 className="flex items-center gap-1.5 text-sm font-medium text-[#7C5CFF] hover:text-[#9F7BFF] transition-colors whitespace-nowrap ml-4"
               >
-                Hantera <ExternalLink className="w-3.5 h-3.5" />
+                {t('Hantera')} <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
           </div>
@@ -467,7 +468,7 @@ export default function SettingsPage() {
       {/* Affected by closed-reply bug (diagnostic) — Doldadress-specific cleanup */}
       {product.showAffectedCustomersTool && (
       <div className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Drabbade kunder (stängd-ärende-buggen)</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('Drabbade kunder (stängd-ärende-buggen)')}</h2>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
             <div className="flex items-start gap-3">
@@ -475,9 +476,9 @@ export default function SettingsPage() {
                 <AlertTriangle className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1">
-                <h3 className="font-medium text-slate-900 dark:text-slate-100">Hitta kunder vars svar hamnade i Stängda</h3>
+                <h3 className="font-medium text-slate-900 dark:text-slate-100">{t('Hitta kunder vars svar hamnade i Stängda')}</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-                  Listar stängda/skickade ärenden där en kund replierat efteråt. Dessa ärenden bör eventuellt öppnas igen och besvaras. Markera som hanterade för att rensa bort dem ur listan när de är åtgärdade.
+                  {t('Listar stängda/skickade ärenden där en kund replierat efteråt. Dessa ärenden bör eventuellt öppnas igen och besvaras. Markera som hanterade för att rensa bort dem ur listan när de är åtgärdade.')}
                 </p>
               </div>
               <button
@@ -485,7 +486,7 @@ export default function SettingsPage() {
                 disabled={affectedLoading}
                 className="text-sm px-4 py-2 rounded-md bg-[#7C5CFF] text-white hover:bg-[#6B4FE0] disabled:opacity-50 whitespace-nowrap"
               >
-                {affectedLoading ? 'Söker…' : affectedReport ? 'Sök om' : 'Visa drabbade'}
+                {affectedLoading ? t('Söker…') : affectedReport ? t('Sök om') : t('Visa drabbade')}
               </button>
             </div>
           </div>
@@ -498,28 +499,28 @@ export default function SettingsPage() {
             <>
               <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3 flex-wrap">
                 <div className="text-sm text-slate-700 dark:text-slate-300">
-                  <strong>{affectedReport.count}</strong> ärenden ·{' '}
-                  <strong>{affectedReport.uniqueCustomerCount}</strong> unika kunder ·{' '}
-                  <strong>{affectedReport.totalUnseenReplies}</strong> följdmail totalt
+                  <strong>{affectedReport.count}</strong> {t('ärenden')} ·{' '}
+                  <strong>{affectedReport.uniqueCustomerCount}</strong> {t('unika kunder')} ·{' '}
+                  <strong>{affectedReport.totalUnseenReplies}</strong> {t('följdmail totalt')}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={downloadAffectedCsv}
                     className="text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 whitespace-nowrap"
                   >
-                    Ladda ner CSV
+                    {t('Ladda ner CSV')}
                   </button>
                   {affectedReport.tickets.length > 0 && (
                     <button
                       onClick={() => {
-                        if (confirm(`Markera alla ${affectedReport.tickets.length} ärenden som hanterade? De försvinner ur listan men raderas inte.`)) {
+                        if (confirm(`${t('Markera alla')} ${affectedReport.tickets.length} ${t('ärenden som hanterade? De försvinner ur listan men raderas inte.')}`)) {
                           dismissAffected(affectedReport.tickets.map((t) => t.id));
                         }
                       }}
                       disabled={affectedDismissing}
                       className="text-xs px-3 py-1.5 rounded-md border border-green-300 dark:border-green-700 bg-white dark:bg-slate-800 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 disabled:opacity-50 whitespace-nowrap"
                     >
-                      {affectedDismissing ? 'Rensar…' : 'Markera alla som hanterade'}
+                      {affectedDismissing ? t('Rensar…') : t('Markera alla som hanterade')}
                     </button>
                   )}
                 </div>
@@ -527,7 +528,7 @@ export default function SettingsPage() {
               {affectedReport.customerEmails.length > 0 && (
                 <div className="p-5 border-b border-slate-100 dark:border-slate-700">
                   <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">
-                    Unika e-postadresser ({affectedReport.customerEmails.length})
+                    {t('Unika e-postadresser')} ({affectedReport.customerEmails.length})
                   </p>
                   <textarea
                     readOnly
@@ -540,40 +541,40 @@ export default function SettingsPage() {
               )}
               {affectedReport.tickets.length === 0 ? (
                 <div className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
-                  Inga drabbade ärenden hittades.
+                  {t('Inga drabbade ärenden hittades.')}
                 </div>
               ) : (
                 <div className="max-h-96 overflow-y-auto">
                   <table className="w-full text-xs">
                     <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0">
                       <tr className="text-left text-slate-500 dark:text-slate-400">
-                        <th className="px-4 py-2 font-medium">Kund</th>
-                        <th className="px-4 py-2 font-medium">Ämne</th>
+                        <th className="px-4 py-2 font-medium">{t('Kund')}</th>
+                        <th className="px-4 py-2 font-medium">{t('Ämne')}</th>
                         <th className="px-4 py-2 font-medium">Status</th>
-                        <th className="px-4 py-2 font-medium text-right">Följdmail</th>
-                        <th className="px-4 py-2 font-medium">Senaste</th>
-                        <th className="px-2 py-2 font-medium w-10" aria-label="Åtgärder" />
+                        <th className="px-4 py-2 font-medium text-right">{t('Följdmail')}</th>
+                        <th className="px-4 py-2 font-medium">{t('Senaste')}</th>
+                        <th className="px-2 py-2 font-medium w-10" aria-label={t('Åtgärder')} />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                      {affectedReport.tickets.map((t) => (
+                      {affectedReport.tickets.map((row) => (
                         <tr
-                          key={t.id}
+                          key={row.id}
                           className="hover:bg-slate-50 dark:hover:bg-slate-700/40"
                         >
-                          <td className="px-4 py-2 font-mono text-slate-900 dark:text-slate-100 whitespace-nowrap">{t.customerEmail}</td>
-                          <td className="px-4 py-2 text-slate-700 dark:text-slate-300 max-w-xs truncate" title={t.subject}>{t.subject}</td>
-                          <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{t.status}</td>
-                          <td className="px-4 py-2 text-right text-slate-900 dark:text-slate-100 font-semibold">{t.repliesAfterOriginal}</td>
-                          <td className="px-4 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">{t.lastFollowupAt ?? '—'}</td>
+                          <td className="px-4 py-2 font-mono text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.customerEmail}</td>
+                          <td className="px-4 py-2 text-slate-700 dark:text-slate-300 max-w-xs truncate" title={row.subject}>{row.subject}</td>
+                          <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{row.status}</td>
+                          <td className="px-4 py-2 text-right text-slate-900 dark:text-slate-100 font-semibold">{row.repliesAfterOriginal}</td>
+                          <td className="px-4 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">{row.lastFollowupAt ?? '—'}</td>
                           <td className="px-2 py-2 text-right">
                             <div className="flex items-center justify-end gap-1">
                               <button
                                 type="button"
-                                onClick={() => openAffectedTicket(t.id)}
+                                onClick={() => openAffectedTicket(row.id)}
                                 className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:text-slate-500 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
-                                title="Öppna ärende"
-                                aria-label="Öppna ärende"
+                                title={t('Öppna ärende')}
+                                aria-label={t('Öppna ärende')}
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </button>
@@ -581,12 +582,12 @@ export default function SettingsPage() {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  dismissAffected([t.id]);
+                                  dismissAffected([row.id]);
                                 }}
                                 disabled={affectedDismissing}
                                 className="p-1.5 rounded-md text-slate-400 hover:text-green-600 hover:bg-green-50 dark:text-slate-500 dark:hover:text-green-400 dark:hover:bg-green-900/20 disabled:opacity-50 transition-colors"
-                                title="Markera som hanterad (dölj ur listan)"
-                                aria-label="Markera som hanterad"
+                                title={t('Markera som hanterad (dölj ur listan)')}
+                                aria-label={t('Markera som hanterad')}
                               >
                                 <CheckCircle className="w-3.5 h-3.5" />
                               </button>
@@ -594,12 +595,12 @@ export default function SettingsPage() {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  deleteAffectedTicket(t.id);
+                                  deleteAffectedTicket(row.id);
                                 }}
-                                disabled={affectedDeleting === t.id}
+                                disabled={affectedDeleting === row.id}
                                 className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:text-slate-500 dark:hover:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
-                                title="Ta bort ärende"
-                                aria-label="Ta bort ärende"
+                                title={t('Ta bort ärende')}
+                                aria-label={t('Ta bort ärende')}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -619,7 +620,7 @@ export default function SettingsPage() {
 
       {/* Blocked senders */}
       <div className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Blockerade avsändare</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('Blockerade avsändare')}</h2>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
             <div className="flex items-start gap-3">
@@ -627,9 +628,9 @@ export default function SettingsPage() {
                 <Ban className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="font-medium text-slate-900 dark:text-slate-100">Filtrera bort avsändare</h3>
+                <h3 className="font-medium text-slate-900 dark:text-slate-100">{t('Filtrera bort avsändare')}</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-                  Mejl från dessa adresser markeras automatiskt som lästa i Gmail och skapar inga ärenden. Ange en hel e-postadress (t.ex. <code>spam@exempel.se</code>) eller en hel domän med inledande @ (t.ex. <code>@spamdomän.se</code>).
+                  {t('Mejl från dessa adresser markeras automatiskt som lästa i Gmail och skapar inga ärenden. Ange en hel e-postadress (t.ex.')} <code>{t('spam@exempel.se')}</code>{t(') eller en hel domän med inledande @ (t.ex.')} <code>{t('@spamdomän.se')}</code>{t(').')}
                 </p>
               </div>
             </div>
@@ -639,7 +640,7 @@ export default function SettingsPage() {
               type="text"
               value={blockedInput}
               onChange={(e) => setBlockedInput(e.target.value)}
-              placeholder="email@exempel.se eller @exempel.se"
+              placeholder={t('email@exempel.se eller @exempel.se')}
               className="flex-1 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               required
             />
@@ -647,7 +648,7 @@ export default function SettingsPage() {
               type="text"
               value={blockedReason}
               onChange={(e) => setBlockedReason(e.target.value)}
-              placeholder="Anledning (valfritt)"
+              placeholder={t('Anledning (valfritt)')}
               className="flex-1 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             />
             <button
@@ -655,7 +656,7 @@ export default function SettingsPage() {
               disabled={blockedSubmitting || !blockedInput.trim()}
               className="px-4 py-2 text-sm font-medium rounded-md bg-[#7C5CFF] text-white hover:bg-[#6B4FE0] disabled:opacity-50 whitespace-nowrap"
             >
-              {blockedSubmitting ? 'Lägger till…' : 'Blockera'}
+              {blockedSubmitting ? t('Lägger till…') : t('Blockera')}
             </button>
           </form>
           {blockedError && (
@@ -665,7 +666,7 @@ export default function SettingsPage() {
           )}
           {blockedSenders.length === 0 ? (
             <div className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
-              Inga blockerade avsändare ännu.
+              {t('Inga blockerade avsändare ännu.')}
             </div>
           ) : (
             <div className="divide-y divide-slate-100 dark:divide-slate-700">
@@ -675,14 +676,14 @@ export default function SettingsPage() {
                     <p className="font-mono text-sm text-slate-900 dark:text-slate-100 truncate">{bs.pattern}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       {bs.reason ? `${bs.reason} · ` : ''}
-                      Tillagd {new Date(bs.createdAt).toLocaleDateString('sv-SE')}
-                      {bs.createdBy ? ` av ${bs.createdBy}` : ''}
+                      {t('Tillagd')} {new Date(bs.createdAt).toLocaleDateString('sv-SE')}
+                      {bs.createdBy ? `${t(' av ')}${bs.createdBy}` : ''}
                     </p>
                   </div>
                   <button
                     onClick={() => removeBlockedSender(bs.id)}
                     className="text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition-colors flex-shrink-0"
-                    title="Ta bort blockering"
+                    title={t('Ta bort blockering')}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -693,7 +694,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Integrationer</h2>
+      <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('Integrationer')}</h2>
       <div className="space-y-6">
         {showIntegration('stripe') && (
         <IntegrationCard
@@ -702,7 +703,7 @@ export default function SettingsPage() {
           description="Access customer payment history, subscriptions, and invoices"
           integration={getIntegration('stripe')}
           fields={[
-            { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk_live_...' },
+            { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk_live_… or rk_live_… (restricted key)' },
           ]}
           onSave={handleSave}
           onToggle={handleToggle}
@@ -714,7 +715,7 @@ export default function SettingsPage() {
         <IntegrationCard
           type="clerk"
           name="Clerk"
-          description="Slå upp kundens användarkonto (skapat, senaste inloggning, verifiering, plan)"
+          description={t('Slå upp kundens användarkonto (skapat, senaste inloggning, verifiering, plan)')}
           integration={getIntegration('clerk')}
           fields={[
             { key: 'secretKey', label: 'Secret Key', type: 'password', placeholder: 'sk_live_...' },
@@ -745,10 +746,10 @@ export default function SettingsPage() {
         <IntegrationCard
           type="retool"
           name="Retool"
-          description="Hämta kunddata från en Retool Workflow (per e-postadress)"
+          description={t('Hämta kunddata från en Retool Workflow (per e-postadress)')}
           integration={getIntegration('retool')}
           fields={[
-            { key: 'apiKey', label: 'Workflow API Key', type: 'password', placeholder: 'Din Retool Workflow API-nyckel (X-Workflow-Api-Key)' },
+            { key: 'apiKey', label: 'Workflow API Key', type: 'password', placeholder: t('Din Retool Workflow API-nyckel (X-Workflow-Api-Key)') },
             { key: 'workflowUrl', label: 'Workflow URL', type: 'text', placeholder: 'https://api.retool.com/v1/workflows/.../startTrigger' },
           ]}
           onSave={handleSave}

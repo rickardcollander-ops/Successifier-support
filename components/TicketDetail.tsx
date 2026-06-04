@@ -5,6 +5,7 @@ import { Mail, ChevronDown, Search, X, Loader2, Trash2, AlertOctagon, UserCircle
 import type { Ticket } from '@/lib/types';
 import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 import { AGENTS, statusLabelSv, agentColor } from '@/lib/constants';
+import { t } from '@/lib/i18n';
 import { product } from '@/lib/products';
 
 // Three-level "traffic light" priority used to rank customers at a glance.
@@ -12,9 +13,9 @@ import { product } from '@/lib/products';
 // colours support asked for. 'high' is treated the same as 'urgent' (red).
 type TrafficLight = { value: 'urgent' | 'normal' | 'low'; label: string; dot: string; ring: string };
 const PRIORITY_LIGHTS: TrafficLight[] = [
-  { value: 'urgent', label: 'Hög', dot: 'bg-red-500', ring: 'ring-red-500' },
-  { value: 'normal', label: 'Medel', dot: 'bg-yellow-400', ring: 'ring-yellow-400' },
-  { value: 'low', label: 'Låg', dot: 'bg-green-500', ring: 'ring-green-500' },
+  { value: 'urgent', label: t('Hög'), dot: 'bg-red-500', ring: 'ring-red-500' },
+  { value: 'normal', label: t('Medel'), dot: 'bg-yellow-400', ring: 'ring-yellow-400' },
+  { value: 'low', label: t('Låg'), dot: 'bg-green-500', ring: 'ring-green-500' },
 ];
 function priorityToLight(priority: string): 'urgent' | 'normal' | 'low' {
   if (priority === 'urgent' || priority === 'high') return 'urgent';
@@ -117,7 +118,7 @@ function parseEmailThread(
         .replace(/\n?\[DrabbadHanterad: [^\]]+\]/g, '')
         .trim();
       const body = isHtml(rawBody) ? htmlToText(rawBody) : rawBody;
-      return { label: 'Ursprungligt meddelande', date: null, dateRaw: null, body, isOriginal: true, isSupport: false, isComment: false };
+      return { label: t('Ursprungligt meddelande'), date: null, dateRaw: null, body, isOriginal: true, isSupport: false, isComment: false };
     }
 
     const isSupportMsg = part.startsWith('[Support-svar ');
@@ -139,7 +140,7 @@ function parseEmailThread(
     const rawBody = bodyLines.join('\n').trim();
     const body = isHtml(rawBody) ? htmlToText(rawBody) : rawBody;
     return {
-      label: isComment ? 'Intern kommentar' : isSupportMsg ? 'Svar från support' : 'Följdmail från kund',
+      label: isComment ? t('Intern kommentar') : isSupportMsg ? t('Svar från support') : t('Följdmail från kund'),
       date: dateStr,
       dateRaw,
       body,
@@ -155,7 +156,7 @@ function parseEmailThread(
     const dateRaw = sentAt ? new Date(sentAt) : null;
     const dateStr = dateRaw ? dateRaw.toLocaleString('sv-SE') : null;
     messages.push({
-      label: 'Svar från support',
+      label: t('Svar från support'),
       date: dateStr,
       dateRaw,
       body: finalResponse,
@@ -259,10 +260,10 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
       if (res.ok) {
         setBillectaSearchResults(data);
       } else {
-        setBillectaSearchResults({ error: data.error || 'Sökning misslyckades' });
+        setBillectaSearchResults({ error: data.error || t('Sökning misslyckades') });
       }
     } catch {
-      setBillectaSearchResults({ error: 'Nätverksfel vid sökning' });
+      setBillectaSearchResults({ error: t('Nätverksfel vid sökning') });
     } finally {
       setBillectaSearching(false);
     }
@@ -501,15 +502,15 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
       const fromAccount = emailAccounts.find(a => a.id === selectedFromAccount);
       setSendConfirmation({
         type: 'success',
-        message: `Mailet har skickats till ${recipientEmail}${fromAccount ? ` från ${fromAccount.email}` : ''} och lagts i skickade.`,
+        message: `${t('Mailet har skickats till')} ${recipientEmail}${fromAccount ? ` ${t('från')} ${fromAccount.email}` : ''} ${t('och lagts i skickade.')}`,
       });
       setTimeout(() => setSendConfirmation(null), 10000);
     } else {
       setSendConfirmation({
         type: 'error',
         message: result.error
-          ? `Mailet kunde inte skickas: ${result.error}`
-          : 'Mailet kunde inte skickas. Försök igen.',
+          ? `${t('Mailet kunde inte skickas:')} ${result.error}`
+          : t('Mailet kunde inte skickas. Försök igen.'),
       });
       // Leave the error visible longer so support can read it.
       setTimeout(() => setSendConfirmation(null), 20000);
@@ -555,19 +556,19 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   };
 
   const handleDelete = () => {
-    if (confirm('Är du säker på att du vill ta bort detta ärende? Detta kan inte ångras.')) {
+    if (confirm(t('Är du säker på att du vill ta bort detta ärende? Detta kan inte ångras.'))) {
       onDelete?.(ticket.id);
     }
   };
 
   const handleSpam = () => {
-    if (confirm('Markera detta ärende som spam?')) {
+    if (confirm(t('Markera detta ärende som spam?'))) {
       onSpam?.(ticket.id);
     }
   };
 
   const handleClose = () => {
-    if (confirm('Stäng detta ärende? Du kan hitta det senare under fliken "Stängda".')) {
+    if (confirm(t('Stäng detta ärende? Du kan hitta det senare under fliken "Stängda".'))) {
       handleStatusChange('closed');
     }
   };
@@ -608,12 +609,12 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   <span className="text-white text-xs">✨</span>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-[#7C5CFF] dark:text-[#9F7BFF]">AI-svar genererat</p>
+                  <p className="text-xs font-semibold text-[#7C5CFF] dark:text-[#9F7BFF]">{t('AI-svar genererat')}</p>
                 </div>
               </div>
               {ticket.aiConfidence && (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-600 dark:text-slate-400">Säkerhet:</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">{t('Säkerhet:')}</span>
                   <span className="px-2.5 py-0.5 bg-gradient-to-r from-[#7C5CFF] to-[#9F7BFF] text-white rounded-full text-xs font-bold">
                     {Math.round(ticket.aiConfidence * 100)}%
                   </span>
@@ -634,7 +635,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
           </div>
           <div className="flex items-center gap-2">
             {/* Priority traffic light — rank the customer röd/gul/grön. */}
-            <div className="flex items-center gap-1 pr-1" role="group" aria-label="Prioritet">
+            <div className="flex items-center gap-1 pr-1" role="group" aria-label={t('Prioritet')}>
               {PRIORITY_LIGHTS.map((p) => {
                 const active = priorityToLight(ticket.priority) === p.value;
                 return (
@@ -643,8 +644,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     type="button"
                     onClick={() => handlePriority(p.value)}
                     aria-pressed={active}
-                    title={`Prioritet: ${p.label}`}
-                    aria-label={`Sätt prioritet ${p.label}`}
+                    title={`${t('Prioritet:')} ${p.label}`}
+                    aria-label={`${t('Sätt prioritet')} ${p.label}`}
                     className={`w-5 h-5 rounded-full ${p.dot} transition-all ${
                       active
                         ? `ring-2 ring-offset-1 ${p.ring} ring-offset-white dark:ring-offset-slate-800`
@@ -672,9 +673,9 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                           }
                         : undefined
                     }
-                    title="Tilldela ärende"
+                    title={t('Tilldela ärende')}
                   >
-                    <option value="">Tilldela…</option>
+                    <option value="">{t('Tilldela…')}</option>
                     {AGENTS.map((agent) => (
                       <option key={agent} value={agent}>{agent}</option>
                     ))}
@@ -697,17 +698,17 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               <button
                 onClick={handleMarkResolved}
                 className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors inline-flex items-center gap-1.5"
-                title="Markera som löst och stäng"
+                title={t('Markera som löst och stäng')}
               >
                 <CheckCircle2 className="w-4 h-4" />
-                Löst
+                {t('Löst')}
               </button>
             )}
             {onSpam && (
               <button
                 onClick={handleSpam}
                 className="p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition-colors"
-                title="Markera som spam"
+                title={t('Markera som spam')}
               >
                 <AlertOctagon className="w-4 h-4" />
               </button>
@@ -716,7 +717,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               <button
                 onClick={handleDelete}
                 className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                title="Ta bort ärende"
+                title={t('Ta bort ärende')}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -734,25 +735,25 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             return (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 text-sm">
                 <Pencil className="w-4 h-4 animate-pulse flex-shrink-0" />
-                <span><strong>{firstNames(typing)}</strong> skriver just nu ett svar till kunden…</span>
+                <span><strong>{firstNames(typing)}</strong> {t('skriver just nu ett svar till kunden…')}</span>
               </div>
             );
           }
           return (
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-sm">
               <UserCircle2 className="w-4 h-4 flex-shrink-0" />
-              <span><strong>{firstNames(viewers)}</strong> tittar också på det här ärendet just nu.</span>
+              <span><strong>{firstNames(viewers)}</strong> {t('tittar också på det här ärendet just nu.')}</span>
             </div>
           );
         })()}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">E-postkonversation</h3>
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{t('E-postkonversation')}</h3>
             <button
               onClick={() => setCommentOpen((v) => !v)}
               className="px-2.5 py-1 text-xs font-medium rounded-md border border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
             >
-              + Intern kommentar
+              {t('+ Intern kommentar')}
             </button>
           </div>
           {commentOpen && (
@@ -760,17 +761,17 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               <textarea
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Skriv intern kommentar (syns inte för kunden)…"
+                placeholder={t('Skriv intern kommentar (syns inte för kunden)…')}
                 className="w-full h-24 text-sm p-2 rounded border border-amber-200 dark:border-amber-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
               <div className="flex justify-end gap-2 mt-2">
-                <button onClick={() => { setCommentOpen(false); setCommentText(''); }} className="px-3 py-1 text-xs text-slate-600 dark:text-slate-400 hover:underline">Avbryt</button>
+                <button onClick={() => { setCommentOpen(false); setCommentText(''); }} className="px-3 py-1 text-xs text-slate-600 dark:text-slate-400 hover:underline">{t('Avbryt')}</button>
                 <button
                   onClick={handleAddComment}
                   disabled={!commentText.trim() || commentSaving}
                   className="px-3 py-1 text-xs font-medium rounded-md bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50"
                 >
-                  {commentSaving ? 'Sparar…' : 'Spara kommentar'}
+                  {commentSaving ? t('Sparar…') : t('Spara kommentar')}
                 </button>
               </div>
             </div>
@@ -814,7 +815,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   </span>
                 </div>
                 <div className="text-sm whitespace-pre-wrap text-slate-900 dark:text-slate-100">
-                  {msg.body || <span className="italic text-slate-400">(tomt)</span>}
+                  {msg.body || <span className="italic text-slate-400">{t('(tomt)')}</span>}
                 </div>
               </div>
             ))}
@@ -822,11 +823,11 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
           {ticket.contextData?.attachments && ticket.contextData.attachments.length > 0 && (
             <div className="mt-3">
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
-                Bifogade filer ({ticket.contextData.attachments.length})
+                {t('Bifogade filer')} ({ticket.contextData.attachments.length})
               </p>
               {attachmentsLoading && attachments.length === 0 ? (
                 <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Laddar bifogade filer…
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('Laddar bifogade filer…')}
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-3">
@@ -839,7 +840,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                             type="button"
                             onClick={() => att.dataUrl && setLightboxImage({ src: att.dataUrl, alt: att.filename })}
                             className="block focus:outline-none focus:ring-2 focus:ring-[#7C5CFF] rounded-lg"
-                            aria-label={`Öppna bild ${att.filename}`}
+                            aria-label={`${t('Öppna bild')} ${att.filename}`}
                           >
                             <img
                               src={att.dataUrl}
@@ -858,7 +859,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                         href={att.dataUrl}
                         download={att.filename}
                         className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 hover:border-[#7C5CFF]/40 hover:shadow-sm transition-all max-w-[240px]"
-                        title={`Ladda ner ${att.filename}`}
+                        title={`${t('Ladda ner')} ${att.filename}`}
                       >
                         <FileText className="w-5 h-5 text-slate-400 flex-shrink-0" />
                         <span className="text-xs text-slate-700 dark:text-slate-300 truncate flex-1">{att.filename}</span>
@@ -873,34 +874,34 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
         </div>
 
         <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
-          <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">Kundhistorik (e-postbaserad)</h3>
+          <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">{t('Kundhistorik (e-postbaserad)')}</h3>
 
           {isHistoryLoading ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Laddar kundhistorik...</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t('Laddar kundhistorik...')}</p>
           ) : !customerHistory ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Ingen kundhistorik hittades.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t('Ingen kundhistorik hittades.')}</p>
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                 <div className="bg-white dark:bg-slate-800 rounded-md p-3 border border-slate-200 dark:border-slate-700">
-                  <p className="text-slate-500 dark:text-slate-400">Kund</p>
+                  <p className="text-slate-500 dark:text-slate-400">{t('Kund')}</p>
                   <p className="font-medium text-slate-900 dark:text-slate-100">
                     {customerHistory.customer.name || customerHistory.customer.email}
                   </p>
                 </div>
                 <div className="bg-white dark:bg-slate-800 rounded-md p-3 border border-slate-200 dark:border-slate-700">
-                  <p className="text-slate-500 dark:text-slate-400">Totalt antal ärenden</p>
+                  <p className="text-slate-500 dark:text-slate-400">{t('Totalt antal ärenden')}</p>
                   <p className="font-medium text-slate-900 dark:text-slate-100">{customerHistory.customer.totalTickets}</p>
                 </div>
                 <div className="bg-white dark:bg-slate-800 rounded-md p-3 border border-slate-200 dark:border-slate-700">
-                  <p className="text-slate-500 dark:text-slate-400">Öppna ärenden</p>
+                  <p className="text-slate-500 dark:text-slate-400">{t('Öppna ärenden')}</p>
                   <p className="font-medium text-slate-900 dark:text-slate-100">{customerHistory.customer.openTickets}</p>
                 </div>
               </div>
 
               {customerHistory.previousTickets.length > 0 && (
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Tidigare ärenden ({customerHistory.previousTickets.length})</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">{t('Tidigare ärenden')} ({customerHistory.previousTickets.length})</p>
                   <div className="space-y-1">
                     {customerHistory.previousTickets.map((prevTicket) => (
                       <div
@@ -923,9 +924,9 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               )}
 
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Liknande ärenden</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">{t('Liknande ärenden')}</p>
                 {customerHistory.similarIssues.length === 0 ? (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Inga liknande ärenden hittades.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{t('Inga liknande ärenden hittades.')}</p>
                 ) : (
                   <div className="space-y-1">
                     {customerHistory.similarIssues.map((issue) => (
@@ -950,7 +951,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
 
         {(ticket.contextData || hasBillectaIntegration) && (
           <div>
-            <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">Kundinformation</h3>
+            <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">{t('Kundinformation')}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {ticket.contextData?.stripe && (
                 <div
@@ -969,16 +970,16 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     const closedDate = canceledSub?.canceledAt || canceledSub?.endedAt;
                     return (
                       <div className="mb-2 px-2 py-1 bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700 rounded text-xs font-semibold text-red-800 dark:text-red-300">
-                        Konto avslutat{closedDate ? ` ${new Date(closedDate * 1000).toLocaleDateString('sv-SE')}` : ''}
+                        {t('Konto avslutat')}{closedDate ? ` ${new Date(closedDate * 1000).toLocaleDateString('sv-SE')}` : ''}
                       </div>
                     );
                   })()}
                   <div className="space-y-1 text-xs text-blue-800 dark:text-blue-200">
-                    <p>💳 {ticket.contextData.stripe.subscriptions?.length || 0} prenumerationer</p>
-                    <p>📄 {ticket.contextData.stripe.invoices?.length || 0} fakturor</p>
-                    <p>💰 {ticket.contextData.stripe.charges?.length || 0} betalningar</p>
+                    <p>💳 {ticket.contextData.stripe.subscriptions?.length || 0} {t('prenumerationer')}</p>
+                    <p>📄 {ticket.contextData.stripe.invoices?.length || 0} {t('fakturor')}</p>
+                    <p>💰 {ticket.contextData.stripe.charges?.length || 0} {t('betalningar')}</p>
                   </div>
-                  <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-2">Klicka för detaljer</p>
+                  <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-2">{t('Klicka för detaljer')}</p>
                 </div>
               )}
               {product.integrations.includes('billecta') && (ticket.contextData?.billecta || customerHistory?.billecta || hasBillectaIntegration) && (() => {
@@ -1008,24 +1009,24 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     )}
                     {debtorStatus && (
                       <div className={`mb-1 px-2 py-0.5 rounded text-xs font-semibold inline-block ${debtorStatus === 'Active' ? 'bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100' : 'bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
-                        {debtorStatus === 'Active' ? 'Aktivt konto' : `Konto: ${debtorStatus}`}
+                        {debtorStatus === 'Active' ? t('Aktivt konto') : `${t('Konto:')} ${debtorStatus}`}
                         {bc?.debtorClosedDate ? ` (${new Date(bc.debtorClosedDate).toLocaleDateString('sv-SE')})` : ''}
                       </div>
                     )}
                     {hasAnyData ? (
                       <div className="flex gap-4 text-xs text-green-800 dark:text-green-200">
-                        <span>📋 {totalInvoices} fakturor</span>
+                        <span>📋 {totalInvoices} {t('fakturor')}</span>
                         {unpaidCount > 0 && (
-                          <span className="text-amber-700 dark:text-amber-400">⚠ {unpaidCount} obetalda</span>
+                          <span className="text-amber-700 dark:text-amber-400">⚠ {unpaidCount} {t('obetalda')}</span>
                         )}
                       </div>
                     ) : (
                       <div className="text-xs text-green-800 dark:text-green-200">
-                        <p>Ingen automatisk träff på kundens e-post.</p>
+                        <p>{t('Ingen automatisk träff på kundens e-post.')}</p>
                       </div>
                     )}
                     <p className="text-[10px] text-green-600 dark:text-green-400 mt-2">
-                      {hasAnyData ? 'Klicka för fakturor & sök' : 'Klicka för att söka manuellt'}
+                      {hasAnyData ? t('Klicka för fakturor & sök') : t('Klicka för att söka manuellt')}
                     </p>
                   </div>
                 );
@@ -1040,13 +1041,13 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                       <span className="text-white text-xs font-bold">R</span>
                     </div>
                     <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">Resend</p>
-                    <span className="text-[9px] text-purple-600 dark:text-purple-400 ml-auto">senaste 7d</span>
+                    <span className="text-[9px] text-purple-600 dark:text-purple-400 ml-auto">{t('senaste 7d')}</span>
                   </div>
                   <div className="space-y-1 text-xs text-purple-800 dark:text-purple-200">
-                    <p>📧 {ticket.contextData.resend.emailsSent || 0} skickade mail</p>
-                    <p>📬 {ticket.contextData.resend.recentEmails?.length || 0} senaste mail</p>
+                    <p>📧 {ticket.contextData.resend.emailsSent || 0} {t('skickade mail')}</p>
+                    <p>📬 {ticket.contextData.resend.recentEmails?.length || 0} {t('senaste mail')}</p>
                   </div>
-                  <p className="text-[10px] text-purple-600 dark:text-purple-400 mt-2">Klicka för detaljer</p>
+                  <p className="text-[10px] text-purple-600 dark:text-purple-400 mt-2">{t('Klicka för detaljer')}</p>
                 </div>
               )}
               {ticket.contextData?.retool && (
@@ -1062,9 +1063,9 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     <ChevronDown className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 ml-auto" />
                   </div>
                   <div className="space-y-1 text-xs text-orange-800 dark:text-orange-200">
-                    <p>🔧 Kunddata tillgänglig</p>
+                    <p>🔧 {t('Kunddata tillgänglig')}</p>
                   </div>
-                  <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-2">Klicka för detaljer</p>
+                  <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-2">{t('Klicka för detaljer')}</p>
                 </div>
               )}
               {ticket.contextData?.clerk && (
@@ -1079,30 +1080,30 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     )}
                   </div>
                   <div className="space-y-1 text-xs text-sky-800 dark:text-sky-200">
-                    <p>👤 Konto finns{ticket.contextData.clerk.emailVerified ? ' · e-post verifierad' : ' · e-post EJ verifierad'}</p>
+                    <p>👤 {t('Konto finns')}{ticket.contextData.clerk.emailVerified ? ` · ${t('e-post verifierad')}` : ` · ${t('e-post EJ verifierad')}`}</p>
                     {(() => {
                       const c = ticket.contextData.clerk;
                       const methods = [
-                        ...(c.passwordEnabled ? ['lösenord'] : []),
+                        ...(c.passwordEnabled ? [t('lösenord')] : []),
                         ...((c.socialAccounts as string[] | undefined) || []),
                       ];
-                      return methods.length > 0 ? <p>🔓 Inloggning: {methods.join(', ')}</p> : null;
+                      return methods.length > 0 ? <p>🔓 {t('Inloggning:')} {methods.join(', ')}</p> : null;
                     })()}
-                    <p>🛡️ 2FA: {ticket.contextData.clerk.twoFactorEnabled ? 'på' : 'av'}</p>
+                    <p>🛡️ 2FA: {ticket.contextData.clerk.twoFactorEnabled ? t('på') : t('av')}</p>
                     {ticket.contextData.clerk.phone && (
-                      <p>📱 {ticket.contextData.clerk.phone}{ticket.contextData.clerk.phoneVerified ? '' : ' (ej verifierad)'}</p>
+                      <p>📱 {ticket.contextData.clerk.phone}{ticket.contextData.clerk.phoneVerified ? '' : ` (${t('ej verifierad')})`}</p>
                     )}
                     {ticket.contextData.clerk.createdAt && (
-                      <p>📅 Skapat {new Date(ticket.contextData.clerk.createdAt).toLocaleDateString('sv-SE')}</p>
+                      <p>📅 {t('Skapat')} {new Date(ticket.contextData.clerk.createdAt).toLocaleDateString('sv-SE')}</p>
                     )}
                     {ticket.contextData.clerk.lastSignInAt && (
-                      <p>🔑 Senaste inloggning {new Date(ticket.contextData.clerk.lastSignInAt).toLocaleDateString('sv-SE')}</p>
+                      <p>🔑 {t('Senaste inloggning')} {new Date(ticket.contextData.clerk.lastSignInAt).toLocaleDateString('sv-SE')}</p>
                     )}
                     {ticket.contextData.clerk.organizations && ticket.contextData.clerk.organizations.length > 0 && (
                       <p>🏢 {ticket.contextData.clerk.organizations.map((o: any) => o.name + (o.role ? ` (${o.role})` : '')).join(', ')}</p>
                     )}
                     {(ticket.contextData.clerk.banned || ticket.contextData.clerk.locked) && (
-                      <p className="text-red-600 dark:text-red-400">⚠️ {ticket.contextData.clerk.banned ? 'Bannat' : 'Låst'} konto</p>
+                      <p className="text-red-600 dark:text-red-400">⚠️ {ticket.contextData.clerk.banned ? t('Bannat') : t('Låst')} {t('konto')}</p>
                     )}
                   </div>
                 </div>
@@ -1119,20 +1120,20 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 <div className="w-6 h-6 rounded-full bg-gradient-to-r from-[#7C5CFF] to-[#9F7BFF] flex items-center justify-center">
                   <span className="text-white text-xs">✨</span>
                 </div>
-                <p className="text-sm font-semibold text-[#7C5CFF] dark:text-[#9F7BFF]">AI-förslag till svar</p>
+                <p className="text-sm font-semibold text-[#7C5CFF] dark:text-[#9F7BFF]">{t('AI-förslag till svar')}</p>
               </div>
               <div className="flex gap-1">
                 <button
                   onClick={() => handleAIFeedback('positive')}
                   className="p-1.5 rounded-md hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
-                  title="Bra svar"
+                  title={t('Bra svar')}
                 >
                   <span className="text-lg">👍</span>
                 </button>
                 <button
                   onClick={() => handleAIFeedback('negative')}
                   className="p-1.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                  title="Dåligt svar"
+                  title={t('Dåligt svar')}
                 >
                   <span className="text-lg">👎</span>
                 </button>
@@ -1144,14 +1145,14 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 onClick={() => setResponse(aiSuggestion)}
                 className="px-3 py-1 text-xs bg-[#7C5CFF] text-white rounded-md hover:bg-[#6B4FE0]"
               >
-                Använd detta svar
+                {t('Använd detta svar')}
               </button>
               <button
                 onClick={handleGenerateAI}
                 disabled={isGenerating}
                 className="px-3 py-1 text-xs border border-[#7C5CFF] text-[#7C5CFF] rounded-md hover:bg-[#7C5CFF]/10"
               >
-                {isGenerating ? 'Genererar om…' : 'Generera om'}
+                {isGenerating ? t('Genererar om…') : t('Generera om')}
               </button>
             </div>
           </div>
@@ -1159,14 +1160,14 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Svar</h3>
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{t('Svar')}</h3>
             {!aiSuggestion && (
               <button
                 onClick={handleGenerateAI}
                 disabled={isGenerating}
                 className="px-3 py-1 text-sm bg-gradient-to-r from-[#7C5CFF] to-[#9F7BFF] text-white rounded-md hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(124,92,255,0.4)]"
               >
-                {isGenerating ? 'Genererar…' : '✨ Generera AI-svar'}
+                {isGenerating ? t('Genererar…') : t('✨ Generera AI-svar')}
               </button>
             )}
           </div>
@@ -1176,11 +1177,11 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             onFocus={noteTyping}
             onBlur={stopComposing}
             className="w-full h-64 p-4 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
-            placeholder="Skriv ditt svar eller generera ett med AI…"
+            placeholder={t('Skriv ditt svar eller generera ett med AI…')}
           />
           <div className="mt-2 flex items-center gap-2">
             <label className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer transition-colors">
-              Bifoga bild
+              {t('Bifoga bild')}
               <input
                 type="file"
                 accept="image/*"
@@ -1205,7 +1206,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               />
             </label>
             {inlineImages.length > 0 && (
-              <span className="text-xs text-slate-500 dark:text-slate-400">{inlineImages.length} bild(er) bifogade</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{inlineImages.length} {t('bild(er) bifogade')}</span>
             )}
           </div>
           {inlineImages.length > 0 && (
@@ -1231,7 +1232,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
         {/* Recipient Email Editor */}
         <div className="mb-3 flex items-center gap-2">
           <Mail className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-          <span className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">Till:</span>
+          <span className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{t('Till:')}</span>
           <input
             type="email"
             value={recipientEmail}
@@ -1244,7 +1245,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
         {emailAccounts.length > 0 && (
           <div className="mb-3 flex items-center gap-2">
             <Mail className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-            <span className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">Svara från:</span>
+            <span className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{t('Svara från:')}</span>
             <div className="relative flex-1">
               <select
                 value={selectedFromAccount}
@@ -1282,7 +1283,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             <button
               onClick={() => setSendConfirmation(null)}
               className="flex-shrink-0 p-1 rounded hover:bg-black/5 dark:hover:bg-white/10"
-              aria-label="Stäng bekräftelse"
+              aria-label={t('Stäng bekräftelse')}
             >
               <X className="w-4 h-4" />
             </button>
@@ -1294,13 +1295,13 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             disabled={!response || isSending}
             className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
-            {isSending ? 'Skickar…' : `Skicka svar${emailAccounts.length > 0 && selectedFromAccount ? ` (${emailAccounts.find(a => a.id === selectedFromAccount)?.email || ''})` : ''}`}
+            {isSending ? t('Skickar…') : `${t('Skicka svar')}${emailAccounts.length > 0 && selectedFromAccount ? ` (${emailAccounts.find(a => a.id === selectedFromAccount)?.email || ''})` : ''}`}
           </button>
           <button
             onClick={handleClose}
             className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-md font-medium transition-colors"
           >
-            Stäng ärende
+            {t('Stäng ärende')}
           </button>
         </div>
       </div>
@@ -1319,8 +1320,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   <span className="text-white text-sm font-bold">B</span>
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Sök i Billecta</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Sök på kundnummer, fakturanummer eller personnummer</p>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Sök i Billecta')}</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{t('Sök på kundnummer, fakturanummer eller personnummer')}</p>
                 </div>
               </div>
               <button
@@ -1340,8 +1341,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   className="px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
                 >
                   <option value="auto">Auto</option>
-                  <option value="invoice">Fakturanr</option>
-                  <option value="orgno">Person/Orgnr</option>
+                  <option value="invoice">{t('Fakturanr')}</option>
+                  <option value="orgno">{t('Person/Orgnr')}</option>
                 </select>
                 <div className="relative flex-1">
                   <input
@@ -1349,7 +1350,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     value={billectaSearchQuery}
                     onChange={(e) => setBillectaSearchQuery(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleBillectaSearch()}
-                    placeholder="Ange kundnummer, fakturanummer, personnummer eller namn..."
+                    placeholder={t('Ange kundnummer, fakturanummer, personnummer eller namn...')}
                     className="w-full px-4 py-2 pl-10 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500"
                     autoFocus
                   />
@@ -1361,7 +1362,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {billectaSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                  Sök
+                  {t('Sök')}
                 </button>
               </div>
             </div>
@@ -1371,7 +1372,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               {billectaSearching && (
                 <div className="flex items-center justify-center py-12 text-slate-500 dark:text-slate-400">
                   <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                  <span className="text-sm">Söker i Billecta...</span>
+                  <span className="text-sm">{t('Söker i Billecta...')}</span>
                 </div>
               )}
 
@@ -1383,17 +1384,17 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
 
               {!billectaSearching && billectaSearchResults?.type === 'empty' && (
                 <div className="text-center py-12 text-slate-500 dark:text-slate-400">
-                  <p className="text-sm">Inga resultat hittades för &quot;{billectaSearchQuery}&quot;</p>
+                  <p className="text-sm">{t('Inga resultat hittades för')} &quot;{billectaSearchQuery}&quot;</p>
                 </div>
               )}
 
               {!billectaSearching && billectaSearchResults?.type === 'invoice' && (
                 <div className="space-y-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">Faktura</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">{t('Faktura')}</p>
                   {sortInvoicesDesc(billectaSearchResults.results).map((inv: any, idx: number) => (
                     <div key={idx} className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <p className="font-semibold text-slate-900 dark:text-slate-100">Faktura #{inv.invoiceNumber}</p>
+                        <p className="font-semibold text-slate-900 dark:text-slate-100">{t('Faktura')} #{inv.invoiceNumber}</p>
                         <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                           inv.isPaid
                             ? 'border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
@@ -1404,25 +1405,25 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                       </div>
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
-                          <p className="text-slate-500 dark:text-slate-400 text-xs">Kund</p>
+                          <p className="text-slate-500 dark:text-slate-400 text-xs">{t('Kund')}</p>
                           <p className="text-slate-900 dark:text-slate-100">{inv.debtorName || '-'}</p>
                         </div>
                         <div>
-                          <p className="text-slate-500 dark:text-slate-400 text-xs">Belopp</p>
+                          <p className="text-slate-500 dark:text-slate-400 text-xs">{t('Belopp')}</p>
                           <p className="text-slate-900 dark:text-slate-100 font-medium">
                             {inv.currentAmount ?? inv.invoicedAmount ?? '-'} {inv.currency}
                           </p>
                         </div>
                         <div>
-                          <p className="text-slate-500 dark:text-slate-400 text-xs">Fakturadatum</p>
+                          <p className="text-slate-500 dark:text-slate-400 text-xs">{t('Fakturadatum')}</p>
                           <p className="text-slate-900 dark:text-slate-100">{inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString('sv-SE') : '-'}</p>
                         </div>
                         <div>
-                          <p className="text-slate-500 dark:text-slate-400 text-xs">Förfallodatum</p>
+                          <p className="text-slate-500 dark:text-slate-400 text-xs">{t('Förfallodatum')}</p>
                           <p className="text-slate-900 dark:text-slate-100">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('sv-SE') : '-'}</p>
                         </div>
                         <div>
-                          <p className="text-slate-500 dark:text-slate-400 text-xs">Leveranssätt</p>
+                          <p className="text-slate-500 dark:text-slate-400 text-xs">{t('Leveranssätt')}</p>
                           <p className="text-slate-900 dark:text-slate-100">{inv.deliveryMethod || '-'}</p>
                         </div>
                       </div>
@@ -1434,7 +1435,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               {!billectaSearching && billectaSearchResults?.type === 'debtor' && (
                 <div className="space-y-4">
                   <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
-                    Kunder ({billectaSearchResults.results.length})
+                    {t('Kunder')} ({billectaSearchResults.results.length})
                   </p>
                   {billectaSearchResults.results.map((debtor: any, idx: number) => (
                     <div key={idx} className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
@@ -1451,7 +1452,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                       {debtor.openInvoices.length > 0 ? (
                         <div>
                           <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">
-                            Öppna fakturor ({debtor.openInvoices.length})
+                            {t('Öppna fakturor')} ({debtor.openInvoices.length})
                           </p>
                           <div className="space-y-2">
                             {sortInvoicesDesc(debtor.openInvoices).map((inv: any, invIdx: number) => (
@@ -1467,16 +1468,16 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                                   </span>
                                 </div>
                                 <div className="flex gap-4 mt-1 text-xs text-slate-600 dark:text-slate-300">
-                                  <span>Belopp: {inv.currentAmount ?? '-'} kr</span>
-                                  <span>Förfaller: {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('sv-SE') : '-'}</span>
-                                  {inv.deliveryMethod && <span>Leverans: {inv.deliveryMethod}</span>}
+                                  <span>{t('Belopp:')} {inv.currentAmount ?? '-'} kr</span>
+                                  <span>{t('Förfaller:')} {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('sv-SE') : '-'}</span>
+                                  {inv.deliveryMethod && <span>{t('Leverans:')} {inv.deliveryMethod}</span>}
                                 </div>
                               </div>
                             ))}
                           </div>
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Inga öppna fakturor</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t('Inga öppna fakturor')}</p>
                       )}
                     </div>
                   ))}
@@ -1494,8 +1495,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                   return (
                     <div className="text-center py-12 text-slate-400 dark:text-slate-500">
                       <Search className="w-10 h-10 mx-auto mb-3 opacity-50" />
-                      <p className="text-sm">Inga fakturor kopplade till denna kund</p>
-                      <p className="text-xs mt-1">Sök på kundnummer, fakturanummer, personnummer/orgnr eller namn</p>
+                      <p className="text-sm">{t('Inga fakturor kopplade till denna kund')}</p>
+                      <p className="text-xs mt-1">{t('Sök på kundnummer, fakturanummer, personnummer/orgnr eller namn')}</p>
                     </div>
                   );
                 }
@@ -1517,34 +1518,34 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     )}
 
                     <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
-                      Fakturor ({invoices.length})
+                      {t('Fakturor')} ({invoices.length})
                     </p>
                     <div className="space-y-2">
                       {invoices.map((inv: any, idx: number) => (
                         <div key={`ctx-inv-${idx}`} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
                           <div className="flex items-center justify-between mb-1">
                             <p className="font-medium text-sm text-slate-900 dark:text-slate-100">
-                              #{inv.number || inv.id || 'Okänd'}
+                              #{inv.number || inv.id || t('Okänd')}
                             </p>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                               inv.isPaid
                                 ? 'border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
                                 : 'border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
                             }`}>
-                              {inv.status || (inv.isPaid ? 'Betald' : 'Obetald')}
+                              {inv.status || (inv.isPaid ? t('Betald') : t('Obetald'))}
                             </span>
                           </div>
                           <div className="flex gap-4 text-xs text-slate-600 dark:text-slate-300">
-                            <span>Belopp: {inv.amount ?? '-'} kr</span>
-                            <span>Förfaller: {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('sv-SE') : '-'}</span>
-                            {inv.deliveryMethod && <span>Leverans: {inv.deliveryMethod}</span>}
+                            <span>{t('Belopp:')} {inv.amount ?? '-'} kr</span>
+                            <span>{t('Förfaller:')} {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('sv-SE') : '-'}</span>
+                            {inv.deliveryMethod && <span>{t('Leverans:')} {inv.deliveryMethod}</span>}
                           </div>
                         </div>
                       ))}
                     </div>
 
                     <div className="pt-3 border-t border-slate-200 dark:border-slate-700 text-center">
-                      <p className="text-xs text-slate-400 dark:text-slate-500">Använd sökfältet ovan för att hitta fler fakturor eller kunder</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">{t('Använd sökfältet ovan för att hitta fler fakturor eller kunder')}</p>
                     </div>
                   </div>
                 );
@@ -1568,7 +1569,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Stripe</h2>
                   {ticket.contextData.stripe.customerId && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Kund: {ticket.contextData.stripe.customerId}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('Kund:')} {ticket.contextData.stripe.customerId}</p>
                   )}
                 </div>
               </div>
@@ -1582,13 +1583,13 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             <div className="flex-1 overflow-auto p-5 space-y-6">
               {ticket.contextData.stripe.accountClosed && (
                 <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg">
-                  <p className="text-sm font-semibold text-red-800 dark:text-red-300">Konto avslutat - Alla prenumerationer är avslutade</p>
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-300">{t('Konto avslutat - Alla prenumerationer är avslutade')}</p>
                 </div>
               )}
               {ticket.contextData.stripe.subscriptions && ticket.contextData.stripe.subscriptions.length > 0 && (
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-3">
-                    Prenumerationer ({ticket.contextData.stripe.subscriptions.length})
+                    {t('Prenumerationer')} ({ticket.contextData.stripe.subscriptions.length})
                   </p>
                   <div className="space-y-2">
                     {ticket.contextData.stripe.subscriptions.map((sub: any, idx: number) => (
@@ -1605,10 +1606,10 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                         </div>
                         <div className="flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-300">
                           {sub.currentPeriodEnd && (
-                            <span>Nuvarande period slutar: {new Date(sub.currentPeriodEnd * 1000).toLocaleDateString('sv-SE')}</span>
+                            <span>{t('Nuvarande period slutar:')} {new Date(sub.currentPeriodEnd * 1000).toLocaleDateString('sv-SE')}</span>
                           )}
                           {sub.canceledAt && (
-                            <span className="text-red-600 dark:text-red-400">Uppsägning begärd: {new Date(sub.canceledAt * 1000).toLocaleDateString('sv-SE')}</span>
+                            <span className="text-red-600 dark:text-red-400">{t('Uppsägning begärd:')} {new Date(sub.canceledAt * 1000).toLocaleDateString('sv-SE')}</span>
                           )}
                           {/* The actual end date the customer cares about: when it
                               already ended (endedAt), otherwise the scheduled end
@@ -1618,12 +1619,12 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                               the (earlier) request date and read the wrong year. */}
                           {(sub.endedAt || sub.cancelAt) && (
                             <span className="text-amber-600 dark:text-amber-400 font-semibold">
-                              {sub.endedAt ? 'Upphörde: ' : 'Upphör: '}
+                              {sub.endedAt ? `${t('Upphörde:')} ` : `${t('Upphör:')} `}
                               {new Date((sub.endedAt || sub.cancelAt) * 1000).toLocaleDateString('sv-SE')}
                             </span>
                           )}
                           {sub.items?.map((item: any, i: number) => (
-                            <span key={i}>Pris: {item.price ? `${(item.price / 100).toFixed(2)} kr` : '-'}</span>
+                            <span key={i}>{t('Pris:')} {item.price ? `${(item.price / 100).toFixed(2)} kr` : '-'}</span>
                           ))}
                         </div>
                       </div>
@@ -1634,7 +1635,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               {ticket.contextData.stripe.invoices && ticket.contextData.stripe.invoices.length > 0 && (
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-3">
-                    Fakturor ({ticket.contextData.stripe.invoices.length})
+                    {t('Fakturor')} ({ticket.contextData.stripe.invoices.length})
                   </p>
                   <div className="space-y-2">
                     {ticket.contextData.stripe.invoices.map((inv: any, idx: number) => (
@@ -1646,12 +1647,12 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                               ? 'border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
                               : 'border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
                           }`}>
-                            {inv.status || (inv.paid ? 'Betald' : 'Obetald')}
+                            {inv.status || (inv.paid ? t('Betald') : t('Obetald'))}
                           </span>
                         </div>
                         <div className="flex gap-4 text-xs text-slate-600 dark:text-slate-300">
-                          <span>Belopp: {inv.amount ? `${(inv.amount / 100).toFixed(2)} kr` : '-'}</span>
-                          {inv.dueDate && <span>Förfaller: {new Date(inv.dueDate * 1000).toLocaleDateString('sv-SE')}</span>}
+                          <span>{t('Belopp:')} {inv.amount ? `${(inv.amount / 100).toFixed(2)} kr` : '-'}</span>
+                          {inv.dueDate && <span>{t('Förfaller:')} {new Date(inv.dueDate * 1000).toLocaleDateString('sv-SE')}</span>}
                         </div>
                       </div>
                     ))}
@@ -1661,7 +1662,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               {ticket.contextData.stripe.charges && ticket.contextData.stripe.charges.length > 0 && (
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-3">
-                    Betalningar ({ticket.contextData.stripe.charges.length})
+                    {t('Betalningar')} ({ticket.contextData.stripe.charges.length})
                   </p>
                   <div className="space-y-2">
                     {ticket.contextData.stripe.charges.map((charge: any, idx: number) => (
@@ -1677,8 +1678,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                           </span>
                         </div>
                         <div className="flex gap-4 text-xs text-slate-600 dark:text-slate-300">
-                          <span>Belopp: {charge.amount ? `${(charge.amount / 100).toFixed(2)} kr` : '-'}</span>
-                          {charge.created && <span>Datum: {new Date(charge.created * 1000).toLocaleDateString('sv-SE')}</span>}
+                          <span>{t('Belopp:')} {charge.amount ? `${(charge.amount / 100).toFixed(2)} kr` : '-'}</span>
+                          {charge.created && <span>{t('Datum:')} {new Date(charge.created * 1000).toLocaleDateString('sv-SE')}</span>}
                         </div>
                       </div>
                     ))}
@@ -1687,7 +1688,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               )}
               {(!ticket.contextData.stripe.subscriptions?.length && !ticket.contextData.stripe.invoices?.length && !ticket.contextData.stripe.charges?.length) && (
                 <div className="text-center py-12 text-slate-400 dark:text-slate-500">
-                  <p className="text-sm">Ingen detaljerad Stripe-data tillgänglig</p>
+                  <p className="text-sm">{t('Ingen detaljerad Stripe-data tillgänglig')}</p>
                 </div>
               )}
             </div>
@@ -1709,7 +1710,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Resend</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">E-posthistorik</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{t('E-posthistorik')}</p>
                 </div>
               </div>
               <button
@@ -1721,23 +1722,23 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             </div>
             <div className="flex-1 overflow-auto p-5">
               <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-                Totalt skickade: <span className="font-semibold">{ticket.contextData.resend.emailsSent || 0}</span> mail
+                {t('Totalt skickade:')} <span className="font-semibold">{ticket.contextData.resend.emailsSent || 0}</span> {t('mail')}
               </p>
               {ticket.contextData.resend.recentEmails && ticket.contextData.resend.recentEmails.length > 0 ? (
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-3">
-                    Senaste mail ({ticket.contextData.resend.recentEmails.length})
+                    {t('Senaste mail')} ({ticket.contextData.resend.recentEmails.length})
                   </p>
                   <div className="space-y-2">
                     {ticket.contextData.resend.recentEmails.map((email: any, idx: number) => (
                       <div key={idx} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
                         <p className="font-medium text-sm text-slate-900 dark:text-slate-100 mb-1">
-                          {email.subject || '(Inget ämne)'}
+                          {email.subject || t('(Inget ämne)')}
                         </p>
                         <div className="flex flex-wrap gap-3 text-xs text-slate-600 dark:text-slate-300">
-                          {email.from && <span>Från: {email.from}</span>}
-                          {email.to && <span>Till: {Array.isArray(email.to) ? email.to.join(', ') : email.to}</span>}
-                          {email.createdAt && <span>Datum: {new Date(email.createdAt).toLocaleDateString('sv-SE')}</span>}
+                          {email.from && <span>{t('Från:')} {email.from}</span>}
+                          {email.to && <span>{t('Till:')} {Array.isArray(email.to) ? email.to.join(', ') : email.to}</span>}
+                          {email.createdAt && <span>{t('Datum:')} {new Date(email.createdAt).toLocaleDateString('sv-SE')}</span>}
                         </div>
                       </div>
                     ))}
@@ -1745,7 +1746,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 </div>
               ) : (
                 <div className="text-center py-12 text-slate-400 dark:text-slate-500">
-                  <p className="text-sm">Inga mail hittades</p>
+                  <p className="text-sm">{t('Inga mail hittades')}</p>
                 </div>
               )}
             </div>
@@ -1767,7 +1768,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Retool</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Kunddata</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{t('Kunddata')}</p>
                 </div>
               </div>
               <button
@@ -1809,7 +1810,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white dark:bg-slate-800 rounded-xl p-8 shadow-2xl flex items-center gap-3">
             <Loader2 className="w-5 h-5 animate-spin text-[#7C5CFF]" />
-            <span className="text-sm text-slate-700 dark:text-slate-300">Laddar ärende...</span>
+            <span className="text-sm text-slate-700 dark:text-slate-300">{t('Laddar ärende...')}</span>
           </div>
         </div>
       )}
@@ -1820,12 +1821,12 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
           onClick={() => setLightboxImage(null)}
           role="dialog"
           aria-modal="true"
-          aria-label="Bildvisare"
+          aria-label={t('Bildvisare')}
         >
           <button
             onClick={() => setLightboxImage(null)}
             className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-            aria-label="Stäng bildvisare"
+            aria-label={t('Stäng bildvisare')}
           >
             <X className="w-6 h-6" />
           </button>
@@ -1877,7 +1878,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     }}
                     className="px-3 py-1.5 text-xs bg-[#7C5CFF] text-white rounded-md hover:bg-[#6B4FE0] transition-colors"
                   >
-                    Öppna ärendet
+                    {t('Öppna ärendet')}
                   </button>
                 )}
                 <button
@@ -1893,16 +1894,16 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             <div className="flex-1 overflow-auto p-5 space-y-4">
               {/* Original Message */}
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">Kundens meddelande</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">{t('Kundens meddelande')}</p>
                 <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 text-sm whitespace-pre-wrap text-slate-900 dark:text-slate-100 max-h-[300px] overflow-auto">
-                  {popoutTicket.originalMessage?.replace(/\[Gmail ID:.*?\]\n?\[Inbox account:.*?\]\n?\n?/g, '').replace(/\n?\[DrabbadHanterad: [^\]]+\]/g, '').trim() || 'Inget meddelande'}
+                  {popoutTicket.originalMessage?.replace(/\[Gmail ID:.*?\]\n?\[Inbox account:.*?\]\n?\n?/g, '').replace(/\n?\[DrabbadHanterad: [^\]]+\]/g, '').trim() || t('Inget meddelande')}
                 </div>
               </div>
 
               {/* Attachments */}
               {popoutTicket.contextData?.attachments && popoutTicket.contextData.attachments.length > 0 && (
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">Bifogade filer</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">{t('Bifogade filer')}</p>
                   <div className="flex flex-wrap gap-3">
                     {popoutTicket.contextData.attachments.map((att: any, idx: number) => {
                       const isImage = att.mimeType?.startsWith('image/') && att.dataUrl;
@@ -1913,7 +1914,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                             type="button"
                             onClick={() => setLightboxImage({ src: att.dataUrl, alt: att.filename })}
                             className="block focus:outline-none focus:ring-2 focus:ring-[#7C5CFF] rounded-lg"
-                            aria-label={`Öppna bild ${att.filename}`}
+                            aria-label={`${t('Öppna bild')} ${att.filename}`}
                           >
                             <img
                               src={att.dataUrl}
@@ -1929,7 +1930,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                           href={att.dataUrl}
                           download={att.filename}
                           className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 hover:border-[#7C5CFF]/40 transition-all max-w-[240px]"
-                          title={`Ladda ner ${att.filename}`}
+                          title={`${t('Ladda ner')} ${att.filename}`}
                         >
                           <FileText className="w-5 h-5 text-slate-400 flex-shrink-0" />
                           <span className="text-xs text-slate-700 dark:text-slate-300 truncate flex-1">{att.filename}</span>
@@ -1948,7 +1949,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     <span className="w-4 h-4 rounded-full bg-gradient-to-r from-[#7C5CFF] to-[#9F7BFF] flex items-center justify-center">
                       <span className="text-white text-[8px]">✨</span>
                     </span>
-                    AI-förslag
+                    {t('AI-förslag')}
                     {popoutTicket.aiConfidence && (
                       <span className="ml-1 px-1.5 py-0.5 bg-[#7C5CFF]/15 text-[#7C5CFF] dark:text-[#B8A6FF] rounded text-[10px] font-bold">
                         {Math.round(popoutTicket.aiConfidence * 100)}%
@@ -1964,12 +1965,12 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
               {/* Sent Response */}
               {popoutTicket.finalResponse && (
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">Skickat svar</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">{t('Skickat svar')}</p>
                   <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4 text-sm whitespace-pre-wrap text-slate-800 dark:text-slate-200 max-h-[250px] overflow-auto">
                     {popoutTicket.finalResponse}
                   </div>
                   {popoutTicket.sentAt && (
-                    <p className="text-[10px] text-slate-400 mt-1">Skickat: {new Date(popoutTicket.sentAt).toLocaleString('sv-SE')}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">{t('Skickat:')} {new Date(popoutTicket.sentAt).toLocaleString('sv-SE')}</p>
                   )}
                 </div>
               )}
@@ -1979,12 +1980,12 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 <div className="flex flex-wrap gap-2">
                   {popoutTicket.contextData.stripe && (
                     <span className="text-[10px] px-2 py-1 rounded bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
-                      Stripe: {popoutTicket.contextData.stripe.subscriptions?.length || 0} pren.
+                      Stripe: {popoutTicket.contextData.stripe.subscriptions?.length || 0} {t('pren.')}
                     </span>
                   )}
                   {popoutTicket.contextData.billecta && (
                     <span className="text-[10px] px-2 py-1 rounded bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300">
-                      Billecta: {popoutTicket.contextData.billecta.invoices?.length || 0} fakturor
+                      Billecta: {popoutTicket.contextData.billecta.invoices?.length || 0} {t('fakturor')}
                     </span>
                   )}
                 </div>

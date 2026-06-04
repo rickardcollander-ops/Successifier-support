@@ -1,4 +1,5 @@
 import { product } from '@/lib/products';
+import { t } from '@/lib/i18n';
 
 /**
  * List of agents who can be assigned tickets and whose stats are broken
@@ -94,21 +95,21 @@ export function agentColor(nameOrEmail: string | null | undefined): AgentColor {
 export function statusLabelSv(status: string): string {
   switch (status) {
     case 'new':
-      return 'Nytt';
+      return t('Nytt');
     case 'in_progress':
-      return 'Öppna';
+      return t('Öppna');
     case 'waiting_ai':
-      return 'Väntar på AI';
+      return t('Väntar på AI');
     case 'review':
-      return 'Granskning';
+      return t('Granskning');
     case 'sent':
-      return 'Skickat';
+      return t('Skickat');
     case 'closed':
-      return 'Stängt';
+      return t('Stängt');
     case 'archived':
-      return 'Arkiverat';
+      return t('Arkiverat');
     case 'duplicate':
-      return 'Dubblett';
+      return t('Dubblett');
     default:
       return status;
   }
@@ -120,13 +121,13 @@ export function statusLabelSv(status: string): string {
 export function priorityLabelSv(priority: string): string {
   switch (priority) {
     case 'urgent':
-      return 'Akut';
+      return t('Akut');
     case 'high':
-      return 'Hög';
+      return t('Hög');
     case 'normal':
-      return 'Normal';
+      return t('Normal');
     case 'low':
-      return 'Låg';
+      return t('Låg');
     default:
       return priority;
   }
