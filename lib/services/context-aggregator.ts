@@ -160,15 +160,36 @@ export class ContextAggregator {
     }
 
     if (context.clerk) {
+      const c = context.clerk;
       formatted += '=== Clerk (Användarkonto) ===\n';
-      formatted += `Konto finns (user-id: ${context.clerk.userId})\n`;
-      if (context.clerk.name) formatted += `Namn: ${context.clerk.name}\n`;
-      if (context.clerk.createdAt) formatted += `Konto skapat: ${new Date(context.clerk.createdAt).toLocaleDateString('sv-SE')}\n`;
-      if (context.clerk.lastSignInAt) formatted += `Senaste inloggning: ${new Date(context.clerk.lastSignInAt).toLocaleDateString('sv-SE')}\n`;
-      formatted += `E-post verifierad: ${context.clerk.emailVerified ? 'ja' : 'nej'}\n`;
-      if (context.clerk.plan) formatted += `Plan: ${context.clerk.plan}\n`;
-      if (context.clerk.banned) formatted += `⚠️ Kontot är bannat\n`;
-      if (context.clerk.locked) formatted += `⚠️ Kontot är låst\n`;
+      formatted += `Konto finns (user-id: ${c.userId})\n`;
+      if (c.name) formatted += `Namn: ${c.name}\n`;
+      if (c.username) formatted += `Användarnamn: ${c.username}\n`;
+      if (c.primaryEmail) formatted += `Primär e-post: ${c.primaryEmail} (${c.emailVerified ? 'verifierad' : 'EJ verifierad'})\n`;
+      if (c.emails && c.emails.length > 1) {
+        formatted += `Alla e-postadresser: ${c.emails.map(e => `${e.email}${e.verified ? '' : ' (ej verifierad)'}`).join(', ')}\n`;
+      }
+      if (c.phone) formatted += `Telefon: ${c.phone} (${c.phoneVerified ? 'verifierad' : 'ej verifierad'})\n`;
+      if (c.createdAt) formatted += `Konto skapat: ${new Date(c.createdAt).toLocaleDateString('sv-SE')}\n`;
+      if (c.lastSignInAt) formatted += `Senaste inloggning: ${new Date(c.lastSignInAt).toLocaleDateString('sv-SE')}\n`;
+      if (c.lastActiveAt) formatted += `Senast aktiv: ${new Date(c.lastActiveAt).toLocaleDateString('sv-SE')}\n`;
+      // Login methods — key for "I can't log in" tickets.
+      const methods: string[] = [];
+      if (c.passwordEnabled) methods.push('lösenord');
+      if (c.socialAccounts && c.socialAccounts.length > 0) methods.push(...c.socialAccounts);
+      formatted += `Inloggningsmetoder: ${methods.length ? methods.join(', ') : 'okänt'}\n`;
+      formatted += `Tvåfaktor (2FA): ${c.twoFactorEnabled ? 'på' : 'av'}\n`;
+      if (c.plan) formatted += `Plan: ${c.plan}\n`;
+      if (c.organizations && c.organizations.length > 0) {
+        formatted += `Organisationer: ${c.organizations.map(o => `${o.name}${o.role ? ` (${o.role})` : ''}`).join(', ')}\n`;
+      }
+      if (c.metadata) formatted += `Metadata: ${JSON.stringify(c.metadata)}\n`;
+      if (c.banned) formatted += `⚠️ Kontot är BANNAT\n`;
+      if (c.locked) {
+        formatted += `⚠️ Kontot är LÅST`;
+        if (c.lockoutExpiresInSeconds) formatted += ` (låsning släpper om ~${Math.round(c.lockoutExpiresInSeconds / 60)} min)`;
+        formatted += '\n';
+      }
       formatted += '\n';
     }
 

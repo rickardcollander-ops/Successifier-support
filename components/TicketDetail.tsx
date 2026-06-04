@@ -1078,12 +1078,27 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                     )}
                   </div>
                   <div className="space-y-1 text-xs text-sky-800 dark:text-sky-200">
-                    <p>👤 Konto finns{ticket.contextData.clerk.emailVerified ? ' · verifierad' : ' · ej verifierad'}</p>
+                    <p>👤 Konto finns{ticket.contextData.clerk.emailVerified ? ' · e-post verifierad' : ' · e-post EJ verifierad'}</p>
+                    {(() => {
+                      const c = ticket.contextData.clerk;
+                      const methods = [
+                        ...(c.passwordEnabled ? ['lösenord'] : []),
+                        ...((c.socialAccounts as string[] | undefined) || []),
+                      ];
+                      return methods.length > 0 ? <p>🔓 Inloggning: {methods.join(', ')}</p> : null;
+                    })()}
+                    <p>🛡️ 2FA: {ticket.contextData.clerk.twoFactorEnabled ? 'på' : 'av'}</p>
+                    {ticket.contextData.clerk.phone && (
+                      <p>📱 {ticket.contextData.clerk.phone}{ticket.contextData.clerk.phoneVerified ? '' : ' (ej verifierad)'}</p>
+                    )}
                     {ticket.contextData.clerk.createdAt && (
                       <p>📅 Skapat {new Date(ticket.contextData.clerk.createdAt).toLocaleDateString('sv-SE')}</p>
                     )}
                     {ticket.contextData.clerk.lastSignInAt && (
                       <p>🔑 Senaste inloggning {new Date(ticket.contextData.clerk.lastSignInAt).toLocaleDateString('sv-SE')}</p>
+                    )}
+                    {ticket.contextData.clerk.organizations && ticket.contextData.clerk.organizations.length > 0 && (
+                      <p>🏢 {ticket.contextData.clerk.organizations.map((o: any) => o.name + (o.role ? ` (${o.role})` : '')).join(', ')}</p>
                     )}
                     {(ticket.contextData.clerk.banned || ticket.contextData.clerk.locked) && (
                       <p className="text-red-600 dark:text-red-400">⚠️ {ticket.contextData.clerk.banned ? 'Bannat' : 'Låst'} konto</p>
