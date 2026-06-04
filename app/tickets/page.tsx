@@ -17,6 +17,34 @@ interface EmailSyncStatus {
 type PresenceViewer = { name: string; email: string; initials: string; typing?: boolean };
 type PresenceMap = Record<string, PresenceViewer[]>;
 
+// Senders routed into the product's vendor folder (Billecta for Doldadress,
+// Stripe for Serus). Matched case-insensitively.
+const isVendorTicket = (t: Ticket) =>
+  product.vendorFolder.senders.includes(t.customerEmail.toLowerCase());
+
+// Bounces (mailer-daemon, postmaster, delivery-status-notification…) get
+// their own folder so they don't clutter the inbox. Match on sender prefix
+// AND on the standard subject lines that bounce notifications use, since some
+// bounces come from neutrally-named addresses but always have a recognizable
+// subject.
+const isBounceTicket = (t: Ticket) => {
+  const email = t.customerEmail.toLowerCase();
+  if (
+    email.startsWith('mailer-daemon@') ||
+    email.startsWith('postmaster@') ||
+    email.startsWith('mailer-noreply@') ||
+    email.includes('mail-daemon@')
+  ) return true;
+  const subj = t.subject.toLowerCase();
+  return (
+    subj.includes('delivery status notification') ||
+    subj.includes('undeliverable') ||
+    subj.includes('mail delivery failed') ||
+    subj.includes('returned mail') ||
+    subj.startsWith('failure notice')
+  );
+};
+
 export default function TicketsPage() {
   // Deep-link param: `/tickets?ticket=<id>` lands here from the Settings
   // "Drabbade kunder" table so support can jump straight to a ticket.
@@ -31,6 +59,17 @@ export default function TicketsPage() {
     if (id) setDeepLinkTicketId(id);
   }, []);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  // Mirror the number of new tickets in the browser tab title (e.g.
+  // "(3) Serus Support - Ticket Management") so support sees fresh tickets
+  // even when this isn't the focused tab. Counts the same set as the "Nya"
+  // tab: status 'new', excluding the vendor folder and bounces.
+  useEffect(() => {
+    const base = `${product.displayName} - Ticket Management`;
+    const newCount = tickets.filter(
+      (t) => t.status === 'new' && !isVendorTicket(t) && !isBounceTicket(t),
+    ).length;
+    document.title = newCount > 0 ? `(${newCount}) ${base}` : base;
+  }, [tickets]);
   const [archivedTickets, setArchivedTickets] = useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
@@ -561,34 +600,7 @@ export default function TicketsPage() {
     }
   };
 
-  // Senders routed into the product's vendor folder (Billecta for
-  // Doldadress, Stripe for Serus). Matched case-insensitively.
-  const isVendorTicket = (t: Ticket) =>
-    product.vendorFolder.senders.includes(t.customerEmail.toLowerCase());
   const billectaTickets = tickets.filter(isVendorTicket);
-
-  // Bounces (mailer-daemon, postmaster, delivery-status-notification…)
-  // get their own folder so they don't clutter the inbox. Match on
-  // sender prefix AND on the standard subject lines that bounce
-  // notifications use, since some bounces come from neutrally-named
-  // addresses but always have a recognizable subject.
-  const isBounceTicket = (t: Ticket) => {
-    const email = t.customerEmail.toLowerCase();
-    if (
-      email.startsWith('mailer-daemon@') ||
-      email.startsWith('postmaster@') ||
-      email.startsWith('mailer-noreply@') ||
-      email.includes('mail-daemon@')
-    ) return true;
-    const subj = t.subject.toLowerCase();
-    return (
-      subj.includes('delivery status notification') ||
-      subj.includes('undeliverable') ||
-      subj.includes('mail delivery failed') ||
-      subj.includes('returned mail') ||
-      subj.startsWith('failure notice')
-    );
-  };
   const bounceTickets = tickets.filter(isBounceTicket);
 
   // Filter by status. Billecta and Kivra-notifications from Billecta used to
