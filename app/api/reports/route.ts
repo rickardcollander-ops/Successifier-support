@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
 import { AGENTS } from '@/lib/constants';
 import { isVendorTicket, isBounceTicket } from '@/lib/ticket-filters';
+import { requireApiAuth } from '@/lib/api-auth';
 
 // Same marker /api/tickets uses to hide imported Zendesk history from the
 // inbox. The reports must exclude them too, or the historical import shows

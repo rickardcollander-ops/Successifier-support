@@ -314,7 +314,7 @@ export default function ReportsPage() {
           const showCounts = activity.length <= 31;
 
           return (
-            <div className="flex items-end justify-between h-64 gap-1 sm:gap-2">
+            <div className="flex items-end justify-between gap-1 sm:gap-2">
               {activity.map((point, index) => {
                 // Baseline of 2% so bars are still visible on zero-count
                 // buckets (makes it clear the chart rendered, not just broke).
@@ -327,7 +327,11 @@ export default function ReportsPage() {
                         {point.count}
                       </span>
                     )}
-                    <div className="w-full flex items-end justify-center h-full">
+                    {/* Fixed-height bar area: the percentage heights below
+                        need a definite parent height to resolve against —
+                        with the old auto-height column + h-full chain they
+                        collapsed to 0 and the chart rendered empty. */}
+                    <div className="w-full h-48 flex items-end justify-center">
                       <div
                         className={`w-full rounded-t-lg transition-all hover:brightness-110 ${
                           point.count === 0
