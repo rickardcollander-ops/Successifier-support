@@ -4,6 +4,7 @@ import { getTenant } from '@/lib/products/tenant';
 import { AGENTS } from '@/lib/constants';
 import { isVendorTicket, isBounceTicket } from '@/lib/ticket-filters';
 import { requireApiAuth } from '@/lib/api-auth';
+import { changeRatio } from '@/lib/text-diff';
 
 // Same marker /api/tickets uses to hide imported Zendesk history from the
 // inbox. The reports must exclude them too, or the historical import shows
@@ -353,6 +354,50 @@ export async function GET(request: NextRequest) {
       moneySaved,
     };
 
+    // How much did agents actually change the AI draft before sending? Word-
+    // level diff of aiResponse → finalResponse per sent reply that had a draft.
+    // Buckets: <10% changed = sent ~verbatim, 10–50% = lightly edited, ≥50% =
+    // rewritten. A high "kept" share is the strongest "the AI did the work"
+    // signal we have.
+    const editRatios: number[] = [];
+    let editUnchanged = 0;
+    let editLight = 0;
+    let editHeavy = 0;
+    for (const tk of sentInRange) {
+      const r = changeRatio(tk.aiResponse, tk.finalResponse);
+      if (r == null) continue;
+      editRatios.push(r);
+      if (r < 0.1) editUnchanged++;
+      else if (r < 0.5) editLight++;
+      else editHeavy++;
+    }
+    const medianChangedPct = editRatios.length > 0 ? Math.round(median(editRatios) * 100) : 0;
+    const editStats = {
+      count: editRatios.length,
+      medianChangedPct,
+      medianKeptPct: 100 - medianChangedPct,
+      unchanged: editUnchanged,
+      light: editLight,
+      heavy: editHeavy,
+    };
+
+    // Real "time inside the ticket": accumulated active presence seconds (see
+    // the presence route) for replies sent in the window. Distinct from the
+    // workStartedAt → sentAt span, which also includes time the ticket just
+    // sat open. Only tickets with measured activity count.
+    const activeSecondsList = sentInRange
+      .map((tk) => tk.activeWorkSeconds ?? 0)
+      .filter((s) => s > 0);
+    const activeWork = {
+      count: activeSecondsList.length,
+      medianMinutes:
+        activeSecondsList.length > 0 ? Math.round((median(activeSecondsList) / 60) * 10) / 10 : 0,
+      avgMinutes:
+        activeSecondsList.length > 0
+          ? Math.round((activeSecondsList.reduce((a, b) => a + b, 0) / activeSecondsList.length / 60) * 10) / 10
+          : 0,
+    };
+
     // Resolved today — a "today" metric independent of the selected range:
     // a ticket opened last week but closed this morning still counts.
     // "Today" means the current Stockholm calendar day.
@@ -440,6 +485,8 @@ export async function GET(request: NextRequest) {
       trend,
       aiComparison,
       savings,
+      editStats,
+      activeWork,
     });
   } catch (error) {
     console.error('Error fetching report data:', error);

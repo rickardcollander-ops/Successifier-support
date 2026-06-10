@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles } from 'lucide-react';
+import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, PencilLine, MousePointerClick } from 'lucide-react';
 import { statusLabelSv, priorityLabelSv } from '@/lib/constants';
 import { t } from '@/lib/i18n';
 
@@ -44,6 +44,19 @@ interface ReportData {
     asIs: GroupStats;
     edited: GroupStats;
     none: GroupStats;
+  };
+  editStats?: {
+    count: number;
+    medianChangedPct: number;
+    medianKeptPct: number;
+    unchanged: number;
+    light: number;
+    heavy: number;
+  };
+  activeWork?: {
+    count: number;
+    medianMinutes: number;
+    avgMinutes: number;
   };
 }
 
@@ -125,6 +138,8 @@ export default function ReportsPage() {
   };
   const trend = data.trend || [];
   const aiComparison = data.aiComparison;
+  const editStats = data.editStats;
+  const activeWork = data.activeWork;
 
   const perUserStats = data.perUserStats || [];
   const maxAgentTotal = Math.max(
@@ -255,6 +270,81 @@ export default function ReportsPage() {
             <p className="text-sm text-emerald-700 dark:text-emerald-400 mt-4 font-medium">
               {t('AI-utkast som skickas oförändrat besvaras')} {Math.round((1 - aiComparison.asIs.responseMedian / aiComparison.none.responseMedian) * 100)}% {t('snabbare än ärenden utan AI-stöd.')}
             </p>
+          )}
+        </div>
+      )}
+
+      {/* ── How the team works: edit amount + active time ───────────────── */}
+      {(editStats || activeWork) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Edit amount: how much of the AI draft is kept vs changed. */}
+          {editStats && (
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 mb-1">
+                <PencilLine className="w-5 h-5 text-[#7C5CFF]" />
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Hur mycket ändras AI-svaren?')}</h3>
+              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                {t('Ord-för-ord-jämförelse mellan AI-utkast och skickat svar.')}
+              </p>
+              {editStats.count === 0 ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400">{t('Ingen data ännu – mäts på svar som hade ett AI-utkast.')}</p>
+              ) : (
+                <>
+                  <div className="flex items-baseline gap-2 mb-4">
+                    <span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">{editStats.medianKeptPct}%</span>
+                    <span className="text-sm text-slate-500 dark:text-slate-400">{t('av AI-svaret behålls (median)')}</span>
+                  </div>
+                  {([
+                    { label: t('Skickat ~oförändrat (<10% ändrat)'), value: editStats.unchanged, color: 'bg-emerald-500' },
+                    { label: t('Lätt redigerat (10–50%)'), value: editStats.light, color: 'bg-amber-500' },
+                    { label: t('Omskrivet (>50%)'), value: editStats.heavy, color: 'bg-slate-400' },
+                  ] as const).map(({ label, value, color }) => (
+                    <div key={label} className="mb-2.5">
+                      <div className="flex items-center justify-between mb-1 text-xs text-slate-600 dark:text-slate-400">
+                        <span>{label}</span>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>
+                      </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                        <div className={`${color} h-2 rounded-full transition-all`} style={{ width: `${(value / editStats.count) * 100}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-[11px] text-slate-400 mt-3">{t('Baserat på')} {editStats.count} {t('svar med AI-utkast.')}</p>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Active time: real "time inside the ticket" from presence. */}
+          {activeWork && (
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 mb-1">
+                <MousePointerClick className="w-5 h-5 text-[#7C5CFF]" />
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Faktisk aktiv arbetstid per ärende')}</h3>
+              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                {t('Tid en agent faktiskt är inne i ärendet, mätt från närvaro (inte total liggtid).')}
+              </p>
+              {activeWork.count === 0 ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400">{t('Ingen data ännu – mäts framåt medan agenter arbetar i ärenden.')}</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-3xl font-bold text-[#7C5CFF]">{fmtMinutes(activeWork.medianMinutes)}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('median')}</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{fmtMinutes(activeWork.avgMinutes)}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('snitt')}</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{activeWork.count}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('ärenden mätta')}</p>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
