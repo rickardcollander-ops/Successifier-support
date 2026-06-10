@@ -299,10 +299,19 @@ export default function ReportsPage() {
           const tooltipFor = (iso: string, count: number) =>
             `${formatLabel(iso)} – ${count} ${t('ärenden')}`;
 
-          // Hourly view packs 24 bars in; only label every 3rd hour (plus the
-          // last one) so the axis stays readable. Daily views label every bar.
+          // With many bars (24 hours, 30/90 days) labelling every bar makes
+          // the axis an unreadable smear. Label every Nth bucket plus the
+          // last one; short ranges still label everything.
+          const labelEvery = hourly
+            ? 3
+            : activity.length > 31 ? 7
+            : activity.length > 14 ? 3
+            : 1;
           const showLabel = (index: number) =>
-            !hourly || index % 3 === 0 || index === activity.length - 1;
+            index % labelEvery === 0 || index === activity.length - 1;
+          // The per-bar count on top only fits up to ~a month of bars; for
+          // 90 days the hover tooltip carries the exact number instead.
+          const showCounts = activity.length <= 31;
 
           return (
             <div className="flex items-end justify-between h-64 gap-1 sm:gap-2">
@@ -313,9 +322,11 @@ export default function ReportsPage() {
                 const height = point.count === 0 ? 2 : Math.max(ratio * 100, 4);
                 return (
                   <div key={index} className="flex-1 flex flex-col items-center min-w-0">
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                      {point.count}
-                    </span>
+                    {showCounts && (
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
+                        {point.count}
+                      </span>
+                    )}
                     <div className="w-full flex items-end justify-center h-full">
                       <div
                         className={`w-full rounded-t-lg transition-all hover:brightness-110 ${

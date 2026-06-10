@@ -6,6 +6,7 @@ import TicketDetail from '@/components/TicketDetail';
 import { t } from '@/lib/i18n';
 import type { Ticket } from '@/lib/types';
 import { product } from '@/lib/products';
+import { isVendorTicket, isBounceTicket } from '@/lib/ticket-filters';
 
 interface EmailSyncStatus {
   lastSyncAt: Date | null;
@@ -17,33 +18,8 @@ interface EmailSyncStatus {
 type PresenceViewer = { name: string; email: string; initials: string; typing?: boolean };
 type PresenceMap = Record<string, PresenceViewer[]>;
 
-// Senders routed into the product's vendor folder (Billecta for Doldadress,
-// Stripe for Serus). Matched case-insensitively.
-const isVendorTicket = (t: Ticket) =>
-  product.vendorFolder.senders.includes(t.customerEmail.toLowerCase());
-
-// Bounces (mailer-daemon, postmaster, delivery-status-notification…) get
-// their own folder so they don't clutter the inbox. Match on sender prefix
-// AND on the standard subject lines that bounce notifications use, since some
-// bounces come from neutrally-named addresses but always have a recognizable
-// subject.
-const isBounceTicket = (t: Ticket) => {
-  const email = t.customerEmail.toLowerCase();
-  if (
-    email.startsWith('mailer-daemon@') ||
-    email.startsWith('postmaster@') ||
-    email.startsWith('mailer-noreply@') ||
-    email.includes('mail-daemon@')
-  ) return true;
-  const subj = t.subject.toLowerCase();
-  return (
-    subj.includes('delivery status notification') ||
-    subj.includes('undeliverable') ||
-    subj.includes('mail delivery failed') ||
-    subj.includes('returned mail') ||
-    subj.startsWith('failure notice')
-  );
-};
+// Vendor- and bounce-folder predicates live in lib/ticket-filters so the
+// reports API counts exactly the same ticket population as the inbox tabs.
 
 export default function TicketsPage() {
   // Deep-link param: `/tickets?ticket=<id>` lands here from the Settings
