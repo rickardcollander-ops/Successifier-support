@@ -162,7 +162,7 @@ export default function KnowledgeEditor({ article, onSave, onDelete, onCancel }:
             </button>
           </div>
           {showPreview ? (
-            <div className="w-full min-h-[24rem] px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700">
+            <div className="w-full min-h-[24rem] px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100">
               <Markdown>{content || '_Inget innehåll än._'}</Markdown>
             </div>
           ) : (

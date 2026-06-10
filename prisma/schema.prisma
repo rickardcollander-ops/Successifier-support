@@ -23,6 +23,7 @@ model Tenant {
   blockedSenders BlockedSender[]
   kbCategories   KnowledgeCategory[]
   kbEvents       KnowledgeEvent[]
+  helpCenter     HelpCenterConfig?
 }
 
 model Agent {
@@ -150,6 +151,25 @@ model KnowledgeRevision {
   article KnowledgeBase @relation(fields: [articleId], references: [id], onDelete: Cascade)
 
   @@index([articleId, createdAt])
+}
+
+// Per-tenant appearance of the public help center. One row per deployment;
+// all fields have sensible defaults so the help center works before it's ever
+// configured.
+model HelpCenterConfig {
+  id          String   @id @default(cuid())
+  tenantId    String   @unique
+  accentColor String   @default("#7C5CFF")
+  theme       String   @default("light") // 'light' | 'dark' | 'auto'
+  logoUrl     String?
+  headline    String?
+  intro       String?
+  layout      String   @default("grid") // 'grid' | 'list'
+  showSearch  Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 // Raw usage events powering help-center analytics (views, searches, helpful

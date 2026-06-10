@@ -1,40 +1,51 @@
 import Link from 'next/link';
 import { getTenantId } from '@/lib/products/tenant';
 import { getPublicCategories, getPublicArticles } from '@/lib/services/public-kb';
+import { getHelpCenterConfig, DEFAULT_HELP_CENTER } from '@/lib/services/help-center';
 import HelpSearch from '@/components/help/HelpSearch';
 
 export const dynamic = 'force-dynamic';
 
 export default async function HelpHome() {
   const tenantId = await getTenantId();
-  const [categories, popular] = tenantId
-    ? await Promise.all([getPublicCategories(tenantId), getPublicArticles(tenantId, { pageSize: 6 })])
-    : [[], { articles: [], total: 0 }];
+  const [config, categories, popular] = tenantId
+    ? await Promise.all([
+        getHelpCenterConfig(tenantId),
+        getPublicCategories(tenantId),
+        getPublicArticles(tenantId, { pageSize: 6 }),
+      ])
+    : [DEFAULT_HELP_CENTER, [], { articles: [], total: 0 }];
+
+  const categoryGridClass =
+    config.layout === 'list' ? 'space-y-3' : 'grid gap-4 sm:grid-cols-2';
 
   return (
     <div className="space-y-10">
       <section className="text-center space-y-4">
-        <h1 className="text-3xl font-bold">Hur kan vi hjälpa dig?</h1>
-        <div className="max-w-xl mx-auto text-left">
-          <HelpSearch />
-        </div>
+        <h1 className="text-3xl font-bold">{config.headline}</h1>
+        {config.intro && <p className="text-[color:var(--kb-muted)] max-w-xl mx-auto">{config.intro}</p>}
+        {config.showSearch && (
+          <div className="max-w-xl mx-auto text-left">
+            <HelpSearch />
+          </div>
+        )}
       </section>
 
       {categories.length > 0 && (
         <section>
           <h2 className="text-lg font-semibold mb-4">Kategorier</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className={categoryGridClass}>
             {categories.map((c) => (
               <Link
                 key={c.slug}
                 href={`/help/c/${c.slug}`}
-                className="block p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-[#7C5CFF] transition-colors"
+                className="block p-5 rounded-xl border border-[color:var(--kb-border)] bg-[color:var(--kb-surface)] hover:border-[color:var(--kb-accent)] transition-colors"
               >
                 <div className="font-medium">{c.name}</div>
                 {c.description && (
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{c.description}</p>
+                  <p className="text-sm text-[color:var(--kb-muted)] mt-1">{c.description}</p>
                 )}
-                <p className="text-xs text-slate-400 mt-2">{c.articleCount} artiklar</p>
+                <p className="text-xs text-[color:var(--kb-muted)] mt-2">{c.articleCount} artiklar</p>
               </Link>
             ))}
           </div>
@@ -47,7 +58,7 @@ export default async function HelpHome() {
           <ul className="space-y-2">
             {popular.articles.map((a) => (
               <li key={a.slug}>
-                <Link href={`/help/${a.slug}`} className="text-[#7C5CFF] hover:underline">
+                <Link href={`/help/${a.slug}`} className="hover:underline" style={{ color: 'var(--kb-accent)' }}>
                   {a.title}
                 </Link>
               </li>
@@ -57,9 +68,7 @@ export default async function HelpHome() {
       )}
 
       {categories.length === 0 && popular.articles.length === 0 && (
-        <p className="text-center text-slate-500 dark:text-slate-400">
-          Inga publicerade artiklar ännu.
-        </p>
+        <p className="text-center text-[color:var(--kb-muted)]">Inga publicerade artiklar ännu.</p>
       )}
     </div>
   );

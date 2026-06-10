@@ -36,13 +36,13 @@ export default async function HelpArticle({ params }: { params: Promise<{ slug: 
   return (
     <article className="space-y-6">
       <div>
-        <Link href="/help" className="text-sm text-[#7C5CFF] hover:underline">
+        <Link href="/help" className="text-sm hover:underline" style={{ color: 'var(--kb-accent)' }}>
           ← Hjälpcenter
         </Link>
         {article.category && (
           <Link
             href={`/help/c/${article.category.slug}`}
-            className="ml-2 text-sm text-slate-500 hover:underline"
+            className="ml-2 text-sm text-[color:var(--kb-muted)] hover:underline"
           >
             {article.category.name}
           </Link>
@@ -52,17 +52,17 @@ export default async function HelpArticle({ params }: { params: Promise<{ slug: 
 
       <Markdown>{article.content ?? ''}</Markdown>
 
-      <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+      <div className="border-t border-[color:var(--kb-border)] pt-6">
         <ArticleFeedback slug={article.slug} />
       </div>
 
       {related.length > 0 && (
-        <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+        <div className="border-t border-[color:var(--kb-border)] pt-6">
           <h2 className="text-lg font-semibold mb-3">Se även</h2>
           <ul className="space-y-2">
             {related.map((r) => (
               <li key={r.slug}>
-                <Link href={`/help/${r.slug}`} className="text-[#7C5CFF] hover:underline">
+                <Link href={`/help/${r.slug}`} className="hover:underline" style={{ color: 'var(--kb-accent)' }}>
                   {r.title}
                 </Link>
               </li>

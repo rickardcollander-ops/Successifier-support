@@ -31,22 +31,22 @@ export default async function HelpCategory({ params }: { params: Promise<{ categ
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/help" className="text-sm text-[#7C5CFF] hover:underline">
+        <Link href="/help" className="text-sm hover:underline" style={{ color: 'var(--kb-accent)' }}>
           ← Tillbaka
         </Link>
         <h1 className="text-2xl font-bold mt-2">{cat.name}</h1>
-        {cat.description && <p className="text-slate-500 dark:text-slate-400 mt-1">{cat.description}</p>}
+        {cat.description && <p className="text-[color:var(--kb-muted)] mt-1">{cat.description}</p>}
       </div>
 
       {articles.length === 0 ? (
-        <p className="text-slate-500 dark:text-slate-400">Inga artiklar i den här kategorin ännu.</p>
+        <p className="text-[color:var(--kb-muted)]">Inga artiklar i den här kategorin ännu.</p>
       ) : (
-        <ul className="divide-y divide-slate-200 dark:divide-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+        <ul className="divide-y divide-[color:var(--kb-border)] rounded-xl border border-[color:var(--kb-border)] bg-[color:var(--kb-surface)] overflow-hidden">
           {articles.map((a) => (
             <li key={a.slug}>
-              <Link href={`/help/${a.slug}`} className="block p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+              <Link href={`/help/${a.slug}`} className="block p-4 hover:bg-[color:var(--kb-hover)]">
                 <div className="font-medium">{a.title}</div>
-                {a.excerpt && <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{a.excerpt}</div>}
+                {a.excerpt && <div className="text-sm text-[color:var(--kb-muted)] mt-0.5">{a.excerpt}</div>}
               </Link>
             </li>
           ))}
