@@ -55,6 +55,22 @@ Exempel:
 curl "https://DIN-APP-DOMÄN/api/public/kb/search?q=uppsägning"
 ```
 
+## Design
+
+Hjälpcentrets utseende ställs in under **Kunskapsbas → Design** (`/knowledge/design`)
+och sparas per tenant (`HelpCenterConfig`). Du kan välja accentfärg, tema
+(ljust/mörkt/auto), logga, rubrik, introtext, layout (rutnät/lista) och om
+sökrutan ska visas. En live-förhandsvisning visar resultatet innan du sparar.
+Sidorna under `/help` läser konfigurationen och temats färger styrs av
+CSS-variabler så valt tema alltid gäller – oberoende av appens interna mörka läge.
+
+## Publik eller intern
+
+Vilka artiklar som syns publikt styrs antingen i editorn (Publicera/Avpublicera)
+eller med snabb-toggeln direkt i artikellistan. Filtret **Alla / Publika /
+Interna** överst i listan visar nuläget. Auto-lärda artiklar kan aldrig
+publiceras.
+
 ## Analys
 
 Visningar, sökningar (inkl. sökningar utan träff) och hjälpsam-röster loggas i

@@ -85,6 +85,32 @@ export default function KnowledgePage() {
     setSelectedArticle(null);
   };
 
+  // Quick publish/unpublish straight from the list. Publishing also moves the
+  // article to 'published' status so it actually appears in the help center.
+  const handleTogglePublic = async (article: KnowledgeBase, makePublic: boolean) => {
+    // Optimistic update so the toggle feels instant.
+    const optimistic = { ...article, isPublic: makePublic, status: makePublic ? 'published' : article.status };
+    setArticles((prev) => prev.map((a) => (a.id === article.id ? optimistic : a)));
+    try {
+      const response = await fetch(`/api/knowledge/${article.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic: makePublic, ...(makePublic ? { status: 'published' } : {}) }),
+      });
+      if (response.ok) {
+        const saved = await response.json();
+        setArticles((prev) => prev.map((a) => (a.id === saved.id ? saved : a)));
+        if (selectedArticle?.id === saved.id) setSelectedArticle(saved);
+      } else {
+        // Revert on failure.
+        setArticles((prev) => prev.map((a) => (a.id === article.id ? article : a)));
+      }
+    } catch (error) {
+      console.error('Error toggling public state:', error);
+      setArticles((prev) => prev.map((a) => (a.id === article.id ? article : a)));
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -101,6 +127,7 @@ export default function KnowledgePage() {
           selectedArticle={selectedArticle}
           onSelectArticle={setSelectedArticle}
           onCreateNew={handleCreate}
+          onTogglePublic={handleTogglePublic}
         />
       </div>
       <div className="lg:col-span-2 overflow-auto">

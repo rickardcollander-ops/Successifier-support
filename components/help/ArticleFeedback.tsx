@@ -21,21 +21,21 @@ export default function ArticleFeedback({ slug }: { slug: string }) {
   };
 
   if (submitted) {
-    return <p className="text-sm text-slate-500 dark:text-slate-400">Tack för din feedback!</p>;
+    return <p className="text-sm text-[color:var(--kb-muted)]">Tack för din feedback!</p>;
   }
 
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm text-slate-600 dark:text-slate-300">Var detta till hjälp?</span>
+      <span className="text-sm text-[color:var(--kb-text)]">Var detta till hjälp?</span>
       <button
         onClick={() => send(true)}
-        className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm"
+        className="px-3 py-1.5 rounded-lg border border-[color:var(--kb-border)] hover:bg-[color:var(--kb-hover)] text-sm"
       >
         👍 Ja
       </button>
       <button
         onClick={() => send(false)}
-        className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm"
+        className="px-3 py-1.5 rounded-lg border border-[color:var(--kb-border)] hover:bg-[color:var(--kb-hover)] text-sm"
       >
         👎 Nej
       </button>

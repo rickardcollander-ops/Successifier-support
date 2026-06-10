@@ -188,8 +188,55 @@ body {
   button, a {
     -webkit-tap-highlight-color: transparent;
   }
-  
+
   input, select, textarea {
     font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Public help center theming.                                         */
+/* The help center is customer-facing and must be themeable            */
+/* independently of the app's global dark mode. All help components    */
+/* read these CSS variables (set from HelpCenterConfig) instead of     */
+/* Tailwind's dark: variants, so the chosen theme always wins.         */
+.kb-root {
+  --kb-accent: #7C5CFF;
+  background: var(--kb-bg);
+  color: var(--kb-text);
+}
+.kb-root[data-theme='light'] {
+  --kb-bg: #f8fafc;
+  --kb-surface: #ffffff;
+  --kb-text: #0f172a;
+  --kb-muted: #64748b;
+  --kb-border: #e2e8f0;
+  --kb-hover: #f1f5f9;
+}
+.kb-root[data-theme='dark'] {
+  --kb-bg: #0f172a;
+  --kb-surface: #1e293b;
+  --kb-text: #f1f5f9;
+  --kb-muted: #94a3b8;
+  --kb-border: #334155;
+  --kb-hover: #243043;
+}
+/* 'auto' follows the visitor's system preference. */
+.kb-root[data-theme='auto'] {
+  --kb-bg: #f8fafc;
+  --kb-surface: #ffffff;
+  --kb-text: #0f172a;
+  --kb-muted: #64748b;
+  --kb-border: #e2e8f0;
+  --kb-hover: #f1f5f9;
+}
+@media (prefers-color-scheme: dark) {
+  .kb-root[data-theme='auto'] {
+    --kb-bg: #0f172a;
+    --kb-surface: #1e293b;
+    --kb-text: #f1f5f9;
+    --kb-muted: #94a3b8;
+    --kb-border: #334155;
+    --kb-hover: #243043;
   }
 }
