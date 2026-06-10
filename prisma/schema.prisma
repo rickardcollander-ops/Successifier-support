@@ -91,6 +91,12 @@ model Ticket {
   // workStartedAt — which is distinct from response time (createdAt → sentAt,
   // wall-clock including time the ticket sat untouched).
   workStartedAt   DateTime?
+  // Accumulated seconds an agent was actively present on this ticket, summed
+  // from the 5s presence heartbeats (gaps over the stale window are not
+  // counted). This is real "time inside the ticket", distinct from the
+  // elapsed workStartedAt → sentAt span which also covers time the ticket
+  // just sat open while the agent did other things.
+  activeWorkSeconds Int    @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

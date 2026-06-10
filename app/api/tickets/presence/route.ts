@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { prisma } from '@/lib/db/client';
 
 // In-memory presence store (cleared on server restart, which is fine for presence)
 const activeViewers = new Map<string, { userId: string; userName: string; userEmail: string; ticketId: string; lastSeen: number; typing: boolean }>();
+
+// Heartbeats arrive every ~5s. If two consecutive beats from the same user on
+// the same ticket fall within this window we credit the elapsed gap as active
+// work time and persist it on the ticket; a longer gap means they were away
+// (other ticket, idle, tab closed) and isn't counted. The cap also stops a
+// single near-miss beat from inflating the total.
+const ACTIVE_WINDOW_MS = 15000;
 
 // Clean up stale entries older than 15 seconds
 function cleanupStale() {
@@ -25,12 +33,30 @@ export async function POST(request: NextRequest) {
     const { ticketId, typing } = await request.json();
 
     if (ticketId) {
+      const now = Date.now();
+      // Credit the gap since this user's previous beat as active work time,
+      // but only if they were on the SAME ticket and within the active window.
+      const prev = activeViewers.get(session.user.email);
+      if (prev && prev.ticketId === ticketId) {
+        const delta = now - prev.lastSeen;
+        if (delta > 0 && delta <= ACTIVE_WINDOW_MS) {
+          const seconds = Math.round(delta / 1000);
+          if (seconds > 0) {
+            // Raw increment so we don't bump updatedAt and reorder the list.
+            prisma.$executeRaw`
+              UPDATE "Ticket"
+              SET "activeWorkSeconds" = "activeWorkSeconds" + ${seconds}
+              WHERE id = ${ticketId}
+            `.catch((e) => console.error('Failed to accrue active work time:', e));
+          }
+        }
+      }
       activeViewers.set(session.user.email, {
         userId: (session.user as any).id || session.user.email,
         userName: session.user.name || session.user.email.split('@')[0],
         userEmail: session.user.email,
         ticketId,
-        lastSeen: Date.now(),
+        lastSeen: now,
         typing: Boolean(typing),
       });
     } else {
