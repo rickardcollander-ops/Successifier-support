@@ -6,11 +6,29 @@ import { google } from 'googleapis';
 import { auth } from '@/lib/auth';
 import { applyAgentSignature } from '@/lib/constants';
 import { gmailOAuthClient } from '@/lib/integrations/gmail-account';
+import { requireApiAuth } from '@/lib/api-auth';
+import { findScopedTicket, findScopedEmailAccount } from '@/lib/db/scoped';
+import { decryptCredentials } from '@/lib/integrations/credentials';
+import { rateLimit, clientIp } from '@/lib/rate-limit';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // This endpoint sends email from the tenant's accounts — it must never
+  // be reachable without a session or a valid API key. (The middleware
+  // only checks that SOME auth material is present, not that it's valid.)
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
+  const limit = rateLimit(`send:${clientIp(request.headers)}`, { limit: 30, windowMs: 60_000 });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+    );
+  }
+
   try {
     const { id } = await params;
     const body = await request.json();
@@ -44,9 +62,7 @@ export async function POST(
       ? `${responseTextWithSig}[INLINE_IMAGES]${responseImagePart}`
       : responseTextWithSig;
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
-    });
+    const ticket = await findScopedTicket(id);
 
     if (!ticket) {
       return NextResponse.json(
@@ -57,11 +73,11 @@ export async function POST(
 
     let sentVia = 'unknown';
 
-    // If a Gmail account is selected, send via Gmail
+    // If a Gmail account is selected, send via Gmail. The account must
+    // belong to a user of this deployment's tenant — an arbitrary id must
+    // not select another tenant's inbox.
     if (fromAccountId) {
-      const emailAccount = await prisma.emailAccount.findUnique({
-        where: { id: fromAccountId },
-      });
+      const emailAccount = await findScopedEmailAccount(fromAccountId);
 
       if (!emailAccount || !emailAccount.isActive) {
         return NextResponse.json(
@@ -250,9 +266,10 @@ export async function POST(
         );
       }
 
+      const resendCredentials = decryptCredentials(resendIntegration.credentials);
       const resendService = new ResendService(
-        (resendIntegration.credentials as any).apiKey as string,
-        (resendIntegration.credentials as any).fromEmail as string
+        resendCredentials.apiKey,
+        resendCredentials.fromEmail
       );
 
       // Handle inline images for Resend too
@@ -278,7 +295,7 @@ export async function POST(
         );
       }
 
-      sentVia = (resendIntegration.credentials as any).fromEmail || 'resend';
+      sentVia = resendCredentials.fromEmail || 'resend';
     }
 
     // Append the sent reply to originalMessage so the full conversation
@@ -313,6 +330,13 @@ export async function POST(
       });
 
       if (!existingKB) {
+        // Keep the learning article free of direct identifiers: no
+        // customer email and only the first part of the question. These
+        // articles are fed into AI responses for OTHER customers, so
+        // anything stored here can resurface in someone else's reply.
+        const questionExcerpt = ticket.originalMessage
+          .split(/\n---\n/)[0]
+          .substring(0, 2000);
         await prisma.knowledgeBase.create({
           data: {
             tenantId: ticket.tenantId,
@@ -320,15 +344,13 @@ export async function POST(
             content: `# ${ticket.subject}
 
 ## Kundfråga
-${ticket.originalMessage}
+${questionExcerpt}
 
 ## Skickat Svar (Verifierat)
 ${response}
 
 ## Metadata
 - Skickat: ${new Date().toISOString()}
-- Kund: ${ticket.customerEmail}
-- Status: ${ticket.status}
 ${(ticket.contextData as any)?.billecta ? `- Billecta-kontext: Ja (${(ticket.contextData as any).billecta.invoices?.length || 0} fakturor)` : ''}
 
 Detta svar har skickats till en riktig kund och är verifierat korrekt.`,

@@ -3,6 +3,8 @@ import { prisma } from '@/lib/db/client';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { requireApiAuth } from '@/lib/api-auth';
+import { findScopedTicket } from '@/lib/db/scoped';
+import { rateLimit, clientIp } from '@/lib/rate-limit';
 
 export async function POST(
   request: NextRequest,
@@ -11,13 +13,20 @@ export async function POST(
   const authResult = await requireApiAuth(request);
   if (!authResult.ok) return authResult.response;
 
+  // Each call costs real money (LLM tokens) — cap bursts per client.
+  const limit = rateLimit(`generate:${clientIp(request.headers)}`, { limit: 20, windowMs: 60_000 });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+    );
+  }
+
   try {
     const { id } = await params;
     let step = 'fetch-ticket';
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
-    });
+    const ticket = await findScopedTicket(id);
 
     if (!ticket) {
       return NextResponse.json(
@@ -70,7 +79,8 @@ export async function POST(
       UPDATE "Ticket"
       SET "aiResponse" = ${aiResponse},
           "aiConfidence" = ${confidence},
-          "contextData" = ${JSON.stringify(context)}::jsonb
+          "contextData" = ${JSON.stringify(context)}::jsonb,
+          "contentRefreshedAt" = NOW()
       WHERE id = ${id}
     `;
 

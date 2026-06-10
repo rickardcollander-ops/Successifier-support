@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { requireApiAuth } from '@/lib/api-auth';
+import { getTenantId } from '@/lib/products/tenant';
 
 const STOP_WORDS = new Set([
   'the', 'and', 'for', 'with', 'that', 'this', 'from', 'have', 'your', 'you', 'are', 'was', 'were',
@@ -65,8 +66,9 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
+    const tenantId = await getTenantId();
+    const ticket = await prisma.ticket.findFirst({
+      where: { id, ...(tenantId ? { tenantId } : {}) },
       select: {
         id: true,
         tenantId: true,
