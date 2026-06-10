@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { upsertTicket } from '@/lib/services/deduplicator';
+import { requireApiAuth } from '@/lib/api-auth';
 
 const ZENDESK_IMPORT_MARKER = '[Zendesk Import Source:';
 
@@ -33,6 +34,9 @@ function stripAttachmentData(tickets: any[]): any[] {
 }
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
@@ -82,6 +86,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
   try {
     const body = await request.json();
     const { customerEmail, customerName, subject, originalMessage, priority } = body;

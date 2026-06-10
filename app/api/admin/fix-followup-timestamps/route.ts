@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
-import { auth } from '@/lib/auth';
+import { requireSuperadmin } from '@/lib/api-auth';
 import { google } from 'googleapis';
+import { gmailOAuthClient } from '@/lib/integrations/gmail-account';
 
 // One-time migration: correct the [Följdmail <timestamp>] markers in
 // originalMessage for all existing tickets. The timestamp used to be
@@ -14,10 +15,8 @@ import { google } from 'googleapis';
 // Optional body: { dryRun: true } to preview changes without writing.
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authResult = await requireSuperadmin();
+  if (!authResult.ok) return authResult.response;
 
   const body = await request.json().catch(() => ({}));
   const dryRun = body.dryRun === true;
@@ -39,25 +38,7 @@ export async function POST(request: NextRequest) {
   // Build a map of inbox address → oauth client for quick lookup.
   const accountByEmail: Record<string, any> = {};
   for (const acc of emailAccounts) {
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-    );
-    oauth2Client.setCredentials({
-      access_token: acc.accessToken,
-      refresh_token: acc.refreshToken,
-    });
-    // Persist token refreshes silently.
-    oauth2Client.on('tokens', async (tokens) => {
-      try {
-        const updateData: { accessToken?: string; refreshToken?: string } = {};
-        if (tokens.access_token) updateData.accessToken = tokens.access_token;
-        if (tokens.refresh_token) updateData.refreshToken = tokens.refresh_token;
-        if (Object.keys(updateData).length > 0) {
-          await prisma.emailAccount.update({ where: { id: acc.id }, data: updateData });
-        }
-      } catch {}
-    });
+    const oauth2Client = gmailOAuthClient(acc);
     accountByEmail[acc.email] = google.gmail({ version: 'v1', auth: oauth2Client });
   }
 

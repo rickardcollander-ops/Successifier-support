@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { product } from '@/lib/products';
 import { getTenantId } from '@/lib/products/tenant';
+import { requireApiAuth } from '@/lib/api-auth';
 
 async function resolveTenantId() {
   const tenantId = await getTenantId();
@@ -27,6 +28,9 @@ async function pruneExpiredLearnedArticles(tenantId: string) {
 }
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
   try {
     const tenantId = await resolveTenantId();
 
@@ -49,6 +53,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
   try {
     const tenantId = await resolveTenantId();
     const body = await request.json();

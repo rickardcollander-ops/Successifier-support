@@ -11,9 +11,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Return all email accounts with owner info so everyone can see connected accounts
+    // Never select the OAuth tokens here — this list is shown to all agents.
     const accounts = await prisma.emailAccount.findMany({
       orderBy: { createdAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        provider: true,
+        isActive: true,
+        lastSyncAt: true,
+        createdAt: true,
         user: {
           select: { name: true, email: true },
         },

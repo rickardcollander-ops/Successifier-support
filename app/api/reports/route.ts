@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
 import { AGENTS } from '@/lib/constants';
+import { requireApiAuth } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const range = searchParams.get('range') || '30d';

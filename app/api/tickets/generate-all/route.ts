@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
 import { generateAIResponse } from '@/lib/services/ai-generator';
+import { requireApiAuth, requireSession } from '@/lib/api-auth';
 
 export async function POST() {
+  const authResult = await requireSession();
+  if (!authResult.ok) return authResult.response;
+
   try {
     // Find tenant
     const tenant = await getTenant();

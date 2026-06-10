@@ -209,7 +209,10 @@ model ApiKey {
   id          String   @id @default(cuid())
   tenantId    String
   name        String
+  // SHA-256 hash of the key. The plaintext is only shown once at creation.
   key         String   @unique
+  // Display form ("dold_abc…wxyz") so the UI can identify keys in lists.
+  maskedKey   String?
   lastUsedAt  DateTime?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())

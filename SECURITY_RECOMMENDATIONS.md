@@ -1,92 +1,49 @@
-# Säkerhetsrekommendationer
+# Säkerhetsmodell
 
-## KRITISKT: Kryptering av Credentials
+Senast uppdaterad: 2026-06-10.
 
-### Nuvarande Problem
-Integration credentials (Billecta API keys, Stripe keys, etc.) och API-nycklar sparas för närvarande i **klartext** i databasen:
+## Autentisering av API-rutter
 
-1. **Integration.credentials** (JSON) - innehåller API-nycklar för Billecta, Stripe, Resend etc.
-2. **ApiKey.key** (String) - utvecklar-API-nycklar
+- **Middleware** (`middleware.ts`) skyddar alla sidor (session krävs) och
+  avvisar API-anrop som varken har session eller nyckel-header. Den validerar
+  INTE API-nycklar (ingen DB-åtkomst i edge-runtime) — det gör varje route.
+- **Varje API-route** anropar en guard från `lib/api-auth.ts`:
+  - `requireApiAuth(request)` — session ELLER giltig API-nyckel
+    (tickets, knowledge, reports, billecta-sök, gmail-sync m.fl.)
+  - `requireSession()` — endast session (integrations- och API-nyckelhantering)
+  - `requireSuperadmin()` — session med rollen `superadmin` (`/api/admin/*`,
+    `/api/tickets/test`)
+  - `validateApiKey(request)` — endast giltig API-nyckel (`/api/webhook/ticket`,
+    som dessutom rate-limitas via `lib/rate-limit.ts`)
 
-### Rekommenderad Lösning
+Ny route? **Lägg alltid till en guard.** Middlewaren räcker inte.
 
-#### 1. Kryptera Integration Credentials
-```typescript
-// lib/crypto.ts
-import crypto from 'crypto';
+## API-nycklar
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!; // 32 bytes
-const ALGORITHM = 'aes-256-gcm';
+- Genereras med `crypto.randomBytes` (`lib/api-auth.ts`).
+- Lagras som **SHA-256-hash** i `ApiKey.key`; visningsformen ligger i
+  `ApiKey.maskedKey`. Klartextnyckeln returneras exakt en gång, vid skapande.
+- Äldre rader med klartextnycklar uppgraderas automatiskt (hashas) första
+  gången de används.
 
-export function encrypt(text: string): string {
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
-  
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  
-  const authTag = cipher.getAuthTag();
-  
-  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
-}
+## Hemligheter i databasen
 
-export function decrypt(encryptedData: string): string {
-  const [ivHex, authTagHex, encrypted] = encryptedData.split(':');
-  
-  const decipher = crypto.createDecipheriv(
-    ALGORITHM,
-    Buffer.from(ENCRYPTION_KEY, 'hex'),
-    Buffer.from(ivHex, 'hex')
-  );
-  
-  decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
-  
-  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  
-  return decrypted;
-}
-```
+- **Integration.credentials**: krypteras med AES-256-GCM (`lib/crypto.ts`,
+  nyckel i `ENCRYPTION_KEY`, 64 hex-tecken — `openssl rand -hex 32`).
+  API:et returnerar aldrig dekrypterade värden till klienten; svaren är
+  maskerade och redigeringsformuläret skickar bara fält som ändrats.
+- **EmailAccount.accessToken/refreshToken** (Gmail OAuth): krypteras vid
+  skrivning (`lib/integrations/gmail-account.ts` + callback-routen). Äldre
+  klartextrader läses transparent och omkrypteras när Google roterar tokens.
 
-#### 2. Uppdatera Integration API
-```typescript
-// app/api/integrations/route.ts
-import { encrypt, decrypt } from '@/lib/crypto';
+## Kvarstående rekommendationer
 
-// Vid sparande:
-const encryptedCredentials = encrypt(JSON.stringify(credentials));
-await prisma.integration.create({
-  data: {
-    credentials: encryptedCredentials, // Spara krypterad sträng
-  }
-});
-
-// Vid läsning:
-const integration = await prisma.integration.findUnique(...);
-const decryptedCreds = JSON.parse(decrypt(integration.credentials));
-```
-
-#### 3. Miljövariabel
-Lägg till i Vercel Environment Variables:
-```
-ENCRYPTION_KEY=<64 hex characters - generera med: openssl rand -hex 32>
-```
-
-### Alternativ: Använd Vercel KV eller Secret Manager
-- Spara credentials i Vercel KV (Redis)
-- Använd AWS Secrets Manager / Google Secret Manager
-- Referera bara till secret-ID i databasen
-
-### Implementeringssteg
-1. Generera ENCRYPTION_KEY och lägg till i Vercel
-2. Skapa crypto.ts med encrypt/decrypt
-3. Uppdatera integrations API för att kryptera vid save
-4. Uppdatera alla services som läser credentials för att dekryptera
-5. Migrera befintliga credentials (en-gångs-skript)
-
-### Status
-⚠️ **INTE IMPLEMENTERAT** - Credentials sparas för närvarande i klartext
-✅ **DOKUMENTERAT** - Rekommendationer finns här
-
-### Prioritet
-**HÖG** - Bör implementeras innan production-användning med riktiga API-nycklar
+- **Rotera** alla integrationsnycklar (Stripe/Billecta/Resend) och API-nycklar
+  som skapats före 2026-06-10 — de kan ha exponerats medan API:et saknade auth.
+- Debugloggar med kunddata är borttagna ur arbetsträdet men finns kvar i
+  git-historiken; överväg en historiktvätt (t.ex. `git filter-repo`) om repot
+  delas externt.
+- Rate-limitern är per serverless-instans (best effort). Byt till en delad
+  store (Upstash/Vercel KV) om belastningen ökar.
+- `allowDangerousEmailAccountLinking: true` i `lib/auth.ts` är acceptabelt så
+  länge Google är enda providern — ta bort den innan fler providers läggs till.

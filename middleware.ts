@@ -12,12 +12,17 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  // Allow API routes with API key authentication (X-API-Key or Bearer token)
+  // API routes enforce their own auth (session OR validated API key — see
+  // lib/api-auth.ts). The middleware can't validate API keys (no DB access
+  // in the edge runtime), so it only short-circuits the obvious case:
+  // no session and no key material at all.
   if (pathname.startsWith("/api/")) {
-    const apiKey = req.headers.get("x-api-key") || req.headers.get("authorization")?.replace("Bearer ", "");
-    if (apiKey) {
-      return NextResponse.next();
+    const hasApiKey =
+      req.headers.has("x-api-key") || req.headers.has("authorization");
+    if (!req.auth && !hasApiKey) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    return NextResponse.next();
   }
 
   // Redirect unauthenticated users to sign in

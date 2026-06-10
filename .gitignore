@@ -38,3 +38,6 @@ next-env.d.ts
 .env.local
 .env.production
 .env*.local
+
+# debug/diagnostic logs
+*.log

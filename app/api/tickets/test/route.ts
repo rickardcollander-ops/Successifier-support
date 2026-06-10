@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { product } from '@/lib/products';
 import { generateAIResponse } from '@/lib/services/ai-generator';
+import { requireSuperadmin } from '@/lib/api-auth';
 
 const testTickets = [
   {
@@ -124,6 +125,9 @@ const testTickets = [
 ];
 
 export async function POST() {
+  const authResult = await requireSuperadmin();
+  if (!authResult.ok) return authResult.response;
+
   try {
     // First, ensure the tenant exists
     const tenant = await prisma.tenant.upsert({

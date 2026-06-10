@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Key, Copy, Trash2, Plus, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { Key, Copy, Trash2, Plus, CheckCircle } from 'lucide-react';
 import { product } from '@/lib/products';
 
 interface ApiKey {
   id: string;
   name: string;
-  key: string;
+  // Display form only — the server stores a hash and never returns the
+  // full key after creation.
+  maskedKey: string | null;
   isActive: boolean;
   lastUsedAt: string | null;
   createdAt: string;
@@ -19,7 +21,6 @@ export default function DeveloperPage() {
   const [showNewKeyModal, setShowNewKeyModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
-  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -97,20 +98,6 @@ export default function DeveloperPage() {
     navigator.clipboard.writeText(text);
     setCopiedKey(keyId);
     setTimeout(() => setCopiedKey(null), 2000);
-  };
-
-  const toggleKeyVisibility = (keyId: string) => {
-    const newVisible = new Set(visibleKeys);
-    if (newVisible.has(keyId)) {
-      newVisible.delete(keyId);
-    } else {
-      newVisible.add(keyId);
-    }
-    setVisibleKeys(newVisible);
-  };
-
-  const maskKey = (key: string) => {
-    return `${key.substring(0, 12)}${'•'.repeat(20)}`;
   };
 
   if (loading) {
@@ -198,30 +185,11 @@ export default function DeveloperPage() {
                     
                     <div className="flex items-center gap-2 mb-2">
                       <code className="text-sm bg-slate-100 dark:bg-slate-900 px-3 py-1 rounded font-mono text-slate-900 dark:text-slate-100">
-                        {visibleKeys.has(apiKey.id) ? apiKey.key : maskKey(apiKey.key)}
+                        {apiKey.maskedKey || '••••••••••••'}
                       </code>
-                      <button
-                        onClick={() => toggleKeyVisibility(apiKey.id)}
-                        className="p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded"
-                        title={visibleKeys.has(apiKey.id) ? 'Hide' : 'Show'}
-                      >
-                        {visibleKeys.has(apiKey.id) ? (
-                          <EyeOff className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                        ) : (
-                          <Eye className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => copyToClipboard(apiKey.key, apiKey.id)}
-                        className="p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded"
-                        title="Copy"
-                      >
-                        {copiedKey === apiKey.id ? (
-                          <CheckCircle className="w-4 h-4 text-green-600" />
-                        ) : (
-                          <Copy className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                        )}
-                      </button>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        Shown only once at creation
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400">

@@ -3,8 +3,24 @@ import { prisma } from '@/lib/db/client';
 import { getTenantId } from '@/lib/products/tenant';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
+import { validateApiKey } from '@/lib/api-auth';
+import { rateLimit, clientIp } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  // External entry point: requires a valid API key (X-API-Key or Bearer).
+  const keyResult = await validateApiKey(request);
+  if (!keyResult.valid) {
+    return NextResponse.json({ error: keyResult.error || 'Unauthorized' }, { status: 401 });
+  }
+
+  const limit = rateLimit(`webhook:${clientIp(request.headers)}`, { limit: 30, windowMs: 60_000 });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+    );
+  }
+
   try {
     const body = await request.json();
     const { email, name, subject, message, priority } = body;

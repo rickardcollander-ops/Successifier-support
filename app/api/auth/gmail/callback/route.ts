@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { google } from 'googleapis';
 import { prisma } from '@/lib/db/client';
+import { encrypt } from '@/lib/crypto';
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,8 +62,8 @@ export async function GET(request: NextRequest) {
         },
       },
       update: {
-        accessToken: tokens.access_token!,
-        refreshToken: tokens.refresh_token!,
+        accessToken: encrypt(tokens.access_token!),
+        refreshToken: encrypt(tokens.refresh_token!),
         expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
         isActive: true,
       },
@@ -70,8 +71,8 @@ export async function GET(request: NextRequest) {
         userId: user.id,
         email: emailAddress,
         provider: 'google',
-        accessToken: tokens.access_token!,
-        refreshToken: tokens.refresh_token!,
+        accessToken: encrypt(tokens.access_token!),
+        refreshToken: encrypt(tokens.refresh_token!),
         expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
         isActive: true,
       },

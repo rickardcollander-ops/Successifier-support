@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
+import { requireApiAuth } from '@/lib/api-auth';
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
   try {
     const body = await request.json();
     const {
@@ -54,6 +58,9 @@ export async function POST(request: NextRequest) {
 
 // Get feedback for learning
 export async function GET(request: NextRequest) {
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const subject = searchParams.get('subject');
