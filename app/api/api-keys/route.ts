@@ -1,17 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { product } from '@/lib/products';
-import { generateApiKey } from '@/lib/api-auth';
+import { generateApiKey, hashApiKey, maskApiKey, requireSession } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireSession();
+  if (!authResult.ok) return authResult.response;
+
   try {
     const subdomain = product.key;
-    
+
     const tenant = await prisma.tenant.findUnique({
       where: { subdomain },
       include: {
         apiKeys: {
           orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            name: true,
+            maskedKey: true,
+            lastUsedAt: true,
+            isActive: true,
+            createdAt: true,
+          },
         },
       },
     });
@@ -28,9 +39,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireSession();
+  if (!authResult.ok) return authResult.response;
+
   try {
     const subdomain = product.key;
-    
+
     const tenant = await prisma.tenant.findUnique({
       where: { subdomain },
     });
@@ -51,11 +65,23 @@ export async function POST(request: NextRequest) {
       data: {
         tenantId: tenant.id,
         name,
-        key,
+        key: hashApiKey(key),
+        maskedKey: maskApiKey(key),
       },
     });
 
-    return NextResponse.json({ apiKey });
+    // The plaintext key is returned exactly once — only the hash is stored.
+    return NextResponse.json({
+      apiKey: {
+        id: apiKey.id,
+        name: apiKey.name,
+        key,
+        maskedKey: apiKey.maskedKey,
+        isActive: apiKey.isActive,
+        createdAt: apiKey.createdAt,
+        lastUsedAt: apiKey.lastUsedAt,
+      },
+    });
   } catch (error) {
     console.error('Error creating API key:', error);
     return NextResponse.json({ error: 'Failed to create API key' }, { status: 500 });

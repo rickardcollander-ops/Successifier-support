@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
+import { requireApiAuth, requireSession } from '@/lib/api-auth';
 
 export async function POST() {
+  const authResult = await requireSession();
+  if (!authResult.ok) return authResult.response;
+
   try {
     console.log('🔍 Starting context aggregation for all tickets...');
 

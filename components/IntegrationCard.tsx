@@ -38,16 +38,14 @@ export default function IntegrationCard({
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // The server only ever returns masked credentials, so the edit form always
+  // starts empty — fields left blank keep their stored value on save.
   useEffect(() => {
-    if (integration) {
-      setCredentials(integration.credentials);
-    } else {
-      const initial: Record<string, string> = {};
-      fields.forEach(field => {
-        initial[field.key] = '';
-      });
-      setCredentials(initial);
-    }
+    const initial: Record<string, string> = {};
+    fields.forEach(field => {
+      initial[field.key] = '';
+    });
+    setCredentials(initial);
   }, [integration, fields]);
 
   const handleSave = async () => {
@@ -118,6 +116,11 @@ export default function IntegrationCard({
 
       {isEditing || !isConfigured ? (
         <div className="space-y-4 mt-4">
+          {isConfigured && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Leave a field empty to keep its saved value.
+            </p>
+          )}
           {fields.map((field) => (
             <div key={field.key}>
               <label className="block text-sm font-medium mb-1 text-slate-900 dark:text-slate-100">{field.label}</label>
@@ -126,7 +129,7 @@ export default function IntegrationCard({
                 value={credentials[field.key] || ''}
                 onChange={(e) => setCredentials({ ...credentials, [field.key]: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
-                placeholder={field.placeholder}
+                placeholder={isConfigured ? '•••••••• (saved)' : field.placeholder}
               />
             </div>
           ))}

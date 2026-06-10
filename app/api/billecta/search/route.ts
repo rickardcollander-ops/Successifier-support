@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
+import { requireApiAuth } from '@/lib/api-auth';
 
 const BILLECTA_BASE_URL = 'https://api.billecta.com';
 
@@ -31,6 +32,9 @@ async function billectaRequest(endpoint: string, secureToken: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
   try {
     const body = await request.json();
     const { query, searchType } = body;

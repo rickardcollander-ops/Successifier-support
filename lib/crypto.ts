@@ -80,3 +80,10 @@ export function isEncrypted(data: string): boolean {
   const parts = data.split(':');
   return parts.length === 3 && parts[0].length === 32 && parts[1].length === 32;
 }
+
+// Decrypt a value that may still be stored in plaintext (legacy rows created
+// before encryption-at-rest was enforced). Returns the input unchanged when
+// it isn't in the encrypted format.
+export function decryptIfEncrypted(data: string): string {
+  return isEncrypted(data) ? decrypt(data) : data;
+}

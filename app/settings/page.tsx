@@ -299,7 +299,11 @@ export default function SettingsPage() {
         Object.entries(credentials).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value])
       );
 
-      if (type === 'billecta') {
+      const existing = integrations.find(i => i.type === type);
+
+      // Empty fields mean "keep the saved value", so only enforce required
+      // fields when the integration is being created for the first time.
+      if (type === 'billecta' && !existing) {
         const apiKey = String(normalizedCredentials.apiKey || '');
         const creditorPublicId = String(normalizedCredentials.creditorPublicId || '');
         if (!apiKey || !creditorPublicId) {
@@ -309,8 +313,6 @@ export default function SettingsPage() {
           };
         }
       }
-
-      const existing = integrations.find(i => i.type === type);
       const url = existing ? `/api/integrations/${existing.id}` : '/api/integrations';
       const method = existing ? 'PATCH' : 'POST';
 

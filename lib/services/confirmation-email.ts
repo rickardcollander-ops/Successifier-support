@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { prisma } from '@/lib/db/client';
 import { product } from '@/lib/products';
+import { gmailOAuthClient } from '@/lib/integrations/gmail-account';
 
 // Subject + body of the autoresponder customers receive when they email
 // support and we open a brand-new ticket. Kept short and on-brand so it
@@ -75,31 +76,7 @@ export async function sendConfirmationEmail(opts: {
     });
     if (!account || !account.isActive) return;
 
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-    );
-
-    oauth2Client.setCredentials({
-      access_token: account.accessToken,
-      refresh_token: account.refreshToken,
-    });
-
-    oauth2Client.on('tokens', async (tokens) => {
-      try {
-        const updateData: { accessToken?: string; refreshToken?: string } = {};
-        if (tokens.access_token) updateData.accessToken = tokens.access_token;
-        if (tokens.refresh_token) updateData.refreshToken = tokens.refresh_token;
-        if (Object.keys(updateData).length > 0) {
-          await prisma.emailAccount.update({
-            where: { id: account.id },
-            data: updateData,
-          });
-        }
-      } catch (err) {
-        console.error('[Confirmation] Failed to persist refreshed tokens:', err);
-      }
-    });
+    const oauth2Client = gmailOAuthClient(account);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     const { subject, body } = buildConfirmationEmail(opts.originalSubject);

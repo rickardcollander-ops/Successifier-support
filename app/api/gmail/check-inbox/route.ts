@@ -5,8 +5,12 @@ import { GmailService } from '@/lib/integrations/gmail';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
 import { parseFramerForm } from '@/lib/services/inbound-forms';
+import { requireApiAuth } from '@/lib/api-auth';
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
   try {
     const tenantId = await getTenantId();
     if (!tenantId) {

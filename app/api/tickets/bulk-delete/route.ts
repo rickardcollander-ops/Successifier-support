@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
 import { product } from '@/lib/products';
+import { requireApiAuth } from '@/lib/api-auth';
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
   try {
     const { folder } = await request.json();
 

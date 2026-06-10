@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
-import { auth } from '@/lib/auth';
+import { requireSuperadmin } from '@/lib/api-auth';
 
 // Reopen every ticket that's still sitting in "sent" or "closed" with at
 // least one customer follow-up appended after the agent considered it
@@ -10,10 +10,8 @@ import { auth } from '@/lib/auth';
 // the read-only listing. This endpoint flips them all back to
 // in_progress so support sees them in Öppna and can respond.
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authResult = await requireSuperadmin();
+  if (!authResult.ok) return authResult.response;
 
   const tenant = await getTenant();
   if (!tenant) {

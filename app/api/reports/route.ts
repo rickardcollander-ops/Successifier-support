@@ -42,6 +42,9 @@ function orderedCounts(values: string[], order: string[]): Record<string, number
 }
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const range = searchParams.get('range') || '30d';

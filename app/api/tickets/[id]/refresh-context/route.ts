@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
+import { requireApiAuth } from '@/lib/api-auth';
 
 // Re-fetch customer context (Stripe, Billecta, Resend, Retool) for a single
 // ticket and persist the refreshed data. Called when support opens a
@@ -10,6 +11,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireApiAuth(request);
+  if (!authResult.ok) return authResult.response;
+
   try {
     const { id } = await params;
 
