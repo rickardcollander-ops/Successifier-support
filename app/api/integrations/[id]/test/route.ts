@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { decryptJSON, isEncrypted } from '@/lib/crypto';
+import { requireSession } from '@/lib/api-auth';
 
 async function stripeProbe(apiKey: string) {
   try {
@@ -259,6 +260,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireSession();
+  if (!authResult.ok) return authResult.response;
+
   try {
     const { id } = await params;
     const body = await request.json().catch(() => ({}));

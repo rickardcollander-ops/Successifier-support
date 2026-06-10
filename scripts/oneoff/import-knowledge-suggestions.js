@@ -56,7 +56,7 @@ function formatContent(article) {
 async function main() {
   const args = parseArgs(process.argv);
   const tenantSubdomain = args.tenant || 'doldadress';
-  const sourcePath = args.source || path.join(process.cwd(), 'scripts', 'knowledge-suggestions-from-imported-tickets.json');
+  const sourcePath = args.source || path.join(process.cwd(), 'scripts', 'oneoff', 'knowledge-suggestions-from-imported-tickets.json');
   const titlePrefix = args.prefix || 'AI Draft:';
 
   if (!fs.existsSync(sourcePath)) {

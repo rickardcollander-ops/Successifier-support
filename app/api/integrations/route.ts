@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { product } from '@/lib/products';
 import { getTenantId } from '@/lib/products/tenant';
-import { encryptJSON, decryptJSON, isEncrypted } from '@/lib/crypto';
+import { encryptJSON } from '@/lib/crypto';
+import { requireSession } from '@/lib/api-auth';
+import { decryptCredentials, maskCredentials, mergeCredentials } from '@/lib/integrations/credentials';
 
 async function resolveTenantId() {
   const tenantId = await getTenantId();
@@ -19,6 +21,9 @@ async function resolveTenantId() {
 }
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireSession();
+  if (!authResult.ok) return authResult.response;
+
   try {
     const tenantId = await resolveTenantId();
 
@@ -26,29 +31,19 @@ export async function GET(request: NextRequest) {
       where: { tenantId },
     });
 
-    // Decrypt credentials before sending to client
-    const decryptedIntegrations = integrations.map(integration => {
+    const masked = integrations.map((integration) => {
       try {
-        const credentialsStr = typeof integration.credentials === 'string' 
-          ? integration.credentials 
-          : JSON.stringify(integration.credentials);
-        
-        // Check if already encrypted, if so decrypt
-        const credentials = isEncrypted(credentialsStr)
-          ? decryptJSON(credentialsStr)
-          : integration.credentials;
-        
         return {
           ...integration,
-          credentials,
+          credentials: maskCredentials(decryptCredentials(integration.credentials)),
         };
       } catch (error) {
-        console.error(`Failed to decrypt credentials for integration ${integration.id}:`, error);
-        return integration; // Return as-is if decryption fails
+        console.error(`Failed to read credentials for integration ${integration.id}:`, error);
+        return { ...integration, credentials: {} };
       }
     });
 
-    return NextResponse.json({ integrations: decryptedIntegrations });
+    return NextResponse.json({ integrations: masked });
   } catch (error) {
     console.error('Error fetching integrations:', error);
     const details = error instanceof Error ? error.message : 'Unknown error';
@@ -63,6 +58,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireSession();
+  if (!authResult.ok) return authResult.response;
+
   try {
     const tenantId = await resolveTenantId();
     const body = await request.json();
@@ -75,8 +73,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Encrypt credentials before storing
-    const encryptedCredentials = encryptJSON(credentials);
+    const existing = await prisma.integration.findUnique({
+      where: { tenantId_type: { tenantId, type } },
+    });
+    const existingCredentials = existing ? decryptCredentials(existing.credentials) : {};
+    const mergedCredentials = mergeCredentials(existingCredentials, credentials);
 
     const integration = await prisma.integration.upsert({
       where: {
@@ -86,25 +87,22 @@ export async function POST(request: NextRequest) {
         },
       },
       update: {
-        credentials: encryptedCredentials as any,
+        credentials: encryptJSON(mergedCredentials) as any,
         name: type.charAt(0).toUpperCase() + type.slice(1),
       },
       create: {
         tenantId,
         type,
         name: type.charAt(0).toUpperCase() + type.slice(1),
-        credentials: encryptedCredentials as any,
+        credentials: encryptJSON(mergedCredentials) as any,
         isActive: true,
       },
     });
 
-    // Decrypt for response
-    const decryptedIntegration = {
+    return NextResponse.json({
       ...integration,
-      credentials: decryptJSON(integration.credentials as any),
-    };
-
-    return NextResponse.json(decryptedIntegration);
+      credentials: maskCredentials(mergedCredentials),
+    });
   } catch (error) {
     console.error('Error creating integration:', error);
     const details = error instanceof Error ? error.message : 'Unknown error';

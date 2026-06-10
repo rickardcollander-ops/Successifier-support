@@ -11,6 +11,7 @@ import { getBlockedPatterns, isBlocked } from '@/lib/services/blocked-senders';
 import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 import { parseFramerForm } from '@/lib/services/inbound-forms';
 import { getMessageAttachments } from '@/lib/integrations/gmail-attachments';
+import { gmailOAuthClient } from '@/lib/integrations/gmail-account';
 
 async function syncSingleAccount(account: {
   id: string;
@@ -18,33 +19,10 @@ async function syncSingleAccount(account: {
   accessToken: string;
   refreshToken: string;
 }) {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
+  const oauth2Client = gmailOAuthClient(
+    account,
     `${process.env.NEXTAUTH_URL}/api/auth/callback/google`
   );
-
-  oauth2Client.setCredentials({
-    access_token: account.accessToken,
-    refresh_token: account.refreshToken,
-  });
-
-  // Persist refreshed tokens so future syncs don't fail
-  oauth2Client.on('tokens', async (tokens) => {
-    try {
-      const updateData: { accessToken?: string; refreshToken?: string } = {};
-      if (tokens.access_token) updateData.accessToken = tokens.access_token;
-      if (tokens.refresh_token) updateData.refreshToken = tokens.refresh_token;
-      if (Object.keys(updateData).length > 0) {
-        await prisma.emailAccount.update({
-          where: { id: account.id },
-          data: updateData,
-        });
-      }
-    } catch (err) {
-      console.error(`[Email Sync] Failed to persist refreshed tokens for ${account.email}:`, err);
-    }
-  });
 
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
   const tenant = await getTenant();

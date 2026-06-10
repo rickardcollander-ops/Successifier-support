@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
-import { auth } from '@/lib/auth';
+import { requireSuperadmin } from '@/lib/api-auth';
 
 // Identify tickets where the previous bug silently buried a customer
 // reply: status was set to "sent" or "closed", a follow-up email
@@ -22,10 +22,8 @@ import { auth } from '@/lib/auth';
 // Auth: any signed-in agent (same gate as the rest of the admin
 // surface — Ida/Malin/Filippa).
 export async function GET(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authResult = await requireSuperadmin();
+  if (!authResult.ok) return authResult.response;
 
   const tenant = await getTenant();
   if (!tenant) {
@@ -111,10 +109,8 @@ export async function GET(request: NextRequest) {
 // than deleting anything. The marker is stripped from the conversation view
 // and excluded from the GET query above.
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authResult = await requireSuperadmin();
+  if (!authResult.ok) return authResult.response;
 
   const tenant = await getTenant();
   if (!tenant) {
@@ -135,7 +131,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'ticketIds required' }, { status: 400 });
   }
 
-  const marker = `\n[DrabbadHanterad: ${new Date().toISOString()} av ${session.user.email}]`;
+  const marker = `\n[DrabbadHanterad: ${new Date().toISOString()} av ${authResult.userEmail}]`;
 
   let dismissed = 0;
   for (const id of ticketIds) {

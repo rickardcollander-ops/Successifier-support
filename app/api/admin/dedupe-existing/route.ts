@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
-import { auth } from '@/lib/auth';
+import { requireSuperadmin } from '@/lib/api-auth';
 
 // Dedup window for existing cleanup. Matches the window enforced for new
 // tickets in lib/services/deduplicator.ts so the retroactive cleanup uses
@@ -17,10 +17,8 @@ function normalizeSubject(subject: string): string {
 // as status='duplicate' so they show up under the Dubletter tab instead
 // of being silently deleted.
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authResult = await requireSuperadmin();
+  if (!authResult.ok) return authResult.response;
 
   const tenant = await getTenant();
   if (!tenant) {
