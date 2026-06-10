@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer } from 'lucide-react';
+import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, Wallet, Settings2 } from 'lucide-react';
 import { statusLabelSv, priorityLabelSv } from '@/lib/constants';
 import { t } from '@/lib/i18n';
 
@@ -9,6 +9,14 @@ interface AgentStats {
   name: string;
   assigned: number;
   sent: number;
+}
+
+interface GroupStats {
+  count: number;
+  responseMedian: number;
+  handlingMedian: number;
+  handlingP90: number;
+  handledCount: number;
 }
 
 interface ReportData {
@@ -26,16 +34,51 @@ interface ReportData {
   }>;
   activityInterval?: 'hour' | 'day';
   perUserStats?: AgentStats[];
+  trend?: Array<{
+    label: string;
+    responseMedian: number;
+    handlingMedian: number;
+    count: number;
+  }>;
+  aiComparison?: {
+    asIs: GroupStats;
+    edited: GroupStats;
+    none: GroupStats;
+  };
+  savings?: {
+    agentHourlyCost: number | null;
+    baselineHandlingMinutes: number | null;
+    baselineResponseHours: number | null;
+    baselineSource: 'configured' | 'no_ai_group' | null;
+    aiAssistedCount: number;
+    aiAssistedHandlingMedian: number;
+    savedMinutesPerTicket: number | null;
+    savedHours: number | null;
+    moneySaved: number | null;
+  };
+}
+
+interface ReportSettings {
+  agentHourlyCost: number | null;
+  baselineResponseHours: number | null;
+  baselineHandlingMinutes: number | null;
 }
 
 export default function ReportsPage() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'1d' | '7d' | '30d' | '90d'>('30d');
+  const [settings, setSettings] = useState<ReportSettings | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
     fetchReportData();
   }, [timeRange]);
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
 
   const fetchReportData = async () => {
     try {
@@ -48,6 +91,37 @@ export default function ReportsPage() {
       console.error('Error fetching report data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch('/api/reports/settings');
+      if (res.ok) setSettings(await res.json());
+    } catch (error) {
+      console.error('Error fetching report settings:', error);
+    }
+  };
+
+  const saveSettings = async () => {
+    if (!settings) return;
+    setSavingSettings(true);
+    try {
+      const res = await fetch('/api/reports/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      if (res.ok) {
+        setSettings(await res.json());
+        setShowSettings(false);
+        // Re-fetch so the money/baseline numbers reflect the new inputs.
+        fetchReportData();
+      }
+    } catch (error) {
+      console.error('Error saving report settings:', error);
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -98,6 +172,19 @@ export default function ReportsPage() {
     return `${Math.round((minutes / 60) * 10) / 10} h`;
   };
 
+  // Shared minute formatter for the comparison/trend panels.
+  const fmtMinutes = (minutes: number): string => {
+    if (!minutes || minutes <= 0) return '–';
+    if (minutes < 60) return `${Math.round(minutes)} min`;
+    return `${Math.round((minutes / 60) * 10) / 10} h`;
+  };
+  const fmtSek = (amount: number): string =>
+    new Intl.NumberFormat('sv-SE', { style: 'currency', currency: 'SEK', maximumFractionDigits: 0 }).format(amount);
+
+  const trend = data.trend || [];
+  const aiComparison = data.aiComparison;
+  const savings = data.savings;
+
   const perUserStats = data.perUserStats || [];
   const maxAgentTotal = Math.max(
     1,
@@ -112,17 +199,88 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{t('Rapporter')}</h1>
           <p className="text-slate-600 dark:text-slate-400 mt-1">{t('Statistik och analys')}</p>
         </div>
-        <select
-          value={timeRange}
-          onChange={(e) => setTimeRange(e.target.value as any)}
-          className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
-        >
-          <option value="1d">{t('Senaste dygnet')}</option>
-          <option value="7d">{t('Senaste 7 dagarna')}</option>
-          <option value="30d">{t('Senaste 30 dagarna')}</option>
-          <option value="90d">{t('Senaste 90 dagarna')}</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSettings((v) => !v)}
+            className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 flex items-center gap-2"
+            title={t('Inställningar för värde & ROI')}
+          >
+            <Settings2 className="w-4 h-4" />
+            <span className="hidden sm:inline text-sm">{t('Värde & ROI')}</span>
+          </button>
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value as any)}
+            className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+          >
+            <option value="1d">{t('Senaste dygnet')}</option>
+            <option value="7d">{t('Senaste 7 dagarna')}</option>
+            <option value="30d">{t('Senaste 30 dagarna')}</option>
+            <option value="90d">{t('Senaste 90 dagarna')}</option>
+          </select>
+        </div>
       </div>
+
+      {/* Value/ROI settings — agent hourly cost + "before our tool" baselines.
+          These drive the money-saved estimate and the baseline comparison. */}
+      {showSettings && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-[#7C5CFF]/40 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Settings2 className="w-5 h-5 text-[#7C5CFF]" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Värde & ROI-inställningar')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Används för att räkna ut tidsbesparing i kronor och jämföra mot läget före verktyget. Lämna tomt för att hoppa över.')}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label className="block">
+              <span className="text-sm text-slate-600 dark:text-slate-400">{t('Timkostnad per medarbetare (kr)')}</span>
+              <input
+                type="number" min="0" step="50"
+                value={settings?.agentHourlyCost ?? ''}
+                onChange={(e) => setSettings((s) => ({ ...(s || { baselineResponseHours: null, baselineHandlingMinutes: null, agentHourlyCost: null }), agentHourlyCost: e.target.value === '' ? null : Number(e.target.value) }))}
+                placeholder={t('t.ex. 400')}
+                className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm text-slate-600 dark:text-slate-400">{t('Baslinje handläggningstid (min)')}</span>
+              <input
+                type="number" min="0" step="1"
+                value={settings?.baselineHandlingMinutes ?? ''}
+                onChange={(e) => setSettings((s) => ({ ...(s || { baselineResponseHours: null, baselineHandlingMinutes: null, agentHourlyCost: null }), baselineHandlingMinutes: e.target.value === '' ? null : Number(e.target.value) }))}
+                placeholder={t('före verktyget, t.ex. 20')}
+                className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm text-slate-600 dark:text-slate-400">{t('Baslinje svarstid (timmar)')}</span>
+              <input
+                type="number" min="0" step="0.5"
+                value={settings?.baselineResponseHours ?? ''}
+                onChange={(e) => setSettings((s) => ({ ...(s || { baselineResponseHours: null, baselineHandlingMinutes: null, agentHourlyCost: null }), baselineResponseHours: e.target.value === '' ? null : Number(e.target.value) }))}
+                placeholder={t('före verktyget, t.ex. 6')}
+                className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+              />
+            </label>
+          </div>
+          <div className="flex items-center gap-3 mt-4">
+            <button
+              onClick={saveSettings}
+              disabled={savingSettings}
+              className="px-4 py-2 bg-[#7C5CFF] text-white rounded-md hover:bg-[#6B4FE0] disabled:opacity-50 text-sm font-medium"
+            >
+              {savingSettings ? t('Sparar…') : t('Spara')}
+            </button>
+            <button
+              onClick={() => setShowSettings(false)}
+              className="px-4 py-2 text-slate-600 dark:text-slate-300 text-sm"
+            >
+              {t('Avbryt')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -191,6 +349,144 @@ export default function ReportsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Value case: money saved ─────────────────────────────────────── */}
+      {savings && (
+        <div className="bg-gradient-to-br from-[#7C5CFF]/10 to-emerald-500/10 dark:from-[#7C5CFF]/20 dark:to-emerald-500/10 rounded-lg border border-[#7C5CFF]/30 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Wallet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Uppskattad besparing')}</h3>
+          </div>
+          {savings.moneySaved != null ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{fmtSek(savings.moneySaved)}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('sparat i vald period')}</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{savings.savedHours} h</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('arbetstid sparad totalt')}</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{fmtMinutes(savings.savedMinutesPerTicket || 0)}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('sparat per ärende')}</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{savings.aiAssistedCount}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('ärenden med AI-stöd')}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
+              <p>{t('Fyll i timkostnad och en baslinje under "Värde & ROI" för att se besparingen i kronor.')}</p>
+              {savings.baselineSource === 'no_ai_group' && (
+                <p className="text-xs">{t('Tips: en baslinje räknas redan fram från ärenden utan AI-stöd – lägg bara till timkostnad.')}</p>
+              )}
+            </div>
+          )}
+          <p className="text-[11px] text-slate-400 mt-4 pt-4 border-t border-[#7C5CFF]/20">
+            {savings.baselineSource === 'configured'
+              ? t('Baslinje: inställd "före verktyget"-tid.')
+              : savings.baselineSource === 'no_ai_group'
+              ? t('Baslinje: handläggningstid för ärenden utan AI-stöd i samma period.')
+              : t('Baslinje saknas – ange en under "Värde & ROI" eller importera historik.')}
+            {savings.baselineHandlingMinutes != null && ` ${t('Baslinje')} ${fmtMinutes(savings.baselineHandlingMinutes)} → ${fmtMinutes(savings.aiAssistedHandlingMedian)} ${t('med AI.')}`}
+          </p>
+        </div>
+      )}
+
+      {/* ── Value case: with vs without AI ──────────────────────────────── */}
+      {aiComparison && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="w-5 h-5 text-[#7C5CFF]" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Med vs utan AI-utkast')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Median handläggningstid (aktiv arbetstid) per ärende, uppdelat på hur AI-utkastet användes.')}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {([
+              { key: 'asIs', label: t('AI-utkast skickat ~oförändrat'), g: aiComparison.asIs, accent: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
+              { key: 'edited', label: t('AI-utkast omskrivet'), g: aiComparison.edited, accent: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
+              { key: 'none', label: t('Utan AI-utkast'), g: aiComparison.none, accent: 'text-slate-600 dark:text-slate-300', dot: 'bg-slate-400' },
+            ] as const).map(({ key, label, g, accent, dot }) => (
+              <div key={key} className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</span>
+                </div>
+                <p className={`text-2xl font-bold ${accent}`}>
+                  {g.handledCount > 0 ? fmtMinutes(g.handlingMedian) : '–'}
+                </p>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-0.5">
+                  <p>{g.count} {t('ärenden')}{g.handledCount > 0 && g.handledCount < g.count ? ` (${g.handledCount} ${t('med arbetstid')})` : ''}</p>
+                  {g.handledCount > 0 && <p>{t('p90:')} {fmtMinutes(g.handlingP90)}</p>}
+                  <p>{t('svarstid median:')} {g.count > 0 ? `${g.responseMedian} h` : '–'}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {aiComparison.asIs.handledCount > 0 && aiComparison.none.handledCount > 0 && aiComparison.none.handlingMedian > aiComparison.asIs.handlingMedian && (
+            <p className="text-sm text-emerald-700 dark:text-emerald-400 mt-4 font-medium">
+              {t('AI-utkast som skickas oförändrat tar')} {Math.round((1 - aiComparison.asIs.handlingMedian / aiComparison.none.handlingMedian) * 100)}% {t('kortare tid än ärenden utan AI-stöd.')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── Value case: trend over time ─────────────────────────────────── */}
+      {trend.length > 1 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingDown className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Utveckling över tid')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Median per period – en nedåtgående kurva visar att verktyget kortar tiderna.')}
+          </p>
+          {([
+            { title: t('Svarstid (timmar)'), pick: (p: typeof trend[number]) => p.responseMedian, suffix: 'h', color: 'from-purple-500 to-purple-400' },
+            { title: t('Handläggningstid (min)'), pick: (p: typeof trend[number]) => p.handlingMedian, suffix: 'min', color: 'from-[#7C5CFF] to-[#9F7BFF]' },
+          ] as const).map(({ title, pick, suffix, color }) => {
+            const max = Math.max(1, ...trend.map(pick));
+            const first = pick(trend[0]);
+            const last = pick(trend[trend.length - 1]);
+            const delta = first > 0 ? Math.round(((last - first) / first) * 100) : 0;
+            return (
+              <div key={title} className="mb-6 last:mb-0">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{title}</span>
+                  {first > 0 && (
+                    <span className={`text-xs font-semibold ${delta < 0 ? 'text-emerald-600 dark:text-emerald-400' : delta > 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                      {delta > 0 ? '+' : ''}{delta}% {delta < 0 ? t('↓ snabbare') : delta > 0 ? t('↑ långsammare') : ''}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-end justify-between gap-1 sm:gap-2">
+                  {trend.map((point, i) => {
+                    const val = pick(point);
+                    const height = val === 0 ? 2 : Math.max((val / max) * 100, 4);
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center min-w-0">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">{val || '–'}</span>
+                        <div className="w-full h-28 flex items-end justify-center">
+                          <div
+                            className={`w-full rounded-t-md transition-all hover:brightness-110 ${val === 0 ? 'bg-slate-200 dark:bg-slate-700' : `bg-gradient-to-t ${color}`}`}
+                            style={{ height: `${height}%` }}
+                            title={`${point.label}: ${val} ${suffix} (${point.count} ${t('ärenden')})`}
+                          />
+                        </div>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 truncate w-full text-center">{point.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Per-user stats (always visible, even if zero) */}
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">

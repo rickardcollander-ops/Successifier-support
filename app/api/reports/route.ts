@@ -42,6 +42,27 @@ function orderedCounts(values: string[], order: string[]): Record<string, number
   return out;
 }
 
+// Median is the headline number for time-to-X: a couple of tickets left open
+// over a weekend skew the mean badly, and "half our tickets are answered
+// faster than X" is the claim that actually survives scrutiny.
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+}
+
+// p90 sits next to the median to show the tail — "even the slow ones are
+// under X". Nearest-rank, which is plenty for a dashboard.
+function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const rank = Math.ceil((p / 100) * sorted.length) - 1;
+  return sorted[Math.min(Math.max(rank, 0), sorted.length - 1)];
+}
+
 export async function GET(request: NextRequest) {
   const authResult = await requireApiAuth(request);
   if (!authResult.ok) return authResult.response;
@@ -194,6 +215,144 @@ export async function GET(request: NextRequest) {
         }, 0) / handledInRange.length
       : 0;
 
+    // ── Value case: trend, with-vs-without AI, and money saved ───────────
+    // Per-ticket time getters reused below. Response = wall-clock from the
+    // customer's mail to Send (hours). Handling = active work time from
+    // workStartedAt to Send (minutes), only where we actually have a start.
+    const responseHours = (t: { createdAt: Date; sentAt: Date | null }) =>
+      (t.sentAt!.getTime() - t.createdAt.getTime()) / HOUR_MS;
+    const hasHandling = (t: { workStartedAt: Date | null; sentAt: Date | null }) =>
+      Boolean(t.workStartedAt && t.sentAt && t.sentAt.getTime() > t.workStartedAt.getTime());
+    const handlingMinutes = (t: { workStartedAt: Date | null; sentAt: Date | null }) =>
+      (t.sentAt!.getTime() - t.workStartedAt!.getTime()) / 60000;
+
+    // Summarise a group of sent tickets for the dashboard: median is the
+    // headline, p90 shows the tail, handledCount tells the UI how solid the
+    // handling number is (a median of 1 ticket isn't a claim).
+    const groupStats = (items: typeof sentInRange) => {
+      const resp = items.map(responseHours);
+      const hand = items.filter(hasHandling).map(handlingMinutes);
+      return {
+        count: items.length,
+        responseMedian: Math.round(median(resp) * 10) / 10,
+        handlingMedian: Math.round(median(hand)),
+        handlingP90: Math.round(percentile(hand, 90)),
+        handledCount: hand.length,
+      };
+    };
+
+    // Trend over time: is the team getting faster as the knowledge base and
+    // AI mature? Weekly buckets for 30/90d, daily for 7d. A single day (1d)
+    // can't show a trend, so we skip it. The downward slope IS the argument.
+    const trend: Array<{ label: string; responseMedian: number; handlingMedian: number; count: number }> = [];
+    if (range !== '1d') {
+      const stepDays = range === '7d' ? 1 : 7;
+      const totalDays = daysAgo;
+      const stepMs = stepDays * DAY_MS;
+      const buckets = Math.ceil(totalDays / stepDays);
+      const fmt = (d: Date) =>
+        d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' });
+      for (let i = buckets - 1; i >= 0; i--) {
+        const end = now.getTime() - i * stepMs;
+        const start = end - stepMs;
+        const inBucket = sentInRange.filter((t) => {
+          const s = t.sentAt!.getTime();
+          return s >= start && s < end;
+        });
+        const resp = inBucket.map(responseHours);
+        const hand = inBucket.filter(hasHandling).map(handlingMinutes);
+        trend.push({
+          label: fmt(new Date(start)),
+          responseMedian: Math.round(median(resp) * 10) / 10,
+          handlingMedian: Math.round(median(hand)),
+          count: inBucket.length,
+        });
+      }
+    }
+
+    // With vs without AI — the causal part of the case. wasEdited from the
+    // AIResponseFeedback log is authoritative when present; otherwise we infer
+    // from the ticket itself (no aiResponse = no AI; finalResponse equal to
+    // aiResponse = sent as-is; otherwise rewritten).
+    const feedbackRows = await prisma.aIResponseFeedback.findMany({
+      where: { tenantId: tenant.id, createdAt: { gte: queryStart } },
+      select: { ticketId: true, wasEdited: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const editedByTicket = new Map<string, boolean>();
+    for (const f of feedbackRows) editedByTicket.set(f.ticketId, f.wasEdited); // last write wins
+
+    const norm = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim();
+    const asIs: typeof sentInRange = [];
+    const editedGroup: typeof sentInRange = [];
+    const noAi: typeof sentInRange = [];
+    for (const t of sentInRange) {
+      const fb = editedByTicket.get(t.id);
+      let aiUsed: boolean;
+      let edited: boolean;
+      if (fb !== undefined) {
+        aiUsed = true;
+        edited = fb;
+      } else if (norm(t.aiResponse)) {
+        aiUsed = true;
+        const a = norm(t.aiResponse);
+        const f = norm(t.finalResponse);
+        edited = !f || f !== a;
+      } else {
+        aiUsed = false;
+        edited = false;
+      }
+      if (!aiUsed) noAi.push(t);
+      else if (edited) editedGroup.push(t);
+      else asIs.push(t);
+    }
+    const aiComparison = {
+      asIs: groupStats(asIs),
+      edited: groupStats(editedGroup),
+      none: groupStats(noAi),
+    };
+
+    // Money saved = time the AI shaved off each ticket × tickets × agent cost.
+    // Baseline: a configured "before our tool" handling time wins; otherwise
+    // fall back to how long this same team takes WITHOUT an AI draft (the
+    // no-AI group), but only when that group is big enough to mean something.
+    const reportSettings = await prisma.reportSettings.findUnique({
+      where: { tenantId: tenant.id },
+    });
+    const aiAssisted = [...asIs, ...editedGroup];
+    const aiAssistedHand = aiAssisted.filter(hasHandling).map(handlingMinutes);
+    const aiAssistedHandlingMedian = median(aiAssistedHand);
+
+    let baselineHandlingMinutes: number | null = reportSettings?.baselineHandlingMinutes ?? null;
+    let baselineSource: 'configured' | 'no_ai_group' | null =
+      baselineHandlingMinutes != null ? 'configured' : null;
+    if (baselineHandlingMinutes == null && aiComparison.none.handledCount >= 3) {
+      baselineHandlingMinutes = aiComparison.none.handlingMedian;
+      baselineSource = 'no_ai_group';
+    }
+
+    const savedMinutesPerTicket =
+      baselineHandlingMinutes != null
+        ? Math.max(0, baselineHandlingMinutes - aiAssistedHandlingMedian)
+        : null;
+    const savedHours =
+      savedMinutesPerTicket != null ? (savedMinutesPerTicket * aiAssistedHand.length) / 60 : null;
+    const hourlyCost = reportSettings?.agentHourlyCost ?? null;
+    const moneySaved =
+      savedHours != null && hourlyCost != null ? Math.round(savedHours * hourlyCost) : null;
+
+    const savings = {
+      agentHourlyCost: hourlyCost,
+      baselineHandlingMinutes,
+      baselineResponseHours: reportSettings?.baselineResponseHours ?? null,
+      baselineSource,
+      aiAssistedCount: aiAssistedHand.length,
+      aiAssistedHandlingMedian: Math.round(aiAssistedHandlingMedian),
+      savedMinutesPerTicket: savedMinutesPerTicket != null ? Math.round(savedMinutesPerTicket) : null,
+      savedHours: savedHours != null ? Math.round(savedHours * 10) / 10 : null,
+      moneySaved,
+    };
+
     // Resolved today — a "today" metric independent of the selected range:
     // a ticket opened last week but closed this morning still counts.
     // "Today" means the current Stockholm calendar day.
@@ -277,6 +436,10 @@ export async function GET(request: NextRequest) {
       // Tells the client how to label the activity bars ("14:00" vs "3 jun").
       activityInterval: isHourly ? 'hour' : 'day',
       perUserStats,
+      // Value-case payloads (see blocks above).
+      trend,
+      aiComparison,
+      savings,
     });
   } catch (error) {
     console.error('Error fetching report data:', error);
