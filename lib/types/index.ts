@@ -99,7 +99,51 @@ export interface KnowledgeBase {
   category: string | null;
   tags: string[];
   isActive: boolean;
+  // Public help-center fields
+  slug: string | null;
+  isPublic: boolean;
+  status: string; // 'draft' | 'review' | 'published'
+  excerpt: string | null;
+  relatedIds: string[];
+  sortOrder: number;
+  viewCount: number;
+  categoryId: string | null;
   createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface KnowledgeCategory {
+  id: string;
+  tenantId: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  sortOrder: number;
+  isPublic: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface KnowledgeRevision {
+  id: string;
+  articleId: string;
+  title: string;
+  content: string;
+  excerpt: string | null;
+  editedBy: string | null;
+  createdAt: Date;
+}
+
+// Shape returned by the public help-center API. Deliberately a narrow subset
+// of KnowledgeBase — never exposes tenantId, isActive, internal flags or PII.
+export interface PublicArticle {
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  content?: string;
+  category: { slug: string; name: string } | null;
+  tags: string[];
   updatedAt: Date;
 }
 

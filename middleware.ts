@@ -12,6 +12,17 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Public help center: the customer-facing pages (/help) and their read-only
+  // JSON API (/api/public) are intentionally unauthenticated. They expose only
+  // published, public articles (see lib/services/public-kb.ts).
+  if (
+    pathname === "/help" ||
+    pathname.startsWith("/help/") ||
+    pathname.startsWith("/api/public/")
+  ) {
+    return NextResponse.next();
+  }
+
   // API routes enforce their own auth (session OR validated API key — see
   // lib/api-auth.ts). The middleware can't validate API keys (no DB access
   // in the edge runtime), so it only short-circuits the obvious case:

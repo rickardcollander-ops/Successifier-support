@@ -9,7 +9,7 @@ interface KnowledgeListProps {
   onCreateNew: () => void;
 }
 
-type KnowledgeTab = 'manual' | 'learned';
+type KnowledgeTab = 'manual' | 'learned' | 'review';
 
 const AUTO_LEARNED_CATEGORY = 'Lärande från skickade svar';
 
@@ -25,13 +25,16 @@ export default function KnowledgeList({
 }: KnowledgeListProps) {
   const [activeTab, setActiveTab] = useState<KnowledgeTab>('manual');
 
-  const { manualArticles, learnedArticles, visibleArticles } = useMemo(() => {
+  const { manualArticles, learnedArticles, reviewArticles, visibleArticles } = useMemo(() => {
     const manual = articles.filter((a) => !isAutoLearned(a));
     const learned = articles.filter(isAutoLearned);
+    const review = articles.filter((a) => a.status === 'review');
+    const visible = activeTab === 'manual' ? manual : activeTab === 'learned' ? learned : review;
     return {
       manualArticles: manual,
       learnedArticles: learned,
-      visibleArticles: activeTab === 'manual' ? manual : learned,
+      reviewArticles: review,
+      visibleArticles: visible,
     };
   }, [articles, activeTab]);
 
@@ -44,12 +47,30 @@ export default function KnowledgeList({
             {articles.length} artiklar
           </p>
         </div>
-        <button
-          onClick={onCreateNew}
-          className="px-3 py-1 text-sm bg-gradient-to-r from-[#7C5CFF] to-[#9F7BFF] text-white rounded-md hover:brightness-110 shadow-[0_0_15px_rgba(124,92,255,0.4)]"
-        >
-          + Ny
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href="/knowledge/analytics"
+            className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
+            title="Hjälpcenter-statistik"
+          >
+            Statistik
+          </a>
+          <a
+            href="/help"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
+            title="Öppna det publika hjälpcentret"
+          >
+            Hjälpcenter ↗
+          </a>
+          <button
+            onClick={onCreateNew}
+            className="px-3 py-1 text-sm bg-gradient-to-r from-[#7C5CFF] to-[#9F7BFF] text-white rounded-md hover:brightness-110 shadow-[0_0_15px_rgba(124,92,255,0.4)]"
+          >
+            + Ny
+          </button>
+        </div>
       </div>
       <div className="flex border-b border-slate-200 dark:border-slate-700" role="tablist">
         <button
@@ -92,13 +113,35 @@ export default function KnowledgeList({
             {learnedArticles.length}
           </span>
         </button>
+        <button
+          role="tab"
+          aria-selected={activeTab === 'review'}
+          onClick={() => setActiveTab('review')}
+          className={`flex-1 px-4 py-2.5 text-sm font-medium transition-all ${
+            activeTab === 'review'
+              ? 'text-[#7C5CFF] border-b-2 border-[#7C5CFF] bg-[#7C5CFF]/5'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+          }`}
+          title={t('Artiklar som väntar på granskning innan publicering')}
+        >
+          Granskning
+          <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+            activeTab === 'review'
+              ? 'bg-[#7C5CFF] text-white'
+              : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+          }`}>
+            {reviewArticles.length}
+          </span>
+        </button>
       </div>
       <div className="divide-y divide-slate-200 dark:divide-slate-700 max-h-[calc(100vh-14rem)] overflow-y-auto">
         {visibleArticles.length === 0 ? (
           <div className="p-8 text-center text-slate-500 dark:text-slate-400">
             {activeTab === 'manual'
               ? 'Inga manuella artiklar ännu. Skapa din första!'
-              : 'Inga automatiskt lärda artiklar ännu. De skapas när du skickar svar.'}
+              : activeTab === 'learned'
+              ? 'Inga automatiskt lärda artiklar ännu. De skapas när du skickar svar.'
+              : 'Inga artiklar väntar på granskning.'}
           </div>
         ) : (
           visibleArticles.map((article) => (
@@ -109,7 +152,12 @@ export default function KnowledgeList({
                 selectedArticle?.id === article.id ? 'bg-slate-50 dark:bg-slate-700' : ''
               }`}
             >
-              <h3 className="font-medium text-sm text-slate-900 dark:text-slate-100 mb-2">{article.title}</h3>
+              <h3 className="font-medium text-sm text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+                {article.isPublic && (
+                  <span className="inline-block w-2 h-2 rounded-full bg-green-500" title="Publik i hjälpcentret" />
+                )}
+                <span>{article.title}</span>
+              </h3>
               {article.category && (
                 <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">{article.category}</p>
               )}
