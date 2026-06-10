@@ -43,7 +43,8 @@ export async function POST() {
         await prisma.$executeRaw`
           UPDATE "Ticket"
           SET "aiResponse" = ${aiResponse},
-              "aiConfidence" = ${confidence}
+              "aiConfidence" = ${confidence},
+              "contentRefreshedAt" = NOW()
           WHERE id = ${ticket.id}
         `;
 

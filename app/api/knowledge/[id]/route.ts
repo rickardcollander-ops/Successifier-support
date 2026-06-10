@@ -88,8 +88,13 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    const existing = await findScopedKnowledge(id);
+    if (!existing) {
+      return NextResponse.json({ error: 'Knowledge article not found' }, { status: 404 });
+    }
+
     await prisma.knowledgeBase.delete({
-      where: { id },
+      where: { id: existing.id },
     });
 
     return NextResponse.json({ success: true });
