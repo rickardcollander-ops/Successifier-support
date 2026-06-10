@@ -14,6 +14,15 @@ const ROOT = join(__dirname, '..');
 // Routes that are allowed to skip the lib/api-auth guards, with the reason.
 const ALLOWLIST: Record<string, string> = {
   'app/api/auth/[...nextauth]/route.ts': 'NextAuth handler — must be public',
+  // Public help center: read-only endpoints that intentionally serve
+  // unauthenticated visitors. They expose ONLY published, public articles and
+  // hard-exclude auto-learned (PII) content via lib/services/public-kb.ts, and
+  // are rate-limited. See KNOWLEDGE_BASE_INTEGRATION.md.
+  'app/api/public/kb/categories/route.ts': 'Public help center — read-only, published content only',
+  'app/api/public/kb/articles/route.ts': 'Public help center — read-only, published content only',
+  'app/api/public/kb/articles/[slug]/route.ts': 'Public help center — read-only, published content only',
+  'app/api/public/kb/articles/[slug]/feedback/route.ts': 'Public help center — anonymous helpful/unhelpful vote, rate-limited',
+  'app/api/public/kb/search/route.ts': 'Public help center — read-only search, published content only',
 };
 
 // Guards from lib/api-auth.ts. A route calling one of these (and returning

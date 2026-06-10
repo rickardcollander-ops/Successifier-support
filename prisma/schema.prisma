@@ -21,6 +21,8 @@ model Tenant {
   users          User[]
   apiKeys        ApiKey[]
   blockedSenders BlockedSender[]
+  kbCategories   KnowledgeCategory[]
+  kbEvents       KnowledgeEvent[]
 }
 
 model Agent {
@@ -77,14 +79,94 @@ model KnowledgeBase {
   content   String   @db.Text
   category  String?
   tags      String[]
+  // isActive controls whether the AI may use the article (unchanged meaning).
   isActive  Boolean  @default(true)
+
+  // --- Public help center fields (separate from AI visibility) ---
+  // Clean URL slug, unique per tenant. Backfilled from the title.
+  slug       String?
+  // Whether the article is shown in the public help center. ALWAYS false
+  // for auto-learned articles (they contain customer PII).
+  isPublic   Boolean  @default(false)
+  // Editorial workflow: 'draft' | 'review' | 'published'.
+  status     String   @default("draft")
+  // Short summary for lists / SEO.
+  excerpt    String?
+  // Manually picked "see also" article ids.
+  relatedIds String[] @default([])
+  // Manual ordering within the help center.
+  sortOrder  Int      @default(0)
+  // Fast denormalized view counter (detailed log lives in KnowledgeEvent).
+  viewCount  Int      @default(0)
+  // Structured category (optional; legacy free-text `category` kept for AI).
+  categoryId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  kbCategory KnowledgeCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  revisions KnowledgeRevision[]
 
   @@index([tenantId, isActive])
   @@index([tenantId, category])
+  @@index([tenantId, isPublic, status])
+  @@unique([tenantId, slug])
+}
+
+// Structured, public-facing categories for the help center. The legacy
+// free-text KnowledgeBase.category is kept for backwards compatibility and
+// the AI keyword rerank; this model powers the browsable help center.
+model KnowledgeCategory {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  slug        String
+  description String?
+  icon        String?
+  sortOrder   Int      @default(0)
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  articles KnowledgeBase[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+// A snapshot of an article's content, written on every edit so changes can
+// be audited and restored.
+model KnowledgeRevision {
+  id        String   @id @default(cuid())
+  articleId String
+  title     String
+  content   String   @db.Text
+  excerpt   String?
+  editedBy  String?
+  createdAt DateTime @default(now())
+
+  article KnowledgeBase @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([articleId, createdAt])
+}
+
+// Raw usage events powering help-center analytics (views, searches, helpful
+// votes). Kept append-only and aggregated on read.
+model KnowledgeEvent {
+  id           String   @id @default(cuid())
+  tenantId     String
+  type         String   // 'view' | 'search' | 'helpful' | 'unhelpful'
+  articleId    String?
+  query        String?
+  resultsCount Int?
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, type, createdAt])
+  @@index([articleId])
 }
 
 model AIResponseFeedback {

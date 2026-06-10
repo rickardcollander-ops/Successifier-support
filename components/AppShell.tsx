@@ -11,6 +11,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const isAuthPage = pathname.startsWith('/auth/');
+  // The public help center renders its own chrome and must never show the
+  // authenticated sidebar, even when an agent happens to be signed in.
+  const isPublicPage = pathname === '/help' || pathname.startsWith('/help/');
   const isLoggedIn = status === 'authenticated';
 
   // Listen for sidebar collapse state changes
@@ -32,8 +35,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Auth pages: no sidebar, full screen
-  if (isAuthPage || !isLoggedIn) {
+  // Auth pages and the public help center: no sidebar, full screen
+  if (isAuthPage || isPublicPage || !isLoggedIn) {
     return (
       <div className="min-h-screen bg-zinc-50 dark:bg-slate-900 text-zinc-900 dark:text-slate-100">
         {children}

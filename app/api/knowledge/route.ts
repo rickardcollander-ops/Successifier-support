@@ -3,6 +3,9 @@ import { prisma } from '@/lib/db/client';
 import { product } from '@/lib/products';
 import { getTenantId } from '@/lib/products/tenant';
 import { requireApiAuth } from '@/lib/api-auth';
+import { generateUniqueSlug } from '@/lib/services/kb-slug';
+
+const VALID_STATUSES = new Set(['draft', 'review', 'published']);
 
 async function resolveTenantId() {
   const tenantId = await getTenantId();
@@ -59,7 +62,7 @@ export async function POST(request: NextRequest) {
   try {
     const tenantId = await resolveTenantId();
     const body = await request.json();
-    const { title, content, category, tags, isActive } = body;
+    const { title, content, category, tags, isActive, isPublic, status, excerpt, categoryId, relatedIds, sortOrder, slug } = body;
 
     if (!title || !content) {
       return NextResponse.json(
@@ -67,6 +70,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // A public article must have a slug; generate one when not supplied.
+    const finalSlug = await generateUniqueSlug(tenantId, slug || title);
 
     const article = await prisma.knowledgeBase.create({
       data: {
@@ -76,6 +82,13 @@ export async function POST(request: NextRequest) {
         category,
         tags: tags || [],
         isActive: isActive !== undefined ? isActive : true,
+        slug: finalSlug,
+        isPublic: isPublic === true,
+        status: VALID_STATUSES.has(status) ? status : 'draft',
+        excerpt: excerpt || null,
+        categoryId: categoryId || null,
+        relatedIds: Array.isArray(relatedIds) ? relatedIds : [],
+        sortOrder: typeof sortOrder === 'number' ? sortOrder : 0,
       },
     });
 
