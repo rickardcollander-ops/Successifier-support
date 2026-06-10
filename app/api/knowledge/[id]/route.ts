@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { requireApiAuth } from '@/lib/api-auth';
+import { findScopedKnowledge } from '@/lib/db/scoped';
+
+// Client-settable fields. tenantId and timestamps are server-managed.
+const PATCHABLE_FIELDS = ['title', 'content', 'category', 'tags', 'isActive'] as const;
 
 export async function PATCH(
   request: NextRequest,
@@ -13,22 +17,25 @@ export async function PATCH(
     const body = await request.json();
     const { id } = await params;
 
-    const data = { ...body };
+    const existing = await findScopedKnowledge(id);
+    if (!existing) {
+      return NextResponse.json({ error: 'Knowledge article not found' }, { status: 404 });
+    }
+
+    const data: Record<string, unknown> = {};
+    for (const field of PATCHABLE_FIELDS) {
+      if (field in body) data[field] = body[field];
+    }
 
     if (data.isActive === true) {
-      const existing = await prisma.knowledgeBase.findUnique({
-        where: { id },
-        select: { title: true },
-      });
-
-      const rawTitle = typeof data.title === 'string' ? data.title : existing?.title;
+      const rawTitle = typeof data.title === 'string' ? data.title : existing.title;
       if (rawTitle) {
         data.title = rawTitle.replace(/^\s*AI\s*Draft:\s*/i, '').trim();
       }
     }
 
     const article = await prisma.knowledgeBase.update({
-      where: { id },
+      where: { id: existing.id },
       data,
     });
 
@@ -52,8 +59,13 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    const existing = await findScopedKnowledge(id);
+    if (!existing) {
+      return NextResponse.json({ error: 'Knowledge article not found' }, { status: 404 });
+    }
+
     await prisma.knowledgeBase.delete({
-      where: { id },
+      where: { id: existing.id },
     });
 
     return NextResponse.json({ success: true });

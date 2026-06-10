@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/client';
 import { getTenantId } from '@/lib/products/tenant';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
+import { sanitizeInboundText } from '@/lib/services/sanitize';
 import { validateApiKey } from '@/lib/api-auth';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
 
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
       customerEmail: email,
       customerName: name,
       subject,
-      originalMessage: message,
+      originalMessage: sanitizeInboundText(message),
       priority: priority || 'normal',
       status: isReply ? 'in_progress' : 'new',
       contextData: context,

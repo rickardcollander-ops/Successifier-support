@@ -54,6 +54,10 @@ model Ticket {
   assignedTo      String?
   sentBy          String?
   sentAt          DateTime?
+  // Bumped by the raw-SQL writes (AI drafts, context refresh) that
+  // deliberately skip @updatedAt so the list order stays stable. The
+  // delta poll uses MAX(updatedAt, contentRefreshedAt) as "changed since".
+  contentRefreshedAt DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -61,6 +65,7 @@ model Ticket {
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
+  @@index([tenantId, updatedAt])
   @@index([tenantId, assignedTo])
   @@index([tenantId, sentBy])
 }

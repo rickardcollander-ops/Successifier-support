@@ -4,6 +4,7 @@ import { getTenantId } from '@/lib/products/tenant';
 import { GmailService } from '@/lib/integrations/gmail';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
+import { sanitizeInboundText } from '@/lib/services/sanitize';
 import { parseFramerForm } from '@/lib/services/inbound-forms';
 import { requireApiAuth } from '@/lib/api-auth';
 
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
         customerEmail,
         customerName,
         subject: email.subject,
-        originalMessage: body,
+        originalMessage: sanitizeInboundText(body),
         status: isReply ? 'in_progress' : 'new',
         priority: 'normal',
         contextData: context,

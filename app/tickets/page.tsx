@@ -221,6 +221,12 @@ export default function TicketsPage() {
   const recentlyDeletedRef = useRef<Map<string, number>>(new Map());
   const TOMBSTONE_TTL_MS = 30_000;
 
+  // Cursor for the delta poll. After the initial full fetch we only ask the
+  // server for tickets changed since the previous response — the 3-second
+  // poll otherwise re-downloads (and the server re-reads from Postgres)
+  // every single ticket each cycle.
+  const lastSyncRef = useRef<string | null>(null);
+
   // Report presence when selected ticket changes
   useEffect(() => {
     selectedTicketIdRef.current = selectedTicket?.id || null;
@@ -292,10 +298,19 @@ export default function TicketsPage() {
 
   const fetchTickets = async () => {
     try {
-      const response = await fetch('/api/tickets');
+      const since = lastSyncRef.current;
+      const response = await fetch(
+        since ? `/api/tickets?since=${encodeURIComponent(since)}` : '/api/tickets'
+      );
       if (response.ok) {
         const data = await response.json();
         let incoming: Ticket[] = data.tickets || [];
+        // Id set of everything currently visible on the server. In delta
+        // responses `tickets` only contains the rows that changed, so
+        // deletions are detected through this set instead of absence.
+        const visibleIds: Set<string> | null = Array.isArray(data.ids)
+          ? new Set<string>(data.ids)
+          : null;
 
         // Drop tombstoned tickets — anything we deleted in the last
         // ~30s. Without this, an in-flight poll from before the DELETE
@@ -325,11 +340,15 @@ export default function TicketsPage() {
           for (const local of prev) {
             const fresh = incomingMap.get(local.id);
             if (!fresh) {
-              // Not in server response. If our local copy is very
-              // recent (likely an in-flight create) keep it; otherwise
-              // it's gone (deleted elsewhere) so drop it.
+              // Not among the changed rows. Still visible on the server
+              // (or tombstoned locally)? Keep our copy. Gone from the
+              // server's id set? Keep it briefly if it's very recent
+              // (likely an in-flight create), otherwise drop it.
+              const stillVisible = visibleIds
+                ? visibleIds.has(local.id) && !recentlyDeletedRef.current.has(local.id)
+                : false;
               const localTs = new Date(local.updatedAt).getTime();
-              if (Date.now() - localTs < 30_000) {
+              if (stillVisible || Date.now() - localTs < 30_000) {
                 merged.push(local);
                 seen.add(local.id);
               }
@@ -346,6 +365,10 @@ export default function TicketsPage() {
           }
           return merged;
         });
+
+        if (typeof data.serverTime === 'string') {
+          lastSyncRef.current = data.serverTime;
+        }
 
         // Refresh the selected ticket only when the server has a newer
         // copy than what we're showing — same reasoning as above so the

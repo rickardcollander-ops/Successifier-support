@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { auth } from '@/lib/auth';
 import { hashApiKey, maskApiKey } from '@/lib/api-keys';
+import { getTenantId } from '@/lib/products/tenant';
 
 export { generateApiKey, hashApiKey, maskApiKey } from '@/lib/api-keys';
 
@@ -48,6 +49,13 @@ export async function validateApiKey(request: NextRequest): Promise<{ valid: boo
 
     if (!key.isActive) {
       return { valid: false, error: 'API key is inactive' };
+    }
+
+    // A key minted for another tenant must not work against this
+    // deployment, even when several tenants share a database.
+    const deploymentTenantId = await getTenantId();
+    if (deploymentTenantId && key.tenantId !== deploymentTenantId) {
+      return { valid: false, error: 'Invalid API key' };
     }
 
     await prisma.apiKey.update({

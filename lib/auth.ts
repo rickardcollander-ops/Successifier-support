@@ -26,7 +26,13 @@ const ALLOWED_DOMAINS = product.allowedDomains;
 // Emails that may sign in regardless of allowedDomains AND are granted admin
 // (superadmin) access on every deployment — see the jwt callback, which forces
 // role = 'superadmin' for these regardless of the per-product User.role.
-const SUPERADMIN_EMAILS = ['rc@successifier.com', 'mc@successifier.com'];
+// Overridable per deployment via SUPERADMIN_EMAILS (comma-separated).
+const SUPERADMIN_EMAILS = (
+  process.env.SUPERADMIN_EMAILS || 'rc@successifier.com,mc@successifier.com'
+)
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: authSecret,
@@ -39,21 +45,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       allowDangerousEmailAccountLinking: true,
+      // Sign-in only needs identity. Gmail access (read/send) is granted
+      // per inbox via the dedicated /api/auth/gmail flow, whose tokens are
+      // stored encrypted in EmailAccount. Requesting Gmail scopes here put
+      // powerful tokens for EVERY agent into the Account table, which the
+      // NextAuth adapter stores in plaintext.
       authorization: {
         params: {
-          scope: 'openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
-          access_type: 'offline',
-          prompt: 'consent',
+          scope: 'openid email profile',
         },
       },
     }),
   ],
   events: {
     async signIn(message) {
-      console.log('[NextAuth] signIn event:', JSON.stringify(message, null, 2));
+      console.log('[NextAuth] signIn:', message.user?.email);
     },
     async createUser(message) {
-      console.log('[NextAuth] createUser event:', JSON.stringify(message, null, 2));
+      console.log('[NextAuth] createUser:', message.user?.email);
       // Auto-assign the deployment's tenant for new users
       const tenant = await getTenant();
       if (tenant && message.user?.id) {
