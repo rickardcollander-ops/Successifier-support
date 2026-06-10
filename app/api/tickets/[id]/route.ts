@@ -68,17 +68,19 @@ export async function PATCH(
       if (field in body) data[field] = body[field];
     }
 
-    // Stamp the first moment work starts on this ticket so reports can show
-    // average active handling time (sentAt − workStartedAt), separate from
-    // total response time. "Work started" = the ticket leaves the unworked
-    // "new" status, or gets assigned to an agent for the first time. Set it
-    // once and never overwrite, so reopened/re-touched tickets keep the
-    // original start.
+    // Stamp the first moment a human starts working on this ticket so reports
+    // can show average active handling time (sentAt − workStartedAt), separate
+    // from total response time. "Work started" = the ticket leaves the
+    // unworked "new" status, gets assigned to an agent, or the agent starts
+    // composing a reply (finalResponse set). Note: AI draft generation does
+    // NOT count — that's automatic, not human effort. Set once and never
+    // overwritten, so reopened/re-touched tickets keep the original start.
     const WORKING_STATUSES = new Set(['in_progress', 'waiting_ai', 'review']);
     if (!existing.workStartedAt) {
       const startsWorking =
         (typeof data.status === 'string' && WORKING_STATUSES.has(data.status)) ||
-        (typeof data.assignedTo === 'string' && data.assignedTo.trim() !== '');
+        (typeof data.assignedTo === 'string' && data.assignedTo.trim() !== '') ||
+        (typeof data.finalResponse === 'string' && data.finalResponse.trim() !== '');
       if (startsWorking) data.workStartedAt = new Date();
     }
 

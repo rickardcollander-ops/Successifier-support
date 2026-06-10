@@ -24,6 +24,30 @@ model Tenant {
   kbCategories   KnowledgeCategory[]
   kbEvents       KnowledgeEvent[]
   helpCenter     HelpCenterConfig?
+  reportSettings ReportSettings?
+}
+
+// Tenant-level knobs for the value/ROI reporting: what an agent costs and
+// the "before the tool" baselines everything is compared against. Kept in
+// its own 1:1 table (same pattern as HelpCenterConfig) so the hot Ticket
+// path stays lean.
+model ReportSettings {
+  id        String   @id @default(cuid())
+  tenantId  String   @unique
+  // Fully-loaded cost of one support agent per hour, in SEK. Drives the
+  // "money saved" estimate. Null = not configured (the UI then asks for it
+  // instead of inventing a number).
+  agentHourlyCost Float?
+  // Historical "before our tool" baselines, e.g. imported from the Zendesk
+  // era. When set they are the comparison point for response/handling time.
+  // Null = fall back to the in-app "skrev om / utan AI" group as the
+  // implicit baseline.
+  baselineResponseHours   Float?
+  baselineHandlingMinutes Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model Agent {
