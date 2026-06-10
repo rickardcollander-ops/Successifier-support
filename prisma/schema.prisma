@@ -61,6 +61,12 @@ model Ticket {
   // deliberately skip @updatedAt so the list order stays stable. The
   // delta poll uses MAX(updatedAt, contentRefreshedAt) as "changed since".
   contentRefreshedAt DateTime?
+  // First moment an agent starts working on the ticket: it leaves the
+  // unworked "new" state or first gets assigned. Reports use this to show
+  // average active handling time (work time) per ticket — sentAt minus
+  // workStartedAt — which is distinct from response time (createdAt → sentAt,
+  // wall-clock including time the ticket sat untouched).
+  workStartedAt   DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
