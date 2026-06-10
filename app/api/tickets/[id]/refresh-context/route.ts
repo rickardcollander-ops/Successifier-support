@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { requireApiAuth } from '@/lib/api-auth';
+import { findScopedTicket } from '@/lib/db/scoped';
 
 // Re-fetch customer context (Stripe, Billecta, Resend, Retool) for a single
 // ticket and persist the refreshed data. Called when support opens a
@@ -17,7 +18,7 @@ export async function POST(
   try {
     const { id } = await params;
 
-    const ticket = await prisma.ticket.findUnique({ where: { id } });
+    const ticket = await findScopedTicket(id);
     if (!ticket) {
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
     }
@@ -43,7 +44,8 @@ export async function POST(
     // sort every time support opens it — confusing and disruptive.
     await prisma.$executeRaw`
       UPDATE "Ticket"
-      SET "contextData" = ${JSON.stringify(merged)}::jsonb
+      SET "contextData" = ${JSON.stringify(merged)}::jsonb,
+          "contentRefreshedAt" = NOW()
       WHERE id = ${id}
     `;
 

@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { requireApiAuth } from '@/lib/api-auth';
+import { findScopedTicket } from '@/lib/db/scoped';
+
+// Fields a client may set via PATCH. Everything else (tenantId, sentBy,
+// aiConfidence, contextData, timestamps…) is server-managed; spreading the
+// raw body into prisma.update would let any client rewrite them.
+const PATCHABLE_FIELDS = [
+  'status',
+  'priority',
+  'assignedTo',
+  'customerEmail',
+  'customerName',
+  'subject',
+  'aiResponse',
+  'finalResponse',
+  'originalMessage',
+] as const;
 
 export async function GET(
   request: NextRequest,
@@ -12,9 +28,7 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
-    });
+    const ticket = await findScopedTicket(id);
 
     if (!ticket) {
       return NextResponse.json(
@@ -44,9 +58,19 @@ export async function PATCH(
     const body = await request.json();
     const { id } = await params;
 
+    const existing = await findScopedTicket(id);
+    if (!existing) {
+      return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+    }
+
+    const data: Record<string, unknown> = {};
+    for (const field of PATCHABLE_FIELDS) {
+      if (field in body) data[field] = body[field];
+    }
+
     const ticket = await prisma.ticket.update({
-      where: { id },
-      data: body,
+      where: { id: existing.id },
+      data,
     });
 
     return NextResponse.json(ticket);
@@ -69,8 +93,13 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    const existing = await findScopedTicket(id);
+    if (!existing) {
+      return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+    }
+
     await prisma.ticket.delete({
-      where: { id },
+      where: { id: existing.id },
     });
 
     return NextResponse.json({ success: true });

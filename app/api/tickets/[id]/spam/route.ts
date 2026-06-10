@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { requireApiAuth } from '@/lib/api-auth';
+import { findScopedTicket } from '@/lib/db/scoped';
 
 export async function POST(
   request: NextRequest,
@@ -12,12 +13,17 @@ export async function POST(
   try {
     const { id } = await params;
 
+    const existing = await findScopedTicket(id);
+    if (!existing) {
+      return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+    }
+
     // Mark ticket as spam by updating status to 'closed' and adding spam marker
     const ticket = await prisma.ticket.update({
-      where: { id },
+      where: { id: existing.id },
       data: {
         status: 'closed',
-        originalMessage: `[SPAM] ${await prisma.ticket.findUnique({ where: { id }, select: { originalMessage: true } }).then(t => t?.originalMessage || '')}`,
+        originalMessage: `[SPAM] ${existing.originalMessage}`,
       },
     });
 

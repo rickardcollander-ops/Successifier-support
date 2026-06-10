@@ -17,9 +17,10 @@ export async function POST(request: NextRequest) {
       knowledgeUsed,
     } = body;
 
-    // Get ticket details
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
+    // Get ticket details (scoped to this deployment's tenant)
+    const tenant = await getTenant();
+    const ticket = await prisma.ticket.findFirst({
+      where: { id: ticketId, ...(tenant ? { tenantId: tenant.id } : {}) },
     });
 
     if (!ticket) {

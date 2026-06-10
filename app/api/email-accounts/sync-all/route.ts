@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
@@ -6,6 +7,7 @@ import { google } from 'googleapis';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
+import { sanitizeInboundText } from '@/lib/services/sanitize';
 import { sendConfirmationEmail } from '@/lib/services/confirmation-email';
 import { getBlockedPatterns, isBlocked } from '@/lib/services/blocked-senders';
 import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
@@ -293,7 +295,7 @@ async function syncSingleAccount(account: {
         customerEmail,
         customerName,
         subject,
-        originalMessage: `[Gmail ID: ${message.id}]\n[Inbox account: ${account.email}]\n${rfcMessageId ? `[Message-Id: ${rfcMessageId}]\n` : ''}\n${body || 'No content'}`,
+        originalMessage: `[Gmail ID: ${message.id}]\n[Inbox account: ${account.email}]\n${rfcMessageId ? `[Message-Id: ${rfcMessageId}]\n` : ''}\n${sanitizeInboundText(body || 'No content')}`,
         status: isReply ? 'in_progress' : 'new',
         priority: 'normal',
         contextData,
@@ -322,18 +324,26 @@ async function syncSingleAccount(account: {
           }).catch((err) => console.error('[Email Sync] Confirmation send failed:', err));
         }
 
-        generateAIResponse(subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined)
-          .then(async ({ response: aiResponse, confidence }) => {
+        // after() keeps the generation alive past the response on
+        // serverless hosts; a bare promise would be frozen and lost.
+        after(async () => {
+          try {
+            const { response: aiResponse, confidence } = await generateAIResponse(
+              subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined
+            );
             // Raw SQL so we don't bump updatedAt — AI generation is not
             // customer activity and should not reorder the ticket list.
             await prisma.$executeRaw`
               UPDATE "Ticket"
               SET "aiResponse" = ${aiResponse},
-                  "aiConfidence" = ${confidence}
+                  "aiConfidence" = ${confidence},
+                  "contentRefreshedAt" = NOW()
               WHERE id = ${ticket.id}
             `;
-          })
-          .catch(console.error);
+          } catch (error) {
+            console.error(error);
+          }
+        });
       } else {
         console.log(`[Email Sync] Merged message ${message.id} into ticket ${ticket.id}`);
       }

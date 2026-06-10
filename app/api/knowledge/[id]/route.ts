@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { requireApiAuth } from '@/lib/api-auth';
+import { findScopedKnowledge } from '@/lib/db/scoped';
 import { generateUniqueSlug } from '@/lib/services/kb-slug';
 import { AUTO_LEARNED_CATEGORY } from '@/lib/services/public-kb';
 
@@ -17,9 +18,11 @@ export async function PATCH(
     const body = await request.json();
     const { id } = await params;
 
-    const existing = await prisma.knowledgeBase.findUnique({ where: { id } });
+    // Tenant-scoped lookup so a valid session/key can't touch another
+    // tenant's article (see lib/db/scoped.ts).
+    const existing = await findScopedKnowledge(id);
     if (!existing) {
-      return NextResponse.json({ error: 'Article not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Knowledge article not found' }, { status: 404 });
     }
 
     const data: Record<string, unknown> = {};
@@ -42,9 +45,9 @@ export async function PATCH(
     // Re-slug when the slug is explicitly changed or a title change leaves the
     // article without one.
     if (typeof body.slug === 'string' && body.slug.trim()) {
-      data.slug = await generateUniqueSlug(existing.tenantId, body.slug, id);
+      data.slug = await generateUniqueSlug(existing.tenantId, body.slug, existing.id);
     } else if (!existing.slug && typeof body.title === 'string') {
-      data.slug = await generateUniqueSlug(existing.tenantId, body.title, id);
+      data.slug = await generateUniqueSlug(existing.tenantId, body.title, existing.id);
     }
 
     // Drop the "AI Draft:" prefix once an article is activated for the AI.
@@ -58,7 +61,7 @@ export async function PATCH(
     // Snapshot the pre-edit state so changes can be audited and restored.
     await prisma.knowledgeRevision.create({
       data: {
-        articleId: id,
+        articleId: existing.id,
         title: existing.title,
         content: existing.content,
         excerpt: existing.excerpt,
@@ -66,7 +69,7 @@ export async function PATCH(
       },
     });
 
-    const article = await prisma.knowledgeBase.update({ where: { id }, data });
+    const article = await prisma.knowledgeBase.update({ where: { id: existing.id }, data });
 
     return NextResponse.json(article);
   } catch (error) {
@@ -88,8 +91,13 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    const existing = await findScopedKnowledge(id);
+    if (!existing) {
+      return NextResponse.json({ error: 'Knowledge article not found' }, { status: 404 });
+    }
+
     await prisma.knowledgeBase.delete({
-      where: { id },
+      where: { id: existing.id },
     });
 
     return NextResponse.json({ success: true });
