@@ -176,6 +176,24 @@ export async function GET(request: NextRequest) {
         }, 0) / sentInRange.length
       : 0;
 
+    // Average active handling time: how long an agent actually worked on a
+    // ticket, measured from when work started (workStartedAt — set the first
+    // time the ticket left "new" or got assigned) to when the reply was sent.
+    // Unlike avgResponseTime this excludes the time the ticket sat untouched
+    // in the queue, so it reflects effort per ticket — the proof-of-concept
+    // metric for the tool. Tickets sent without ever being marked as worked
+    // (no workStartedAt) are excluded rather than counted as zero.
+    const handledInRange = sentInRange.filter(
+      (t) => t.workStartedAt && t.sentAt && t.sentAt.getTime() > t.workStartedAt.getTime()
+    );
+    const avgHandlingTime = handledInRange.length > 0
+      ? handledInRange.reduce((sum, ticket) => {
+          const started = ticket.workStartedAt!.getTime();
+          const sent = ticket.sentAt!.getTime();
+          return sum + (sent - started) / 60000; // minutes
+        }, 0) / handledInRange.length
+      : 0;
+
     // Resolved today — a "today" metric independent of the selected range:
     // a ticket opened last week but closed this morning still counts.
     // "Today" means the current Stockholm calendar day.
@@ -249,6 +267,10 @@ export async function GET(request: NextRequest) {
       ticketsByStatus,
       ticketsByPriority,
       avgResponseTime: Math.round(avgResponseTime * 10) / 10, // Round to 1 decimal
+      // Minutes of active work per ticket, plus how many tickets the average
+      // is based on (lets the UI say "saknas ännu" while data builds up).
+      avgHandlingMinutes: Math.round(avgHandlingTime),
+      handledCount: handledInRange.length,
       resolvedToday,
       pendingTickets,
       recentActivity,

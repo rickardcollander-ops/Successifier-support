@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send } from 'lucide-react';
+import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer } from 'lucide-react';
 import { statusLabelSv, priorityLabelSv } from '@/lib/constants';
 import { t } from '@/lib/i18n';
 
@@ -16,6 +16,8 @@ interface ReportData {
   ticketsByStatus: Record<string, number>;
   ticketsByPriority: Record<string, number>;
   avgResponseTime: number;
+  avgHandlingMinutes?: number;
+  handledCount?: number;
   resolvedToday: number;
   pendingTickets: number;
   recentActivity: Array<{
@@ -86,6 +88,16 @@ export default function ReportsPage() {
     }
   };
 
+  // Active handling time comes from the API in minutes; show it in whichever
+  // unit reads cleanest. "–" while no worked-and-sent tickets exist yet so an
+  // empty POC doesn't claim "0 min" handling time.
+  const formatHandlingTime = (): string => {
+    const minutes = data.avgHandlingMinutes ?? 0;
+    if (!data.handledCount || minutes <= 0) return '–';
+    if (minutes < 60) return `${minutes} min`;
+    return `${Math.round((minutes / 60) * 10) / 10} h`;
+  };
+
   const perUserStats = data.perUserStats || [];
   const maxAgentTotal = Math.max(
     1,
@@ -113,7 +125,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -158,6 +170,23 @@ export default function ReportsPage() {
             </div>
             <div className="w-12 h-12 rounded-lg border border-purple-300 dark:border-purple-700 flex items-center justify-center">
               <Clock className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{t('Genomsnittlig handläggningstid')}</p>
+              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{formatHandlingTime()}</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {data.handledCount
+                  ? `${t('Aktiv arbetstid per ärende, baserat på')} ${data.handledCount} ${t('ärenden')}`
+                  : t('Mäts från påbörjat arbete till skickat svar')}
+              </p>
+            </div>
+            <div className="w-12 h-12 rounded-lg border border-[#7C5CFF]/40 flex items-center justify-center">
+              <Timer className="w-6 h-6 text-[#7C5CFF]" />
             </div>
           </div>
         </div>
