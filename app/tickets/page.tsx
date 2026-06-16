@@ -514,12 +514,12 @@ export default function TicketsPage() {
     }
   };
 
-  const handleSendResponse = async (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string): Promise<{ ok: boolean; error?: string }> => {
+  const handleSendResponse = async (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string, attachments?: Array<{ name: string; mimeType: string; data: string }>): Promise<{ ok: boolean; error?: string }> => {
     try {
       const res = await fetch(`/api/tickets/${ticketId}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response, fromAccountId, recipientEmail }),
+        body: JSON.stringify({ response, fromAccountId, recipientEmail, attachments }),
       });
 
       if (res.ok) {
@@ -602,6 +602,10 @@ export default function TicketsPage() {
   const billectaTickets = tickets.filter(isVendorTicket);
   const bounceTickets = tickets.filter(isBounceTicket);
 
+  // Red traffic-light tickets (urgent/high) drive the "Akut ärende" folder.
+  // Mirrors the priority ranking shown in the ticket list/detail.
+  const isUrgentTicket = (t: Ticket) => t.priority === 'urgent' || t.priority === 'high';
+
   // Filter by status. Billecta and Kivra-notifications from Billecta used to
   // live in two separate tabs; they're now merged into a single "Billecta"
   // folder per user request. Bounces are excluded from every "normal" tab
@@ -614,6 +618,12 @@ export default function TicketsPage() {
     ? tickets.filter(t => t.status === 'duplicate')
     : activeStatus === 'bounce'
     ? bounceTickets
+    : activeStatus === 'urgent'
+    // "Akut ärende" — every open ticket flagged red (urgent/high priority),
+    // regardless of which status tab it would otherwise sit under, so
+    // support can find the cases that need attention first. Closed/sent
+    // tickets are excluded since they're already handled.
+    ? tickets.filter(t => isUrgentTicket(t) && !isVendorTicket(t) && !isBounceTicket(t) && t.status !== 'duplicate' && t.status !== 'closed' && t.status !== 'sent')
     : tickets.filter(t => t.status === activeStatus && !isVendorTicket(t) && !isBounceTicket(t));
 
   // Apply search filter
@@ -673,6 +683,7 @@ export default function TicketsPage() {
     all: tickets.filter(t => !isExcludedFromNormal(t) && t.status !== 'duplicate').length,
     billecta: billectaTickets.length,
     bounce: bounceTickets.length,
+    urgent: tickets.filter(t => isUrgentTicket(t) && !isExcludedFromNormal(t) && t.status !== 'duplicate' && t.status !== 'closed' && t.status !== 'sent').length,
     new: tickets.filter(t => t.status === 'new' && !isExcludedFromNormal(t)).length,
     in_progress: tickets.filter(t => t.status === 'in_progress' && !isExcludedFromNormal(t)).length,
     review: tickets.filter(t => t.status === 'review' && !isExcludedFromNormal(t)).length,
@@ -682,6 +693,7 @@ export default function TicketsPage() {
   };
 
   const tabs = [
+    { id: 'urgent', label: t('Akut ärende'), count: statusCounts.urgent },
     { id: 'new', label: t('Nya'), count: statusCounts.new },
     { id: 'in_progress', label: t('Öppna'), count: statusCounts.in_progress },
     { id: 'review', label: t('Granskning'), count: statusCounts.review },

@@ -34,6 +34,20 @@ export async function POST(
     const body = await request.json();
     const { response: rawResponse, fromAccountId, recipientEmail } = body;
 
+    // Optional file attachments (PDF, Word, …). Each entry carries the raw
+    // base64 payload (no data-URL prefix) so we can drop it straight into a
+    // MIME part. Defend against malformed input — a bad attachments array
+    // must never take down the whole send.
+    const rawAttachments: Array<{ name?: string; mimeType?: string; data?: string }> =
+      Array.isArray(body?.attachments) ? body.attachments : [];
+    const attachments = rawAttachments
+      .filter((a) => a && typeof a.data === 'string' && a.data.length > 0)
+      .map((a) => ({
+        name: typeof a.name === 'string' && a.name ? a.name : 'bilaga',
+        mimeType: typeof a.mimeType === 'string' && a.mimeType ? a.mimeType : 'application/octet-stream',
+        data: (a.data as string).replace(/\s/g, ''),
+      }));
+
     if (!rawResponse) {
       return NextResponse.json(
         { error: 'Response text is required' },
@@ -160,15 +174,14 @@ export async function POST(
       // failures.
       const boundary = `dadrs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
       const fromValue = `${encodeHeader(product.fromName)} <${emailAccount.email}>`;
-      const headers = [
-        `From: ${fromValue}`,
-        `To: ${recipientEmail || ticket.customerEmail}`,
-        `Subject: ${encodeHeader(subjectPrefixed)}`,
-        'MIME-Version: 1.0',
-        `Content-Type: multipart/alternative; boundary="${boundary}"`,
-      ];
-      const mimeBody = [
-        '',
+
+      // The reply body itself is always a multipart/alternative (plain + HTML).
+      // `altContentType` is the header that introduces it; `altInner` is the
+      // boundary-delimited body. Kept separate so we can either put the header
+      // at the top of the message (no attachments) or inside a multipart/mixed
+      // part (with attachments).
+      const altContentType = `Content-Type: multipart/alternative; boundary="${boundary}"`;
+      const altInner = [
         `--${boundary}`,
         'Content-Type: text/plain; charset="UTF-8"',
         'Content-Transfer-Encoding: 8bit',
@@ -182,9 +195,50 @@ export async function POST(
         htmlBody,
         '',
         `--${boundary}--`,
-        '',
       ].join('\r\n');
-      const rawMessage = headers.join('\r\n') + '\r\n' + mimeBody;
+
+      const baseHeaders = [
+        `From: ${fromValue}`,
+        `To: ${recipientEmail || ticket.customerEmail}`,
+        `Subject: ${encodeHeader(subjectPrefixed)}`,
+        'MIME-Version: 1.0',
+      ];
+
+      let rawMessage: string;
+
+      if (attachments.length > 0) {
+        // Wrap the body + the files in a multipart/mixed envelope. Base64
+        // payloads are folded to 76-char lines per RFC 2045 so strict MTAs
+        // don't choke on over-long lines.
+        const mixedBoundary = `dadrs_mix_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+        const foldBase64 = (b64: string) => b64.replace(/(.{76})/g, '$1\r\n');
+        const attachmentParts = attachments.map((att) => [
+          `--${mixedBoundary}`,
+          `Content-Type: ${att.mimeType}; name="${encodeHeader(att.name)}"`,
+          'Content-Transfer-Encoding: base64',
+          `Content-Disposition: attachment; filename="${encodeHeader(att.name)}"`,
+          '',
+          foldBase64(att.data),
+        ].join('\r\n'));
+
+        const headers = [...baseHeaders, `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`];
+        const mimeBody = [
+          '',
+          `--${mixedBoundary}`,
+          altContentType,
+          '',
+          altInner,
+          '',
+          ...attachmentParts,
+          `--${mixedBoundary}--`,
+          '',
+        ].join('\r\n');
+        rawMessage = headers.join('\r\n') + '\r\n' + mimeBody;
+      } else {
+        const headers = [...baseHeaders, altContentType];
+        const mimeBody = ['', altInner, ''].join('\r\n');
+        rawMessage = headers.join('\r\n') + '\r\n' + mimeBody;
+      }
 
       const encodedMessage = Buffer.from(rawMessage, 'utf-8')
         .toString('base64')
@@ -284,7 +338,8 @@ export async function POST(
         await resendService.sendEmail(
           recipientEmail || ticket.customerEmail,
           `Re: ${ticket.subject}`,
-          htmlContent
+          htmlContent,
+          attachments.map((att) => ({ filename: att.name, content: att.data })),
         );
       } catch (resendError: any) {
         const detail = resendError?.message || 'Okänt Resend-fel';

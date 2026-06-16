@@ -66,6 +66,16 @@ export interface ProductConfig {
   agentColors: Record<string, AgentColor>;
 
   /**
+   * Whether to offer an on-demand "Translate" button on incoming customer
+   * messages in the ticket view, translating them into the product's own
+   * language. On for products whose customers often write in a different
+   * language than the support team reads (e.g. Serus, English-speaking team
+   * receiving French/German mail); off where customer and agent share a
+   * language (e.g. Doldadress).
+   */
+  translateIncoming: boolean;
+
+  /**
    * Whether to send the "we received your email" autoresponder when a
    * brand-new ticket is opened. Off for products that don't want an
    * automatic acknowledgement (e.g. Serus).
