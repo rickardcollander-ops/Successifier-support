@@ -18,6 +18,7 @@ const EN: Record<string, string> = {
   'Dubblett': 'Duplicate',
   // Priority
   'Akut': 'Urgent',
+  'Akut ärende': 'Urgent',
   'Hög': 'High',
   'Normal': 'Normal',
   'Låg': 'Low',
@@ -152,6 +153,9 @@ const EN: Record<string, string> = {
   'Skriv ditt svar eller generera ett med AI…': 'Write your reply or generate one with AI…',
   'Bifoga bild': 'Attach image',
   'bild(er) bifogade': 'image(s) attached',
+  'Bifoga fil': 'Attach file',
+  'fil(er) bifogade': 'file(s) attached',
+  'Filen är för stor (max 10 MB):': 'File is too large (max 10 MB):',
   'Till:': 'To:',
   'Svara från:': 'Reply from:',
   'Stäng bekräftelse': 'Dismiss confirmation',

@@ -78,7 +78,7 @@ interface TicketDetailProps {
   ticket: Ticket;
   onUpdate: (ticketId: string, updates: Partial<Ticket>) => void;
   onGenerateAI: (ticketId: string) => Promise<string | null>;
-  onSend: (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string) => Promise<{ ok: boolean; error?: string }>;
+  onSend: (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string, attachments?: Array<{ name: string; mimeType: string; data: string }>) => Promise<{ ok: boolean; error?: string }>;
   onDelete?: (ticketId: string) => void;
   onSpam?: (ticketId: string) => void;
   onSelectTicket?: (ticket: Ticket | null) => void;
@@ -206,6 +206,10 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   const [retoolModalOpen, setRetoolModalOpen] = useState(false);
   const [sendConfirmation, setSendConfirmation] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [inlineImages, setInlineImages] = useState<Array<{ name: string; dataUrl: string }>>([]);
+  // Real file attachments (PDF, Word, …) sent alongside the reply as proper
+  // MIME attachments. `data` is base64 without the data-URL prefix so the
+  // send route can drop it straight into the message envelope.
+  const [fileAttachments, setFileAttachments] = useState<Array<{ name: string; mimeType: string; data: string }>>([]);
   const [popoutTicket, setPopoutTicket] = useState<any>(null);
   const [popoutLoading, setPopoutLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -494,7 +498,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
       finalResponseContent = response + '\n[INLINE_IMAGES]' + imagesHtml;
     }
 
-    const result = await onSend(ticket.id, finalResponseContent, selectedFromAccount || undefined, recipientEmail);
+    const result = await onSend(ticket.id, finalResponseContent, selectedFromAccount || undefined, recipientEmail, fileAttachments);
     isSendingRef.current = false;
     setIsSending(false);
 
@@ -504,6 +508,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
         type: 'success',
         message: `${t('Mailet har skickats till')} ${recipientEmail}${fromAccount ? ` ${t('från')} ${fromAccount.email}` : ''} ${t('och lagts i skickade.')}`,
       });
+      // Clear the picked attachments so they aren't re-sent on the next reply.
+      setFileAttachments([]);
       setTimeout(() => setSendConfirmation(null), 10000);
     } else {
       setSendConfirmation({
@@ -1205,10 +1211,64 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 }}
               />
             </label>
+            <label className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer transition-colors">
+              {t('Bifoga fil')}
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (!files) return;
+                  Array.from(files).forEach(file => {
+                    if (file.size > 10 * 1024 * 1024) {
+                      // Gmail/Resend reject very large payloads — keep a sane cap.
+                      alert(`${t('Filen är för stor (max 10 MB):')} ${file.name}`);
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const dataUrl = ev.target?.result as string;
+                      if (!dataUrl) return;
+                      // Strip the "data:<mime>;base64," prefix — the send route
+                      // wants the raw base64 payload.
+                      const base64 = dataUrl.split(',')[1] || '';
+                      setFileAttachments(prev => [...prev, {
+                        name: file.name,
+                        mimeType: file.type || 'application/octet-stream',
+                        data: base64,
+                      }]);
+                    };
+                    reader.readAsDataURL(file);
+                  });
+                  e.target.value = '';
+                }}
+              />
+            </label>
             {inlineImages.length > 0 && (
               <span className="text-xs text-slate-500 dark:text-slate-400">{inlineImages.length} {t('bild(er) bifogade')}</span>
             )}
+            {fileAttachments.length > 0 && (
+              <span className="text-xs text-slate-500 dark:text-slate-400">{fileAttachments.length} {t('fil(er) bifogade')}</span>
+            )}
           </div>
+          {fileAttachments.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {fileAttachments.map((file, idx) => (
+                <div key={idx} className="flex items-center gap-2 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                  <FileText className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <span className="text-xs text-slate-700 dark:text-slate-300 truncate max-w-[180px]">{file.name}</span>
+                  <button
+                    onClick={() => setFileAttachments(prev => prev.filter((_, i) => i !== idx))}
+                    className="w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center flex-shrink-0"
+                    aria-label={`${t('Ta bort')} ${file.name}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           {inlineImages.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {inlineImages.map((img, idx) => (

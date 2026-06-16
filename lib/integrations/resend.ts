@@ -9,14 +9,25 @@ export class ResendService {
     this.fromEmail = fromEmail;
   }
 
-  async sendEmail(to: string, subject: string, html: string) {
+  async sendEmail(
+    to: string,
+    subject: string,
+    html: string,
+    attachments?: Array<{ filename: string; content: string }>,
+  ) {
     try {
-      const response = await this.resend.emails.send({
+      const payload: any = {
         from: this.fromEmail,
         to,
         subject,
         html,
-      });
+      };
+      // Resend expects each attachment's `content` as a base64 string (or
+      // Buffer) plus a filename. Only attach when we actually have files.
+      if (attachments && attachments.length > 0) {
+        payload.attachments = attachments;
+      }
+      const response = await this.resend.emails.send(payload);
       return response;
     } catch (error) {
       console.error('Error sending email via Resend:', error);
