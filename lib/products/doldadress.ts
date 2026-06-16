@@ -13,6 +13,8 @@ export const doldadress: ProductConfig = {
   apiBaseDomain: 'doldadress.com',
   integrations: ['stripe', 'billecta', 'retool', 'resend', 'gmail', 'postman'],
   showAffectedCustomersTool: true,
+  // Doldadress customers and support share Swedish — no translation needed.
+  translateIncoming: false,
   sendConfirmation: true,
   vendorFolder: {
     label: 'Billecta',

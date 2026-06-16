@@ -19,6 +19,9 @@ export const serus: ProductConfig = {
   apiBaseDomain: 'serus.ai',
   integrations: ['stripe', 'clerk'],
   showAffectedCustomersTool: false,
+  // Serus support reads English but gets mail in many languages (French,
+  // German, …) — let agents translate incoming customer messages on demand.
+  translateIncoming: true,
   // Serus vill inte skicka något automatiskt bekräftelsemail till kunden
   // när ett nytt ärende öppnas.
   sendConfirmation: false,

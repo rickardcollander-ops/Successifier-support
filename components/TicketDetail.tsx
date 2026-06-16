@@ -210,6 +210,10 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   // MIME attachments. `data` is base64 without the data-URL prefix so the
   // send route can drop it straight into the message envelope.
   const [fileAttachments, setFileAttachments] = useState<Array<{ name: string; mimeType: string; data: string }>>([]);
+  // On-demand translations of incoming customer messages, keyed by their
+  // index in the parsed thread. Only used when the product opts in
+  // (product.translateIncoming).
+  const [translations, setTranslations] = useState<Record<number, { loading: boolean; text?: string; error?: string; show: boolean }>>({});
   const [popoutTicket, setPopoutTicket] = useState<any>(null);
   const [popoutLoading, setPopoutLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -324,6 +328,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     setAiSuggestion(ticket.aiResponse || null);
     setRecipientEmail(ticket.customerEmail);
     setInlineImages([]);
+    setFileAttachments([]);
+    setTranslations({});
     // Reset composing state when switching tickets. The parent clears the
     // old ticket's presence on selection change, so we just reset locally.
     composingRef.current = false;
@@ -603,6 +609,35 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     }
   };
 
+  // Translate one customer message (identified by its thread index) into the
+  // product language. Caches the result so toggling back and forth is free.
+  const handleTranslate = async (idx: number, text: string) => {
+    const existing = translations[idx];
+    if (existing?.text) {
+      // Already translated — just toggle the view.
+      setTranslations((prev) => ({ ...prev, [idx]: { ...prev[idx], show: !prev[idx].show } }));
+      return;
+    }
+    if (existing?.loading) return;
+    setTranslations((prev) => ({ ...prev, [idx]: { loading: true, show: true } }));
+    try {
+      const res = await fetch(`/api/tickets/${ticket.id}/translate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTranslations((prev) => ({ ...prev, [idx]: { loading: false, text: data.translated, show: true } }));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setTranslations((prev) => ({ ...prev, [idx]: { loading: false, error: data?.error || `HTTP ${res.status}`, show: true } }));
+      }
+    } catch (error: any) {
+      setTranslations((prev) => ({ ...prev, [idx]: { loading: false, error: error?.message || t('Nätverksfel'), show: true } }));
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm h-full flex flex-col">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700">
@@ -823,6 +858,36 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
                 <div className="text-sm whitespace-pre-wrap text-slate-900 dark:text-slate-100">
                   {msg.body || <span className="italic text-slate-400">{t('(tomt)')}</span>}
                 </div>
+                {/* On-demand translation of incoming customer mail (Serus). */}
+                {product.translateIncoming && !msg.isSupport && !msg.isComment && msg.body && (() => {
+                  const tr = translations[idx];
+                  return (
+                    <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <button
+                        onClick={() => handleTranslate(idx, msg.body)}
+                        disabled={tr?.loading}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-[#7C5CFF] hover:underline disabled:opacity-50 disabled:no-underline"
+                      >
+                        {tr?.loading ? (
+                          <><Loader2 className="w-3 h-3 animate-spin" /> {t('Översätter…')}</>
+                        ) : tr?.text ? (
+                          tr.show ? t('Visa original') : t('Visa översättning')
+                        ) : (
+                          t('Översätt')
+                        )}
+                      </button>
+                      {tr?.error && (
+                        <p className="mt-1 text-xs text-red-600 dark:text-red-400">{t('Kunde inte översätta:')} {tr.error}</p>
+                      )}
+                      {tr?.text && tr.show && (
+                        <div className="mt-2 rounded-md bg-[#7C5CFF]/5 border border-[#7C5CFF]/20 p-3">
+                          <p className="text-[10px] uppercase tracking-wide text-[#7C5CFF] font-semibold mb-1">{t('Översättning')}</p>
+                          <div className="text-sm whitespace-pre-wrap text-slate-900 dark:text-slate-100">{tr.text}</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>

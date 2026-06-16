@@ -497,6 +497,27 @@ async function findPreviousTicketContext(
   }
 }
 
+// --- Incoming message translation ---
+
+// Translate a customer's message into the product's own language so support
+// can read mail written in a foreign language (e.g. Serus, an English team,
+// receiving French or German). Uses the cheap helper model and returns the
+// translation as plain text. If the text is already in the target language
+// the model is told to return it unchanged.
+export async function translateToProductLanguage(text: string): Promise<string> {
+  const targetLanguage = product.language === 'en' ? 'English' : 'Swedish';
+  const completion = await anthropic.messages.create({
+    model: HELPER_MODEL,
+    max_tokens: 2000,
+    system: `You are a translation engine. Translate the user's message into ${targetLanguage}. Preserve the meaning, tone and line breaks, and keep names, numbers, e-mail addresses and links exactly as written. If the text is already in ${targetLanguage}, return it unchanged. Output ONLY the translation — no preamble, explanations or quotation marks.`,
+    messages: [{ role: 'user', content: text }],
+  });
+  const textBlock = completion.content.find(
+    (b): b is Anthropic.TextBlock => b.type === 'text',
+  );
+  return textBlock?.text?.trim() ?? '';
+}
+
 // --- Main Generation Function ---
 
 // Static system prompt — cacheable across requests (all dynamic content lives
