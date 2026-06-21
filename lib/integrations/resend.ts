@@ -14,6 +14,7 @@ export class ResendService {
     subject: string,
     html: string,
     attachments?: Array<{ filename: string; content: string }>,
+    options?: { cc?: string[]; bcc?: string[] },
   ) {
     try {
       const payload: any = {
@@ -22,6 +23,14 @@ export class ResendService {
         subject,
         html,
       };
+      // Resend accepts cc/bcc as a string or array of addresses. Only set
+      // them when we actually have recipients so we don't send empty fields.
+      if (options?.cc && options.cc.length > 0) {
+        payload.cc = options.cc;
+      }
+      if (options?.bcc && options.bcc.length > 0) {
+        payload.bcc = options.bcc;
+      }
       // Resend expects each attachment's `content` as a base64 string (or
       // Buffer) plus a filename. Only attach when we actually have files.
       if (attachments && attachments.length > 0) {

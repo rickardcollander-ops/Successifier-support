@@ -34,6 +34,20 @@ export async function POST(
     const body = await request.json();
     const { response: rawResponse, fromAccountId, recipientEmail } = body;
 
+    // Optional Cc / Bcc recipients. The UI passes a single comma/semicolon
+    // separated string; normalise it into a clean list of addresses and drop
+    // anything that doesn't look like an email so a stray comma can't break
+    // the whole send.
+    const parseAddressList = (raw: unknown): string[] => {
+      if (typeof raw !== 'string') return [];
+      return raw
+        .split(/[,;]/)
+        .map((a) => a.trim())
+        .filter((a) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a));
+    };
+    const ccList = parseAddressList(body?.cc);
+    const bccList = parseAddressList(body?.bcc);
+
     // Optional file attachments (PDF, Word, …). Each entry carries the raw
     // base64 payload (no data-URL prefix) so we can drop it straight into a
     // MIME part. Defend against malformed input — a bad attachments array
@@ -200,6 +214,11 @@ export async function POST(
       const baseHeaders = [
         `From: ${fromValue}`,
         `To: ${recipientEmail || ticket.customerEmail}`,
+        // Cc is visible to all recipients; Bcc is honoured by Gmail's send API
+        // (it routes to the address but strips the header so other recipients
+        // never see it).
+        ...(ccList.length > 0 ? [`Cc: ${ccList.join(', ')}`] : []),
+        ...(bccList.length > 0 ? [`Bcc: ${bccList.join(', ')}`] : []),
         `Subject: ${encodeHeader(subjectPrefixed)}`,
         'MIME-Version: 1.0',
       ];
@@ -340,6 +359,7 @@ export async function POST(
           `Re: ${ticket.subject}`,
           htmlContent,
           attachments.map((att) => ({ filename: att.name, content: att.data })),
+          { cc: ccList, bcc: bccList },
         );
       } catch (resendError: any) {
         const detail = resendError?.message || 'Okänt Resend-fel';

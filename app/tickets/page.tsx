@@ -514,12 +514,12 @@ export default function TicketsPage() {
     }
   };
 
-  const handleSendResponse = async (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string, attachments?: Array<{ name: string; mimeType: string; data: string }>): Promise<{ ok: boolean; error?: string }> => {
+  const handleSendResponse = async (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string, attachments?: Array<{ name: string; mimeType: string; data: string }>, cc?: string, bcc?: string): Promise<{ ok: boolean; error?: string }> => {
     try {
       const res = await fetch(`/api/tickets/${ticketId}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response, fromAccountId, recipientEmail, attachments }),
+        body: JSON.stringify({ response, fromAccountId, recipientEmail, attachments, cc, bcc }),
       });
 
       if (res.ok) {

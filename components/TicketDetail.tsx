@@ -78,7 +78,7 @@ interface TicketDetailProps {
   ticket: Ticket;
   onUpdate: (ticketId: string, updates: Partial<Ticket>) => void;
   onGenerateAI: (ticketId: string) => Promise<string | null>;
-  onSend: (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string, attachments?: Array<{ name: string; mimeType: string; data: string }>) => Promise<{ ok: boolean; error?: string }>;
+  onSend: (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string, attachments?: Array<{ name: string; mimeType: string; data: string }>, cc?: string, bcc?: string) => Promise<{ ok: boolean; error?: string }>;
   onDelete?: (ticketId: string) => void;
   onSpam?: (ticketId: string) => void;
   onSelectTicket?: (ticket: Ticket | null) => void;
@@ -196,6 +196,12 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
   const [emailAccounts, setEmailAccounts] = useState<ReplyFromAccount[]>([]);
   const [selectedFromAccount, setSelectedFromAccount] = useState<string>('');
   const [recipientEmail, setRecipientEmail] = useState(ticket.customerEmail);
+  // Optional Cc / Bcc recipients (comma-separated). Hidden behind toggles so
+  // the reply form stays clean until support actually needs a copy.
+  const [ccEmail, setCcEmail] = useState('');
+  const [bccEmail, setBccEmail] = useState('');
+  const [showCc, setShowCc] = useState(false);
+  const [showBcc, setShowBcc] = useState(false);
   const [billectaModalOpen, setBillectaModalOpen] = useState(false);
   const [billectaSearchQuery, setBillectaSearchQuery] = useState('');
   const [billectaSearchType, setBillectaSearchType] = useState<'auto' | 'invoice' | 'orgno'>('auto');
@@ -327,6 +333,10 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     setResponse(ticket.finalResponse || ticket.aiResponse || '');
     setAiSuggestion(ticket.aiResponse || null);
     setRecipientEmail(ticket.customerEmail);
+    setCcEmail('');
+    setBccEmail('');
+    setShowCc(false);
+    setShowBcc(false);
     setInlineImages([]);
     setFileAttachments([]);
     setTranslations({});
@@ -504,7 +514,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
       finalResponseContent = response + '\n[INLINE_IMAGES]' + imagesHtml;
     }
 
-    const result = await onSend(ticket.id, finalResponseContent, selectedFromAccount || undefined, recipientEmail, fileAttachments);
+    const result = await onSend(ticket.id, finalResponseContent, selectedFromAccount || undefined, recipientEmail, fileAttachments, ccEmail.trim() || undefined, bccEmail.trim() || undefined);
     isSendingRef.current = false;
     setIsSending(false);
 
@@ -1365,7 +1375,74 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
             className="flex-1 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
             placeholder="mottagare@example.com"
           />
+          {/* Cc / Bcc toggles — hidden until support needs them */}
+          {(!showCc || !showBcc) && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {!showCc && (
+                <button
+                  type="button"
+                  onClick={() => setShowCc(true)}
+                  className="text-xs font-medium text-[#7C5CFF] hover:underline"
+                >
+                  {t('Lägg till kopia (Cc)')}
+                </button>
+              )}
+              {!showBcc && (
+                <button
+                  type="button"
+                  onClick={() => setShowBcc(true)}
+                  className="text-xs font-medium text-[#7C5CFF] hover:underline"
+                >
+                  {t('Lägg till hemlig kopia (Bcc)')}
+                </button>
+              )}
+            </div>
+          )}
         </div>
+        {/* Cc Editor */}
+        {showCc && (
+          <div className="mb-3 flex items-center gap-2">
+            <Mail className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+            <span className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{t('Kopia:')}</span>
+            <input
+              type="text"
+              value={ccEmail}
+              onChange={(e) => setCcEmail(e.target.value)}
+              className="flex-1 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
+              placeholder="kopia@example.com, …"
+            />
+            <button
+              type="button"
+              onClick={() => { setShowCc(false); setCcEmail(''); }}
+              className="flex-shrink-0 p-1 rounded hover:bg-black/5 dark:hover:bg-white/10 text-slate-400"
+              aria-label={t('Stäng')}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        {/* Bcc Editor */}
+        {showBcc && (
+          <div className="mb-3 flex items-center gap-2">
+            <Mail className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+            <span className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{t('Hemlig kopia:')}</span>
+            <input
+              type="text"
+              value={bccEmail}
+              onChange={(e) => setBccEmail(e.target.value)}
+              className="flex-1 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
+              placeholder="hemligkopia@example.com, …"
+            />
+            <button
+              type="button"
+              onClick={() => { setShowBcc(false); setBccEmail(''); }}
+              className="flex-shrink-0 p-1 rounded hover:bg-black/5 dark:hover:bg-white/10 text-slate-400"
+              aria-label={t('Stäng')}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         {/* Reply From Selector */}
         {emailAccounts.length > 0 && (
           <div className="mb-3 flex items-center gap-2">
