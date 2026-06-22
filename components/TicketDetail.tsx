@@ -381,8 +381,11 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     return () => {
       cancelled = true;
     };
+    // Re-run when the attachment metadata changes, not just on ticket switch:
+    // the list payload omits contextData, so when the parent fills it in after
+    // selection the reference changes and we pick up the (now present) bytes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticket.id]);
+  }, [ticket.id, ticket.contextData?.attachments]);
 
   // Only clear the send confirmation when switching to a different ticket
   useEffect(() => {

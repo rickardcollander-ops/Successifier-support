@@ -16,31 +16,37 @@ const ZENDESK_IMPORT_MARKER = '[Zendesk Import Source:';
 // is idempotent, so re-sending a few rows is harmless.
 const DELTA_OVERLAP_MS = 30_000;
 
-// Strip the heavy attachment `dataUrl` payloads from list responses. The
-// tickets page polls this endpoint every 3 seconds, so shipping multi-MB
-// image/PDF data URLs each time would be very wasteful. We keep lightweight
-// metadata (filename/mimeType/size) so the UI can show counts and a loading
-// state; the detail view lazy-loads the full bytes from the single-ticket
-// endpoint (/api/tickets/[id]).
-function stripAttachmentData(tickets: any[]): any[] {
-  return tickets.map((t) => {
-    const ctx = t.contextData as Record<string, any> | null;
-    if (!ctx || !Array.isArray(ctx.attachments) || ctx.attachments.length === 0) {
-      return t;
-    }
-    return {
-      ...t,
-      contextData: {
-        ...ctx,
-        attachments: ctx.attachments.map((a: any) => ({
-          filename: a.filename,
-          mimeType: a.mimeType,
-          size: a.size,
-        })),
-      },
-    };
-  });
-}
+// The tickets page polls this endpoint every 3 seconds. `contextData` is a
+// JSONB blob that can be megabytes per row (it holds attachment data URLs as
+// well as Stripe/Billecta/Clerk integration data), so reading it from Postgres
+// for every changed row on every poll — across several concurrent agents — is
+// the dominant cost behind the inbox lag. The list/detail panes don't need it
+// from the poll: TicketList renders none of it, and TicketDetail lazy-loads
+// the full ticket (contextData included) from /api/tickets/[id] when a ticket
+// is selected. So we select every scalar column EXCEPT contextData for the
+// list queries. (Prisma 5's `omit` is still behind a preview flag here, so we
+// use an explicit select instead.)
+const LIST_SELECT = {
+  id: true,
+  tenantId: true,
+  customerEmail: true,
+  customerName: true,
+  subject: true,
+  status: true,
+  priority: true,
+  originalMessage: true,
+  aiResponse: true,
+  aiConfidence: true,
+  finalResponse: true,
+  assignedTo: true,
+  sentBy: true,
+  sentAt: true,
+  contentRefreshedAt: true,
+  workStartedAt: true,
+  activeWorkSeconds: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 
 export async function GET(request: NextRequest) {
   const authResult = await requireApiAuth(request);
@@ -67,8 +73,9 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { createdAt: 'desc' },
         take: 200,
+        select: LIST_SELECT,
       });
-      return NextResponse.json({ tickets: stripAttachmentData(tickets) });
+      return NextResponse.json({ tickets });
     }
 
     // Default scope: exclude archived and Zendesk imports (include
@@ -104,6 +111,7 @@ export async function GET(request: NextRequest) {
             ],
           },
           orderBy: { createdAt: 'desc' },
+          select: LIST_SELECT,
         }),
         prisma.ticket.findMany({
           where: baseWhere,
@@ -113,7 +121,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         delta: true,
-        tickets: stripAttachmentData(changed),
+        tickets: changed,
         ids: idRows.map((r) => r.id),
         serverTime,
       });
@@ -122,10 +130,11 @@ export async function GET(request: NextRequest) {
     const tickets = await prisma.ticket.findMany({
       where: baseWhere,
       orderBy: { createdAt: 'desc' },
+      select: LIST_SELECT,
     });
 
     return NextResponse.json({
-      tickets: stripAttachmentData(tickets),
+      tickets,
       ids: tickets.map((t) => t.id),
       serverTime,
     });
