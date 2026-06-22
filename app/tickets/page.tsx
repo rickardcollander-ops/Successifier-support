@@ -18,6 +18,44 @@ interface EmailSyncStatus {
 type PresenceViewer = { name: string; email: string; initials: string; typing?: boolean };
 type PresenceMap = Record<string, PresenceViewer[]>;
 
+// Demo ticket shown only as a last resort when the API can't be reached and
+// the inbox is still empty (e.g. local dev without a backend). It is never
+// used to replace tickets that have already loaded — a failed poll must not
+// wipe real customer tickets from the screen.
+const MOCK_TICKETS = [
+  {
+    id: 'mock-1',
+    tenantId: 'doldadress',
+    customerEmail: 'customer@example.com',
+    customerName: 'Test Customer',
+    subject: 'Test ticket with integration data',
+    status: 'new',
+    priority: 'normal',
+    originalMessage: 'This is a test ticket to demonstrate integration info cards.',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    contextData: {
+      stripe: {
+        customerId: 'cus_test123',
+        subscriptions: [{ id: 'sub_1' }, { id: 'sub_2' }],
+        invoices: [{ id: 'inv_1' }, { id: 'inv_2' }, { id: 'inv_3' }],
+        charges: [{ id: 'ch_1' }, { id: 'ch_2' }],
+      },
+      billecta: {
+        debtorId: 'debtor_123',
+        invoices: [{ id: 'bill_1' }, { id: 'bill_2' }],
+      },
+      resend: {
+        emailsSent: 15,
+        recentEmails: [{ id: 'email_1' }, { id: 'email_2' }, { id: 'email_3' }],
+      },
+      retool: {
+        customData: 'Available',
+      },
+    },
+  },
+] as any;
+
 // Vendor- and bounce-folder predicates live in lib/ticket-filters so the
 // reports API counts exactly the same ticket population as the inbox tabs.
 
@@ -86,7 +124,7 @@ export default function TicketsPage() {
       }
       const data = await res.json();
       setReopenResult(`${t('Återöppnade')} ${data.reopened} ${t('ärenden — finns nu i Öppna.')}`);
-      await fetchTickets();
+      await fetchTickets({ force: true });
     } catch (error) {
       setReopenResult(t('Nätverksfel vid återöppning'));
     } finally {
@@ -117,7 +155,7 @@ export default function TicketsPage() {
         return;
       }
       if (selectedTicket) setSelectedTicket(null);
-      await fetchTickets();
+      await fetchTickets({ force: true });
     } catch (error) {
       alert(t('Nätverksfel vid tömning av mapp'));
     } finally {
@@ -139,7 +177,7 @@ export default function TicketsPage() {
       }
       const data = await res.json();
       setDedupeResult(`${t('Flyttade')} ${data.markedAsDuplicate} ${t('ärenden i')} ${data.groups} ${t('grupper till Dubletter.')}`);
-      await fetchTickets();
+      await fetchTickets({ force: true });
     } catch (error) {
       setDedupeResult(t('Nätverksfel vid rensning'));
     } finally {
@@ -227,11 +265,60 @@ export default function TicketsPage() {
   // every single ticket each cycle.
   const lastSyncRef = useRef<string | null>(null);
 
+  // Guards for the 3-second poll. Under load a poll can take longer than the
+  // 3s interval, so without these the interval stacks several requests at
+  // once and their responses arrive out of order — an older response then
+  // overwrites a newer one (and drags a stale id-set with it), which is what
+  // made tickets "freeze" and the whole list blink to 0. `pollInFlightRef`
+  // makes a background tick skip when one is already running; `fetchSeqRef`
+  // tags every request so a response only applies if it's still the most
+  // recent one issued. Explicit refreshes (force) bypass the skip but still
+  // respect ordering.
+  const pollInFlightRef = useRef(false);
+  const fetchSeqRef = useRef(0);
+
   // Report presence when selected ticket changes
   useEffect(() => {
     selectedTicketIdRef.current = selectedTicket?.id || null;
     composingRef.current = false;
     reportPresence(selectedTicket?.id || null, false);
+  }, [selectedTicket?.id]);
+
+  // The list/poll payload omits the heavy `contextData` blob, so a ticket
+  // opened from the list arrives without its integration cards or attachment
+  // bytes. Fetch the full ticket once on selection and merge contextData into
+  // both the selected copy and the list copy. Tickets opened via the deep
+  // link / pop-out already carry contextData (fetched directly), so the
+  // null-check skips them and avoids a redundant request.
+  useEffect(() => {
+    const id = selectedTicket?.id;
+    if (!id || selectedTicket?.contextData != null) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/tickets/${id}`);
+        if (!res.ok || cancelled) return;
+        const full = await res.json();
+        if (cancelled || !full?.id || full.contextData == null) return;
+        setSelectedTicket((curr) =>
+          curr && curr.id === id && curr.contextData == null
+            ? { ...curr, contextData: full.contextData }
+            : curr,
+        );
+        setTickets((prev) =>
+          prev.map((t) =>
+            t.id === id && t.contextData == null
+              ? { ...t, contextData: full.contextData }
+              : t,
+          ),
+        );
+      } catch {
+        // Leave the ticket without contextData; cards just won't show.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedTicket?.id]);
 
   // Honour the ?ticket=<id> deep link from Settings → Drabbade kunder.
@@ -266,7 +353,7 @@ export default function TicketsPage() {
   }, [deepLinkTicketId]);
 
   useEffect(() => {
-    fetchTickets();
+    fetchTickets({ force: true });
     triggerEmailSync();
     fetchPresence();
 
@@ -296,18 +383,33 @@ export default function TicketsPage() {
     };
   }, []);
 
-  const fetchTickets = async () => {
+  const fetchTickets = async (opts?: { force?: boolean }) => {
+    const force = opts?.force ?? false;
+    // Skip a background tick if the previous poll is still running — this is
+    // what stops requests from stacking up and resolving out of order under
+    // load. Explicit refreshes after an action ignore the skip so the user
+    // always sees the result of what they just did.
+    if (pollInFlightRef.current && !force) return;
+    const seq = ++fetchSeqRef.current;
+    if (!force) pollInFlightRef.current = true;
     try {
       const since = lastSyncRef.current;
       const response = await fetch(
         since ? `/api/tickets?since=${encodeURIComponent(since)}` : '/api/tickets'
       );
+      // A newer request was issued while this one was in flight. Discard this
+      // (now stale) response instead of letting it overwrite fresher state.
+      if (seq !== fetchSeqRef.current) return;
       if (response.ok) {
         const data = await response.json();
         let incoming: Ticket[] = data.tickets || [];
         // Id set of everything currently visible on the server. In delta
         // responses `tickets` only contains the rows that changed, so
-        // deletions are detected through this set instead of absence.
+        // deletions are detected through this set instead of absence. When
+        // the server doesn't send an id set (e.g. the tenant momentarily
+        // can't be resolved and it returns `{ tickets: [] }`), we treat the
+        // response as carrying NO deletion information and keep every local
+        // ticket — a single such response must never wipe the inbox.
         const visibleIds: Set<string> | null = Array.isArray(data.ids)
           ? new Set<string>(data.ids)
           : null;
@@ -338,17 +440,21 @@ export default function TicketsPage() {
           const seen = new Set<string>();
 
           for (const local of prev) {
+            if (recentlyDeletedRef.current.has(local.id)) continue;
             const fresh = incomingMap.get(local.id);
             if (!fresh) {
-              // Not among the changed rows. Still visible on the server
-              // (or tombstoned locally)? Keep our copy. Gone from the
-              // server's id set? Keep it briefly if it's very recent
-              // (likely an in-flight create), otherwise drop it.
-              const stillVisible = visibleIds
-                ? visibleIds.has(local.id) && !recentlyDeletedRef.current.has(local.id)
-                : false;
+              // Not among the changed rows. We only drop a ticket when the
+              // server positively says it's gone — i.e. it sent an
+              // authoritative id-set and this id isn't in it. If there's no
+              // id-set at all (visibleIds === null), the response carries no
+              // deletion info, so we keep our copy rather than risk wiping
+              // the inbox. New local rows the server hasn't indexed yet are
+              // also kept briefly (in-flight create).
               const localTs = new Date(local.updatedAt).getTime();
-              if (stillVisible || Date.now() - localTs < 30_000) {
+              const recentlyCreated = Date.now() - localTs < 30_000;
+              const deletedOnServer =
+                visibleIds !== null && !visibleIds.has(local.id);
+              if (!deletedOnServer || recentlyCreated) {
                 merged.push(local);
                 seen.add(local.id);
               }
@@ -356,12 +462,23 @@ export default function TicketsPage() {
             }
             const localTs = new Date(local.updatedAt).getTime();
             const freshTs = new Date(fresh.updatedAt).getTime();
-            merged.push(freshTs >= localTs ? fresh : local);
+            // The list payload omits the heavy `contextData` blob, so a
+            // fresh row never carries it. Preserve whatever we'd already
+            // loaded for this ticket (e.g. from opening it) so its
+            // integration cards/attachments don't blink away on each poll.
+            const winner = freshTs >= localTs ? fresh : local;
+            merged.push(
+              winner.contextData == null && local.contextData != null
+                ? { ...winner, contextData: local.contextData }
+                : winner,
+            );
             seen.add(local.id);
           }
 
           for (const fresh of incoming) {
-            if (!seen.has(fresh.id)) merged.push(fresh);
+            if (!seen.has(fresh.id) && !recentlyDeletedRef.current.has(fresh.id)) {
+              merged.push(fresh);
+            }
           }
           return merged;
         });
@@ -372,94 +489,40 @@ export default function TicketsPage() {
 
         // Refresh the selected ticket only when the server has a newer
         // copy than what we're showing — same reasoning as above so the
-        // detail pane doesn't snap back to a pre-close state.
+        // detail pane doesn't snap back to a pre-close state. Carry over
+        // the already-loaded contextData (the poll omits it) so the open
+        // ticket keeps its integration cards and attachments.
         if (selectedTicket) {
           const updatedSelected = incoming.find((t: Ticket) => t.id === selectedTicket.id);
           if (updatedSelected) {
             const localTs = new Date(selectedTicket.updatedAt).getTime();
             const freshTs = new Date(updatedSelected.updatedAt).getTime();
             if (freshTs >= localTs) {
-              setSelectedTicket(updatedSelected);
+              setSelectedTicket(
+                updatedSelected.contextData == null && selectedTicket.contextData != null
+                  ? { ...updatedSelected, contextData: selectedTicket.contextData }
+                  : updatedSelected,
+              );
             }
           }
         }
       } else {
-        // Use mock data if API fails
-        setTickets([
-          {
-            id: 'mock-1',
-            tenantId: 'doldadress',
-            customerEmail: 'customer@example.com',
-            customerName: 'Test Customer',
-            subject: 'Test ticket with integration data',
-            status: 'new',
-            priority: 'normal',
-            originalMessage: 'This is a test ticket to demonstrate integration info cards.',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            contextData: {
-              stripe: {
-                customerId: 'cus_test123',
-                subscriptions: [{ id: 'sub_1' }, { id: 'sub_2' }],
-                invoices: [{ id: 'inv_1' }, { id: 'inv_2' }, { id: 'inv_3' }],
-                charges: [{ id: 'ch_1' }, { id: 'ch_2' }],
-              },
-              billecta: {
-                debtorId: 'debtor_123',
-                invoices: [{ id: 'bill_1' }, { id: 'bill_2' }],
-              },
-              resend: {
-                emailsSent: 15,
-                recentEmails: [{ id: 'email_1' }, { id: 'email_2' }, { id: 'email_3' }],
-              },
-              retool: {
-                customData: 'Available',
-              },
-            },
-          },
-        ] as any);
+        // A failed poll must not destroy the inbox. Previously we replaced
+        // the whole list with a mock "Test Customer" ticket on any non-OK
+        // response, so a single transient 500 wiped every real ticket from
+        // view. Only seed the demo data when nothing has loaded yet (so a
+        // dev with no backend still sees the example cards); otherwise keep
+        // whatever we already have on screen.
+        setTickets((prev) => (prev.length > 0 ? prev : MOCK_TICKETS));
       }
     } catch (error) {
       console.error('Error fetching tickets:', error);
-      // Use mock data on error
-      setTickets([
-        {
-          id: 'mock-1',
-          tenantId: 'doldadress',
-          customerEmail: 'customer@example.com',
-          customerName: 'Test Customer',
-          subject: 'Test ticket with integration data',
-          status: 'new',
-          priority: 'normal',
-          originalMessage: 'This is a test ticket to demonstrate integration info cards.',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          contextData: {
-            stripe: {
-              customerId: 'cus_test123',
-              subscriptions: [{ id: 'sub_1' }, { id: 'sub_2' }],
-              invoices: [{ id: 'inv_1' }, { id: 'inv_2' }, { id: 'inv_3' }],
-              charges: [{ id: 'ch_1' }, { id: 'ch_2' }],
-            },
-            billecta: {
-              debtorId: 'debtor_123',
-              invoices: [{ id: 'bill_1' }, { id: 'bill_2' }],
-            },
-            resend: {
-              emailsSent: 15,
-              recentEmails: [{ id: 'email_1' }, { id: 'email_2' }, { id: 'email_3' }],
-            },
-            gmail: {
-              totalEmails: 42,
-              recentEmails: [{ id: 'thread_1' }, { id: 'thread_2' }, { id: 'thread_3' }, { id: 'thread_4' }],
-            },
-            retool: {
-              customData: 'Available',
-            },
-          },
-        },
-      ] as any);
+      // Network blip — same rule as above: never overwrite real tickets.
+      setTickets((prev) => (prev.length > 0 ? prev : MOCK_TICKETS));
     } finally {
+      // Release the background-poll guard so the next tick can run. Forced
+      // refreshes never took the guard, so this is a no-op for them.
+      if (!force) pollInFlightRef.current = false;
       setLoading(false);
     }
   };
