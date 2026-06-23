@@ -21,6 +21,7 @@ export const doldadress: ProductConfig = {
     senders: ['no-reply@billecta.com'],
   },
   allowedDomains: ['doldadress.se', 'becomeanon.com'],
+  adminEmails: ['ida@doldadress.se'],
   agents: ['Ida Rosell', 'Malin Sundberg', 'Filippa Kramp'],
   agentSignatures: {
     'Ida Rosell': 'Vänliga hälsningar,\nIda\nSupportteamet Doldadress.se',

@@ -4,9 +4,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, ExternalLink, RefreshCw, CheckCircle, AlertCircle, Ban, X, AlertTriangle, Trash2 } from 'lucide-react';
 import IntegrationCard from '@/components/IntegrationCard';
+import InboxTabsAdmin from '@/components/settings/InboxTabsAdmin';
+import UsersAdmin from '@/components/settings/UsersAdmin';
 import type { Integration } from '@/lib/types';
 import { product } from '@/lib/products';
 import { t } from '@/lib/i18n';
+
+type SettingsTab = 'integrations' | 'email' | 'tabs' | 'users' | 'blocked' | 'tools';
 
 interface BlockedSender {
   id: string;
@@ -48,6 +52,7 @@ export default function SettingsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [emailAccounts, setEmailAccounts] = useState<ConnectedEmailAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('integrations');
   const [blockedSenders, setBlockedSenders] = useState<BlockedSender[]>([]);
   const [blockedInput, setBlockedInput] = useState('');
   const [blockedReason, setBlockedReason] = useState('');
@@ -380,12 +385,45 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold mb-2 text-slate-900 dark:text-slate-100">Settings</h1>
-        <p className="text-slate-600 dark:text-slate-400">Configure your integrations to enable AI-powered context gathering</p>
+        <p className="text-slate-600 dark:text-slate-400">{t('Hantera integrationer, e-postkonton, inkorgsflikar och användare')}</p>
       </div>
 
+      {/* Tab navigation */}
+      <div className="mb-6 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex gap-1 overflow-x-auto">
+          {([
+            { id: 'integrations', label: t('Integrationer') },
+            { id: 'email', label: t('E-postkonton') },
+            { id: 'tabs', label: t('Inkorgsflikar') },
+            { id: 'users', label: t('Användare') },
+            { id: 'blocked', label: t('Blockerade avsändare') },
+            ...(product.showAffectedCustomersTool ? [{ id: 'tools', label: t('Verktyg') }] : []),
+          ] as { id: SettingsTab; label: string }[]).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setSettingsTab(tab.id)}
+              className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-all ${
+                settingsTab === tab.id
+                  ? 'text-[#7C5CFF] border-b-2 border-[#7C5CFF]'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Inbox tabs admin */}
+      {settingsTab === 'tabs' && <InboxTabsAdmin />}
+
+      {/* Users admin */}
+      {settingsTab === 'users' && <UsersAdmin />}
+
       {/* Connected Gmail Accounts Section */}
+      {settingsTab === 'email' && (
       <div className="mb-8">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('E-postkonton (Gmail)')}</h2>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
@@ -467,8 +505,10 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      )}
+
       {/* Affected by closed-reply bug (diagnostic) — Doldadress-specific cleanup */}
-      {product.showAffectedCustomersTool && (
+      {settingsTab === 'tools' && product.showAffectedCustomersTool && (
       <div className="mb-8">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('Drabbade kunder (stängd-ärende-buggen)')}</h2>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
@@ -621,6 +661,7 @@ export default function SettingsPage() {
       )}
 
       {/* Blocked senders */}
+      {settingsTab === 'blocked' && (
       <div className="mb-8">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('Blockerade avsändare')}</h2>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
@@ -695,7 +736,10 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+      )}
 
+      {settingsTab === 'integrations' && (
+      <>
       <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('Integrationer')}</h2>
       <div className="space-y-6">
         {showIntegration('stripe') && (
@@ -809,6 +853,8 @@ export default function SettingsPage() {
         />
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

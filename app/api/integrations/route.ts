@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db/client';
 import { product } from '@/lib/products';
 import { getTenantId } from '@/lib/products/tenant';
 import { encryptJSON } from '@/lib/crypto';
-import { requireSession } from '@/lib/api-auth';
+import { requireSession, requireSettingsAdmin } from '@/lib/api-auth';
 import { decryptCredentials, maskCredentials, mergeCredentials } from '@/lib/integrations/credentials';
 
 async function resolveTenantId() {
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireSession();
+  const authResult = await requireSettingsAdmin();
   if (!authResult.ok) return authResult.response;
 
   try {
