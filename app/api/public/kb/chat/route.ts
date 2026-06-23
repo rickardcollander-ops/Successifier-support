@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTenantId } from '@/lib/products/tenant';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
 import { corsHeaders } from '@/lib/services/public-kb';
+import { getHelpCenterConfig } from '@/lib/services/help-center';
 import { streamChatResponse, type ChatTurn } from '@/lib/services/public-kb-chat';
 
 export const dynamic = 'force-dynamic';
@@ -48,6 +49,12 @@ export async function POST(request: NextRequest) {
     const tenantId = await getTenantId();
     if (!tenantId) {
       return NextResponse.json({ error: 'Not available' }, { status: 404, headers: cors });
+    }
+
+    // Honor the operator's on/off switch for the chatbot.
+    const config = await getHelpCenterConfig(tenantId);
+    if (!config.chatEnabled) {
+      return NextResponse.json({ error: 'Chat disabled' }, { status: 404, headers: cors });
     }
 
     const body = await request.json().catch(() => ({}));

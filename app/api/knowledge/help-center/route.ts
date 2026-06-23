@@ -35,17 +35,44 @@ export async function PUT(request: NextRequest) {
     const tenantId = await resolveTenantId();
     const body = await request.json();
 
+    // Trim + cap a free-text field, or null when empty.
+    const str = (v: unknown, max: number): string | null =>
+      typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null;
+
     const accentColor = typeof body.accentColor === 'string' && HEX.test(body.accentColor)
       ? body.accentColor
       : DEFAULT_HELP_CENTER.accentColor;
     const theme = ['light', 'dark', 'auto'].includes(body.theme) ? body.theme : 'light';
     const layout = body.layout === 'list' ? 'list' : 'grid';
     const showSearch = body.showSearch !== false;
-    const logoUrl = typeof body.logoUrl === 'string' && body.logoUrl.trim() ? body.logoUrl.trim() : null;
-    const headline = typeof body.headline === 'string' && body.headline.trim() ? body.headline.trim().slice(0, 120) : null;
-    const intro = typeof body.intro === 'string' && body.intro.trim() ? body.intro.trim().slice(0, 400) : null;
+    const logoUrl = str(body.logoUrl, 500);
+    const headline = str(body.headline, 120);
+    const intro = str(body.intro, 400);
 
-    const data = { accentColor, theme, layout, showSearch, logoUrl, headline, intro };
+    // Extra appearance
+    const footerText = str(body.footerText, 300);
+    const supportUrl = str(body.supportUrl, 500);
+    const supportLabel = str(body.supportLabel, 80);
+
+    // Chatbot
+    const chatEnabled = body.chatEnabled !== false;
+    const chatTitle = str(body.chatTitle, 80);
+    const chatWelcome = str(body.chatWelcome, 500);
+    const chatPlaceholder = str(body.chatPlaceholder, 120);
+    const chatInstructions = str(body.chatInstructions, 4000);
+    const chatFallback = str(body.chatFallback, 500);
+    const chatSuggestions = Array.isArray(body.chatSuggestions)
+      ? body.chatSuggestions
+          .filter((s: unknown): s is string => typeof s === 'string' && s.trim().length > 0)
+          .map((s: string) => s.trim().slice(0, 150))
+          .slice(0, 6)
+      : [];
+
+    const data = {
+      accentColor, theme, layout, showSearch, logoUrl, headline, intro,
+      footerText, supportUrl, supportLabel,
+      chatEnabled, chatTitle, chatWelcome, chatPlaceholder, chatInstructions, chatFallback, chatSuggestions,
+    };
 
     const config = await prisma.helpCenterConfig.upsert({
       where: { tenantId },

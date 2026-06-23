@@ -21,18 +21,28 @@ interface Message {
   sources?: Source[];
 }
 
-const INTRO: Message = {
-  role: 'assistant',
-  content: 'Hej! Ställ en fråga så söker jag svar i vårt hjälpcenter.',
-};
+interface HelpChatProps {
+  title?: string;
+  welcome?: string;
+  placeholder?: string;
+  suggestions?: string[];
+}
 
-export default function HelpChat() {
+export default function HelpChat({
+  title = 'Fråga hjälpcentret',
+  welcome = 'Hej! Ställ en fråga så söker jag svar i vårt hjälpcenter.',
+  placeholder = 'Skriv din fråga…',
+  suggestions = [],
+}: HelpChatProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<Message[]>([INTRO]);
+  const [messages, setMessages] = useState<Message[]>([{ role: 'assistant', content: welcome }]);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Suggestions are offered until the visitor asks their first question.
+  const started = messages.length > 1;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -44,8 +54,8 @@ export default function HelpChat() {
     if (open) inputRef.current?.focus();
   }, [open]);
 
-  async function send() {
-    const question = input.trim();
+  async function send(text?: string) {
+    const question = (text ?? input).trim();
     if (!question || loading) return;
 
     const nextMessages: Message[] = [...messages, { role: 'user', content: question }];
@@ -53,10 +63,10 @@ export default function HelpChat() {
     setInput('');
     setLoading(true);
 
-    // Send prior turns (excluding the canned intro) so follow-ups keep context.
+    // Send prior turns (excluding the welcome at index 0 and the just-added
+    // question) so follow-ups keep context.
     const history = nextMessages
-      .filter((m) => m !== INTRO)
-      .slice(0, -1)
+      .slice(1, -1)
       .map((m) => ({ role: m.role, content: m.content }));
 
     // Placeholder assistant message we stream tokens into.
@@ -149,7 +159,7 @@ export default function HelpChat() {
             className="px-4 py-3 text-sm font-semibold"
             style={{ background: 'var(--kb-accent)', color: '#fff' }}
           >
-            Fråga hjälpcentret
+            {title}
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -205,6 +215,22 @@ export default function HelpChat() {
                 </div>
               </div>
             )}
+
+            {!started && suggestions.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {suggestions.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => send(s)}
+                    className="rounded-full border px-3 py-1.5 text-xs text-left transition-colors hover:bg-[color:var(--kb-hover)]"
+                    style={{ borderColor: 'var(--kb-border)', color: 'var(--kb-text)' }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 border-t p-3" style={{ borderColor: 'var(--kb-border)' }}>
@@ -214,7 +240,7 @@ export default function HelpChat() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
               maxLength={1000}
-              placeholder="Skriv din fråga…"
+              placeholder={placeholder}
               className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2"
               style={
                 {
@@ -228,7 +254,7 @@ export default function HelpChat() {
             />
             <button
               type="button"
-              onClick={send}
+              onClick={() => send()}
               disabled={loading || input.trim().length === 0}
               aria-label="Skicka"
               className="flex h-9 w-9 items-center justify-center rounded-xl disabled:opacity-40"

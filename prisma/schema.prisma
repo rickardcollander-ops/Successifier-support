@@ -238,6 +238,18 @@ model HelpCenterConfig {
   intro       String?
   layout      String   @default("grid") // 'grid' | 'list'
   showSearch  Boolean  @default(true)
+  // Extra appearance
+  footerText   String?
+  supportUrl   String?
+  supportLabel String?
+  // Chatbot
+  chatEnabled      Boolean  @default(true)
+  chatTitle        String?
+  chatWelcome      String?
+  chatPlaceholder  String?
+  chatInstructions String?  // operator-authored persona/tone added to the system prompt
+  chatFallback     String?  // message shown when the KB can't answer
+  chatSuggestions  String[] @default([]) // starter questions shown as chips
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

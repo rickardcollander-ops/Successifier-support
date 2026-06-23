@@ -36,10 +36,26 @@ export default async function HelpLayout({ children }: { children: React.ReactNo
         </div>
       </header>
       <main className="mx-auto max-w-4xl px-4 py-8">{children}</main>
-      <footer className="mx-auto max-w-4xl px-4 py-8 text-sm text-[color:var(--kb-muted)]">
-        © {new Date().getFullYear()} {product.brandName}
+      <footer className="mx-auto max-w-4xl px-4 py-8 text-sm text-[color:var(--kb-muted)] flex flex-wrap items-center justify-between gap-3">
+        <span>{config.footerText || `© ${new Date().getFullYear()} ${product.brandName}`}</span>
+        {config.supportUrl && (
+          <a
+            href={config.supportUrl}
+            className="hover:underline"
+            style={{ color: 'var(--kb-accent)' }}
+          >
+            {config.supportLabel || 'Kontakta supporten'}
+          </a>
+        )}
       </footer>
-      <HelpChat />
+      {config.chatEnabled && (
+        <HelpChat
+          title={config.chatTitle}
+          welcome={config.chatWelcome}
+          placeholder={config.chatPlaceholder}
+          suggestions={config.chatSuggestions}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { product } from '@/lib/products';
 import { searchPublicArticles, getPublicArticleContentsBySlugs, logKbEvent } from './public-kb';
+import { getHelpCenterConfig } from './help-center';
 
 // AI chatbot for the PUBLIC help center. It answers ONLY from published,
 // public knowledge-base articles (the same narrow read layer the help center
@@ -110,7 +111,17 @@ export async function streamChatResponse(
   history: ChatTurn[] = []
 ): Promise<ReadableStream<Uint8Array>> {
   const trimmed = question.trim();
-  if (trimmed.length < 2) return staticStream(NO_MATCH_FALLBACK);
+
+  // Operator settings steer the bot: a custom fallback message and extra
+  // persona/tone instructions. The instructions REFINE tone/scope only — the
+  // absolute grounding rules in the base prompt always win (see systemText).
+  const config = await getHelpCenterConfig(tenantId);
+  const fallback = config.chatFallback || NO_MATCH_FALLBACK;
+  const systemText = config.chatInstructions
+    ? `${SYSTEM_PROMPT}\n\n=== ${product.language === 'en' ? 'OPERATOR INSTRUCTIONS (tone & scope only — the ABSOLUTE RULES above always take precedence)' : 'INSTRUKTIONER FRÅN VERKSAMHETEN (endast ton & omfattning — de ABSOLUTA REGLERNA ovan gäller alltid före)'} ===\n${config.chatInstructions}`
+    : SYSTEM_PROMPT;
+
+  if (trimmed.length < 2) return staticStream(fallback);
 
   // Retrieve candidate articles from the SAME read layer the help center uses.
   const hits = await searchPublicArticles(tenantId, trimmed);
@@ -118,11 +129,11 @@ export async function streamChatResponse(
   // articles (resultsCount = 0) surfaces as a content gap alongside the
   // existing "searches with no result" report.
   void logKbEvent(tenantId, { type: 'search', query: trimmed, resultsCount: hits.length });
-  if (hits.length === 0) return staticStream(NO_MATCH_FALLBACK);
+  if (hits.length === 0) return staticStream(fallback);
 
   const topSlugs = hits.slice(0, MAX_SOURCES).map((a) => a.slug);
   const articles = await getPublicArticleContentsBySlugs(tenantId, topSlugs);
-  if (articles.length === 0) return staticStream(NO_MATCH_FALLBACK);
+  if (articles.length === 0) return staticStream(fallback);
 
   const titleBySlug = new Map(articles.map((a) => [a.slug, a.title]));
 
@@ -167,7 +178,7 @@ export async function streamChatResponse(
           model: CHAT_MODEL,
           max_tokens: 1200,
           temperature: 0.3,
-          system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+          system: [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }],
           messages,
         });
 
@@ -195,7 +206,7 @@ export async function streamChatResponse(
       } catch (error) {
         console.error('[public-kb] chat stream error:', error);
         // If nothing was emitted yet, give the user the fallback text.
-        if (emitted === 0) controller.enqueue(ndjson({ type: 'delta', text: NO_MATCH_FALLBACK }));
+        if (emitted === 0) controller.enqueue(ndjson({ type: 'delta', text: fallback }));
         controller.enqueue(ndjson({ type: 'error', sources: [] }));
         controller.close();
       }
