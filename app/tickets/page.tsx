@@ -642,14 +642,6 @@ export default function TicketsPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-slate-600 dark:text-slate-400">{t('Laddar ärenden…')}</div>
-      </div>
-    );
-  }
-
   const fetchArchivedTickets = async () => {
     if (archivedTickets.length > 0) return;
     setLoadingArchived(true);
@@ -761,6 +753,18 @@ export default function TicketsPage() {
       (t.customerName || '').toLowerCase().includes(search)
     );
   }), [archivedTickets, archivedSearch]);
+
+  // Initial-load spinner. This early return MUST stay below every hook above
+  // (the useMemo filtering/counts especially) — a conditional return placed
+  // before a hook changes the hook count between the loading and loaded
+  // renders, which crashes the whole page with a client-side exception.
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-slate-600 dark:text-slate-400">{t('Laddar ärenden…')}</div>
+      </div>
+    );
+  }
 
   const tabs = [
     { id: 'urgent', label: t('Akut ärende'), count: statusCounts.urgent },
