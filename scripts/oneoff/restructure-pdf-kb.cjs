@@ -1,7 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const OpenAI = require('openai').default;
 
-const DB_URL = "postgresql://neondb_owner:npg_GuEe9BOY3Srv@ep-rapid-bird-akvjmjl9.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require";
+const DB_URL = "postgresql://neondb_owner:REDACTED_ROTATE_ME@ep-rapid-bird-akvjmjl9.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require";
 const db = new PrismaClient({ datasources: { db: { url: DB_URL } } });
 
 async function main() {
