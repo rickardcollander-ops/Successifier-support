@@ -66,13 +66,22 @@ artiklar.
 Flödet (`POST /api/public/kb/chat` → `lib/services/public-kb-chat.ts`):
 
 1. Frågan körs mot `searchPublicArticles` för att hämta topp-träffar.
-2. Endast de träffarnas fulla innehåll matas till modellen med strikt grounding:
-   *svara bara från källorna, hitta inte på, och säg ifrån om svaret saknas.*
-3. Svaret returneras med **källänkar** till `/help/<slug>` som visas i chatten.
+2. Endast de träffarnas fulla innehåll matas till modellen (`claude-sonnet-4-6`)
+   med strikt grounding: *svara bara från källorna, hitta inte på, och säg ifrån
+   om svaret saknas.*
+3. Svaret **streamas** token-för-token som NDJSON och avslutas med **källänkar**
+   till `/help/<slug>` (modellen markerar använda artiklar med en sista rad
+   `[[SOURCES: …]]` som strippas innan texten visas).
+
+Streamens rader: `{"type":"delta","text":"…"}` (flera) och avslutande
+`{"type":"done","sources":[…]}`.
 
 Endpointen är hårdare rate-limitad än söket (12 anrop/min/IP) eftersom varje
 anrop är ett LLM-anrop, och varje fråga loggas som ett `search`-event så att
 frågor utan svar (`resultsCount = 0`) syns som innehållsluckor i analysen.
+
+Samma chatt finns även i den inbäddningsbara widgeten (`public/kb-widget.js`)
+under fliken **Fråga AI**, så hemsidan kan erbjuda boten utan egen kod.
 
 ## Design
 

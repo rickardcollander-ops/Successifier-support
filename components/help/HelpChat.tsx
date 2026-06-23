@@ -59,30 +59,56 @@ export default function HelpChat() {
       .slice(0, -1)
       .map((m) => ({ role: m.role, content: m.content }));
 
+    // Placeholder assistant message we stream tokens into.
+    const botIndex = nextMessages.length;
+    setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+
+    const update = (fn: (m: Message) => Message) =>
+      setMessages((prev) => prev.map((m, i) => (i === botIndex ? fn(m) : m)));
+
     try {
       const res = await fetch('/api/public/kb/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, history }),
       });
-      if (!res.ok) throw new Error('request failed');
-      const data = await res.json();
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: typeof data.answer === 'string' ? data.answer : 'Något gick fel.',
-          sources: Array.isArray(data.sources) ? data.sources : [],
-        },
-      ]);
+      if (!res.ok || !res.body) throw new Error('request failed');
+
+      // Read the NDJSON stream line by line, appending deltas as they arrive.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      const handleLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        let evt: { type?: string; text?: string; sources?: Source[] };
+        try {
+          evt = JSON.parse(trimmed);
+        } catch {
+          return;
+        }
+        if (evt.type === 'delta' && typeof evt.text === 'string') {
+          update((m) => ({ ...m, content: m.content + evt.text }));
+        } else if (evt.type === 'done') {
+          update((m) => ({ ...m, sources: Array.isArray(evt.sources) ? evt.sources : [] }));
+        }
+      };
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        lines.forEach(handleLine);
+      }
+      if (buffer.trim()) handleLine(buffer);
+
+      update((m) => (m.content ? m : { ...m, content: 'Något gick fel. Försök igen om en liten stund.' }));
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: 'Något gick fel. Försök igen om en liten stund.',
-        },
-      ]);
+      update((m) => ({ ...m, content: 'Något gick fel. Försök igen om en liten stund.' }));
     } finally {
       setLoading(false);
     }
@@ -127,7 +153,8 @@ export default function HelpChat() {
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-            {messages.map((m, i) => (
+            {messages.map((m, i) =>
+              m.role === 'assistant' && m.content === '' ? null : (
               <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
                 <div
                   className="max-w-[85%] rounded-2xl px-3 py-2 text-sm"
@@ -168,7 +195,7 @@ export default function HelpChat() {
               </div>
             ))}
 
-            {loading && (
+            {loading && messages[messages.length - 1]?.content === '' && (
               <div className="flex justify-start">
                 <div
                   className="rounded-2xl px-3 py-2 text-sm"
