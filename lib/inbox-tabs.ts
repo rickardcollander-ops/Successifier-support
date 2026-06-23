@@ -2,6 +2,16 @@
 // imports here — both the tickets page and the Settings admin UI use this, and
 // the API stores/returns the same shapes.
 
+import { product } from '@/lib/products';
+import { t } from '@/lib/i18n';
+import {
+  isVendorTicket,
+  isBounceTicket,
+  isUrgentPriority,
+  BOUNCE_SENDER_PREFIXES,
+  BOUNCE_SUBJECT_MARKERS,
+} from '@/lib/ticket-filters';
+
 export type TabRuleField = 'status' | 'priority' | 'sender' | 'subject';
 export type TabRuleOp = 'in' | 'not_in' | 'contains' | 'not_contains';
 
@@ -148,4 +158,93 @@ export function customTabSlug(label: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 40);
   return `custom-${base || 'tab'}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+// --- Built-in folder rules ----------------------------------------------
+//
+// SINGLE SOURCE OF TRUTH for what each built-in tab shows. The inbox
+// (app/tickets/page.tsx) filters with `matches`; the Settings UI renders
+// `describe()` read-only so admins can see the rules behind the existing
+// folders. The descriptions are derived from the real predicates and the
+// shared constants (vendor senders, bounce markers) rather than re-typed, so
+// they can't drift from the actual filtering.
+
+// Status folders: one ticket status each, minus the vendor/bounce folders
+// which have their own tabs.
+const STATUS_TAB_KEYS = ['new', 'in_progress', 'review', 'sent', 'closed'] as const;
+
+// Friendly names for the underlying status values (mirrors the inbox labels).
+const STATUS_LABEL: Record<(typeof STATUS_TAB_KEYS)[number], () => string> = {
+  new: () => t('Nya'),
+  in_progress: () => t('Öppna'),
+  review: () => t('Granskning'),
+  sent: () => t('Skickade'),
+  closed: () => t('Stängda'),
+};
+
+export interface BuiltinTabRule {
+  // Whether a ticket belongs in this built-in folder. Omitted for `archived`,
+  // which is loaded from a separate query rather than filtered client-side.
+  matches?: (ticket: MatchableTicket) => boolean;
+  // Localized, human-readable summary of the rule, shown read-only in Settings.
+  describe: () => string;
+}
+
+const vendorSendersText = () =>
+  product.vendorFolder.senders.length
+    ? product.vendorFolder.senders.join(', ')
+    : product.vendorFolder.label;
+
+export const BUILTIN_TAB_RULES: Record<BuiltinTabKey, BuiltinTabRule> = {
+  urgent: {
+    matches: (tk) =>
+      isUrgentPriority(tk) &&
+      !isVendorTicket(tk) &&
+      !isBounceTicket(tk) &&
+      tk.status !== 'duplicate' &&
+      tk.status !== 'closed' &&
+      tk.status !== 'sent',
+    describe: () =>
+      `${t('Prioritet')}: ${t('Akut')}/${t('Hög')} — ${t('endast öppna ärenden, exkl. leverantörs-, studs- och dublettmappen')}`,
+  },
+  new: statusRule('new'),
+  in_progress: statusRule('in_progress'),
+  review: statusRule('review'),
+  sent: statusRule('sent'),
+  closed: statusRule('closed'),
+  all: {
+    matches: (tk) => !isVendorTicket(tk) && tk.status !== 'duplicate' && !isBounceTicket(tk),
+    describe: () => t('Alla ärenden utom leverantörs-, studs- och dublettmappen'),
+  },
+  billecta: {
+    matches: (tk) => isVendorTicket(tk),
+    describe: () => `${t('Avsändare (e-post)')}: ${vendorSendersText()}`,
+  },
+  bounce: {
+    matches: (tk) => isBounceTicket(tk),
+    describe: () =>
+      `${t('Avsändare börjar med')} ${BOUNCE_SENDER_PREFIXES.join(', ')} ${t('eller ämnet innehåller')} ${BOUNCE_SUBJECT_MARKERS.join(', ')}`,
+  },
+  duplicate: {
+    matches: (tk) => tk.status === 'duplicate',
+    describe: () => `${t('Status')}: ${t('Dubletter')}`,
+  },
+  archived: {
+    // No client-side predicate — archived tickets are fetched on demand.
+    describe: () => t('Arkiverade ärenden (hämtas separat)'),
+  },
+};
+
+function statusRule(status: (typeof STATUS_TAB_KEYS)[number]): BuiltinTabRule {
+  return {
+    matches: (tk) => tk.status === status && !isVendorTicket(tk) && !isBounceTicket(tk),
+    describe: () =>
+      `${t('Status')}: ${STATUS_LABEL[status]()} — ${t('exkl. leverantörs- och studsmappen')}`,
+  };
+}
+
+/** Read-only rule summary for a built-in tab, or null if the key is unknown. */
+export function builtinTabRuleText(key: string): string | null {
+  const rule = (BUILTIN_TAB_RULES as Record<string, BuiltinTabRule>)[key];
+  return rule ? rule.describe() : null;
 }

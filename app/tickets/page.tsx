@@ -11,8 +11,10 @@ import {
   buildTabList,
   ticketMatchesRules,
   BUILTIN_TAB_KEYS,
+  BUILTIN_TAB_RULES,
   type StoredTab,
   type InboxTabConfig,
+  type BuiltinTabKey,
 } from '@/lib/inbox-tabs';
 
 interface EmailSyncStatus {
@@ -63,12 +65,9 @@ const MOCK_TICKETS = [
   },
 ] as any;
 
-// Vendor- and bounce-folder predicates live in lib/ticket-filters so the
-// reports API counts exactly the same ticket population as the inbox tabs.
-
-// Red traffic-light tickets (urgent/high) drive the "Akut ärende" folder.
-// Module-level so it's a stable reference inside the memoized filtering.
-const isUrgentTicket = (t: Ticket) => t.priority === 'urgent' || t.priority === 'high';
+// Vendor- and bounce-folder predicates live in lib/ticket-filters, and the
+// per-tab predicates in lib/inbox-tabs (BUILTIN_TAB_RULES), so the reports API
+// and the Settings rule descriptions stay in sync with what the inbox shows.
 
 export default function TicketsPage() {
   // Deep-link param: `/tickets?ticket=<id>` lands here from the Settings
@@ -689,27 +688,18 @@ export default function TicketsPage() {
   const ticketsForTab = useCallback(
     (tab: { key: string; isCustom: boolean; rules?: InboxTabConfig['rules'] }) => {
       if (tab.isCustom) return tickets.filter((tk) => ticketMatchesRules(tk, tab.rules ?? null));
-      switch (tab.key) {
-        case 'all':
-          return tickets.filter((t) => !isVendorTicket(t) && t.status !== 'duplicate' && !isBounceTicket(t));
-        case 'billecta':
-          return billectaTickets;
-        case 'duplicate':
-          return tickets.filter((t) => t.status === 'duplicate');
-        case 'bounce':
-          return bounceTickets;
-        case 'urgent':
-          // "Akut ärende" — every open ticket flagged red (urgent/high), so
-          // support finds the cases needing attention first. Closed/sent are
-          // excluded since they're already handled.
-          return tickets.filter((t) => isUrgentTicket(t) && !isVendorTicket(t) && !isBounceTicket(t) && t.status !== 'duplicate' && t.status !== 'closed' && t.status !== 'sent');
-        case 'archived':
-          return archivedTickets;
-        default:
-          // A status folder (new/in_progress/review/sent/closed): that status,
-          // minus the vendor/bounce folders which have their own tabs.
-          return tickets.filter((t) => t.status === tab.key && !isVendorTicket(t) && !isBounceTicket(t));
-      }
+      // Archived lives in its own fetched list; everything else uses the
+      // shared built-in predicate so the inbox and the rule descriptions in
+      // Settings can't drift apart.
+      if (tab.key === 'archived') return archivedTickets;
+      if (tab.key === 'billecta') return billectaTickets;
+      if (tab.key === 'bounce') return bounceTickets;
+      const rule = BUILTIN_TAB_RULES[tab.key as BuiltinTabKey];
+      const matches = rule?.matches;
+      if (matches) return tickets.filter(matches);
+      // Unknown built-in (e.g. a key added in code later): treat it as a
+      // status folder, minus the vendor/bounce folders which have own tabs.
+      return tickets.filter((t) => t.status === tab.key && !isVendorTicket(t) && !isBounceTicket(t));
     },
     [tickets, billectaTickets, bounceTickets, archivedTickets],
   );
