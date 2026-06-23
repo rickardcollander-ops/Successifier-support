@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantId } from '@/lib/products/tenant';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
-import { corsHeaders, logKbEvent } from '@/lib/services/public-kb';
-import { answerFromPublicKb, type ChatTurn } from '@/lib/services/public-kb-chat';
+import { corsHeaders } from '@/lib/services/public-kb';
+import { streamChatResponse, type ChatTurn } from '@/lib/services/public-kb-chat';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,25 +53,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const question = typeof body?.question === 'string' ? body.question.trim() : '';
     if (question.length < 2 || question.length > 1000) {
-      return NextResponse.json(
-        { error: 'Invalid question' },
-        { status: 400, headers: cors }
-      );
+      return NextResponse.json({ error: 'Invalid question' }, { status: 400, headers: cors });
     }
 
     const history = parseHistory(body?.history);
-    const result = await answerFromPublicKb(tenantId, question, history);
+    const stream = await streamChatResponse(tenantId, question, history);
 
-    // Reuse the KB analytics stream: log the question as a search so that
-    // unanswered questions (resultsCount = 0) surface content gaps alongside
-    // the existing "searches with no result" report.
-    void logKbEvent(tenantId, {
-      type: 'search',
-      query: question,
-      resultsCount: result.sources.length,
+    return new NextResponse(stream, {
+      headers: {
+        ...cors,
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Accel-Buffering': 'no',
+      },
     });
-
-    return NextResponse.json(result, { headers: cors });
   } catch (error) {
     console.error('[public-kb] chat error:', error);
     return NextResponse.json({ error: 'Chat failed' }, { status: 500, headers: cors });
