@@ -1,9 +1,17 @@
+import { headers } from 'next/headers';
 import { product } from '@/lib/products';
 
-export default function ApiDocsPage() {
+export default async function ApiDocsPage() {
+  // Derive the real deployment origin from the request so every example URL
+  // (API base, help center, widget) matches the domain the admin is actually
+  // on — e.g. https://doldadress.successifier.com — instead of a guessed
+  // placeholder.
+  const h = await headers();
+  const host = h.get('host') ?? `your-subdomain.${product.apiBaseDomain}`;
+  const proto = h.get('x-forwarded-proto') ?? 'https';
+  const appDomain = `${proto}://${host}`;
   const keyExample = `${product.apiKeyPrefix}_your_api_key_here`;
-  const baseUrl = `https://your-subdomain.${product.apiBaseDomain}/api`;
-  const appDomain = `https://your-subdomain.${product.apiBaseDomain}`;
+  const baseUrl = `${appDomain}/api`;
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
