@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { LayoutList, ChevronUp, ChevronDown, Trash2, Plus, Eye, EyeOff } from 'lucide-react';
+import { LayoutList, ChevronUp, ChevronDown, Trash2, Plus, Eye, EyeOff, Filter } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { product } from '@/lib/products';
 import {
   buildTabList,
   customTabSlug,
+  builtinTabRuleText,
   BUILTIN_TAB_KEYS,
   type InboxTabConfig,
   type StoredTab,
@@ -282,6 +283,16 @@ export default function InboxTabsAdmin() {
                     </button>
                   )}
                 </div>
+
+                {!tb.isCustom && builtinTabRuleText(tb.key) && (
+                  <div className="mt-2 ml-8 flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <Filter className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-slate-400" />
+                    <span>
+                      <span className="font-medium text-slate-600 dark:text-slate-300">{t('Regel:')}</span>{' '}
+                      {builtinTabRuleText(tb.key)}
+                    </span>
+                  </div>
+                )}
 
                 {tb.isCustom && (
                   <div className="mt-3 ml-8 rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/40">
