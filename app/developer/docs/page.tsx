@@ -3,6 +3,7 @@ import { product } from '@/lib/products';
 export default function ApiDocsPage() {
   const keyExample = `${product.apiKeyPrefix}_your_api_key_here`;
   const baseUrl = `https://your-subdomain.${product.apiBaseDomain}/api`;
+  const appDomain = `https://your-subdomain.${product.apiBaseDomain}`;
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
@@ -34,9 +35,130 @@ Authorization: Bearer ${keyExample}`}</code>
         </pre>
       </section>
 
+      {/* Help Center & AI Chatbot on your own site */}
+      <section className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 space-y-5">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+            Help Center &amp; AI Chatbot on your own site
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400">
+            The knowledge base powers a public help center and an AI chatbot you can add to your
+            own website. Everything here is <strong>read-only and needs no API key</strong> — it
+            serves only articles you have marked <strong>Published</strong> and <strong>Public</strong>.
+            Internal and auto-learned articles (which may contain customer data) are never exposed.
+          </p>
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
+            Step 1 — Publish the articles you want visible
+          </h3>
+          <p className="text-slate-600 dark:text-slate-400">
+            In <span className="font-mono">Knowledge</span>, set an article&apos;s status to{' '}
+            <span className="font-mono">Published</span> and toggle it <span className="font-mono">Public</span>.
+            Only those articles appear in the help center, in search, and as chatbot answers.
+            You can style the help center under <span className="font-mono">Knowledge → Design</span>.
+          </p>
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
+            Step 2 — Add the widget (chatbot + search)
+          </h3>
+          <p className="text-slate-600 dark:text-slate-400 mb-3">
+            Paste this snippet before <span className="font-mono">&lt;/body&gt;</span> on your site. It
+            injects a floating <strong>Help</strong> button with an <strong>Ask AI</strong> tab (the
+            chatbot, answering only from your published articles and linking its sources) and a{' '}
+            <strong>Search</strong> tab.
+          </p>
+          <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
+            <code>{`<script src="${appDomain}/kb-widget.js"
+        data-kb-base="${appDomain}"></script>`}</code>
+          </pre>
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
+            Alternative — link the hosted help center
+          </h3>
+          <p className="text-slate-600 dark:text-slate-400 mb-3">
+            Prefer no code? Link straight to the ready-made, server-rendered help center:
+          </p>
+          <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
+            <code>{`${appDomain}/help            # start page with search + categories
+${appDomain}/help/c/<category>  # category page
+${appDomain}/help/<slug>        # a single article
+${appDomain}/help/sitemap.xml   # for search-engine indexing`}</code>
+          </pre>
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">
+            Public help center API (no key, CORS-enabled)
+          </h3>
+          <p className="text-slate-600 dark:text-slate-400 mb-3">
+            Want full control over the design? Build your own UI against these endpoints. CORS is
+            allowed for your product domains.
+          </p>
+          <div className="space-y-2 mb-4">
+            <div className="flex gap-2 flex-wrap">
+              <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">GET /api/public/kb/categories</code>
+              <span className="text-slate-600 dark:text-slate-400">Public categories with article counts</span>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">GET /api/public/kb/articles?category=&amp;page=</code>
+              <span className="text-slate-600 dark:text-slate-400">List published articles</span>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">GET /api/public/kb/articles/&lt;slug&gt;</code>
+              <span className="text-slate-600 dark:text-slate-400">A single article (full content + related)</span>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">GET /api/public/kb/search?q=</code>
+              <span className="text-slate-600 dark:text-slate-400">Full-text search over published articles</span>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">POST /api/public/kb/chat</code>
+              <span className="text-slate-600 dark:text-slate-400">AI chatbot, grounded only in published articles</span>
+            </div>
+          </div>
+
+          <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">Chatbot request</h4>
+          <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto mb-3">
+            <code>{`POST ${appDomain}/api/public/kb/chat
+Content-Type: application/json
+
+{
+  "question": "How do I change my address?",
+  "history": [
+    { "role": "user", "content": "previous question" },
+    { "role": "assistant", "content": "previous answer" }
+  ]
+}`}</code>
+          </pre>
+          <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">
+            Streaming response (NDJSON, one JSON object per line)
+          </h4>
+          <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
+            <code>{`{"type":"delta","text":"You can change "}
+{"type":"delta","text":"your address under My Pages…"}
+{"type":"done","sources":[{"slug":"andra-adress","title":"Ändra adress"}]}`}</code>
+          </pre>
+          <p className="text-slate-600 dark:text-slate-400 mt-3">
+            Read the body as a stream and append each <span className="font-mono">delta.text</span> as it
+            arrives; the final <span className="font-mono">done</span> event carries the source articles
+            the answer was based on. If the knowledge base can&apos;t answer, the bot says so instead of
+            guessing. The endpoint is rate-limited to 12 requests/min per IP.
+          </p>
+        </div>
+      </section>
+
       {/* Endpoints */}
       <section className="space-y-6">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Endpoints</h2>
+        <p className="text-slate-600 dark:text-slate-400">
+          The endpoints below are the authenticated Support API (they require an API key).
+        </p>
 
         {/* Create Ticket */}
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">

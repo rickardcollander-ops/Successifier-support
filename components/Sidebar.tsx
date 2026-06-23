@@ -32,7 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/tickets", label: "Tickets", icon: Ticket },
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/developer", label: "Developer", icon: Code },
+  { href: "/developer", label: "Developer", icon: Code, superadminOnly: true },
   { href: "/settings/email-accounts", label: "Email Accounts", icon: Mail },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/admin", label: "Admin", icon: Shield, superadminOnly: true },

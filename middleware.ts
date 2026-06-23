@@ -43,8 +43,11 @@ export default auth((req) => {
     return NextResponse.redirect(signInUrl);
   }
 
-  // Block /admin routes for non-superadmin users
-  if (pathname.startsWith("/admin") && req.auth.user?.role !== "superadmin") {
+  // Block /admin and /developer routes for non-superadmin (admin) users
+  if (
+    (pathname.startsWith("/admin") || pathname.startsWith("/developer")) &&
+    req.auth.user?.role !== "superadmin"
+  ) {
     return NextResponse.redirect(new URL("/tickets", req.url));
   }
 
