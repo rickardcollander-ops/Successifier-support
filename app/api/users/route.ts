@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
 import { requireSettingsAdmin } from '@/lib/api-auth';
-import { isSettingsAdmin } from '@/lib/access';
+import { isSettingsAdmin, isSuperadmin } from '@/lib/access';
 
 // GET — list the users that belong to this deployment's tenant. Settings
 // admins only. We also flag which accounts are settings admins (by role or the
@@ -31,7 +31,11 @@ export async function GET() {
 
   return NextResponse.json({
     currentUserEmail: authResult.userEmail.toLowerCase(),
-    users: users.map((u) => ({
+    users: users
+      // Hide global superadmins (us, the platform operators) from the
+      // user-admin list. Product admins (e.g. Ida) stay visible.
+      .filter((u) => !isSuperadmin(u.email, u.role))
+      .map((u) => ({
       id: u.id,
       name: u.name,
       email: u.email,

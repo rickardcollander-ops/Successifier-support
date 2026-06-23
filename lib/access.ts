@@ -48,3 +48,16 @@ export function isSettingsAdmin(email?: string | null, role?: string | null): bo
   if (!e) return false;
   return settingsAdminEmails().includes(e);
 }
+
+/**
+ * Whether the given identity is a global superadmin (us, the platform
+ * operators) — by role or the SUPERADMIN_EMAILS allowlist. Note this does NOT
+ * include the product's admin allowlist (e.g. Ida); those are regular settings
+ * admins. Used to hide superadmins from the user-admin UI.
+ */
+export function isSuperadmin(email?: string | null, role?: string | null): boolean {
+  if (role === 'superadmin') return true;
+  const e = (email || '').toLowerCase();
+  if (!e) return false;
+  return SUPERADMIN_EMAILS.includes(e);
+}
