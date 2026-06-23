@@ -55,6 +55,25 @@ Exempel:
 curl "https://DIN-APP-DOMÄN/api/public/kb/search?q=uppsägning"
 ```
 
+## AI-chatbot i hjälpcentret
+
+En flytande chattbubbla finns på alla `/help`-sidor (`components/help/HelpChat.tsx`)
+och ärver hjälpcentrets tema. Den svarar **enbart** utifrån publicerade, publika
+artiklar – samma läs-lager (`lib/services/public-kb.ts`) som resten av
+hjälpcentret, så den kan aldrig citera interna eller auto-lärda (PII-haltiga)
+artiklar.
+
+Flödet (`POST /api/public/kb/chat` → `lib/services/public-kb-chat.ts`):
+
+1. Frågan körs mot `searchPublicArticles` för att hämta topp-träffar.
+2. Endast de träffarnas fulla innehåll matas till modellen med strikt grounding:
+   *svara bara från källorna, hitta inte på, och säg ifrån om svaret saknas.*
+3. Svaret returneras med **källänkar** till `/help/<slug>` som visas i chatten.
+
+Endpointen är hårdare rate-limitad än söket (12 anrop/min/IP) eftersom varje
+anrop är ett LLM-anrop, och varje fråga loggas som ett `search`-event så att
+frågor utan svar (`resultsCount = 0`) syns som innehållsluckor i analysen.
+
 ## Design
 
 Hjälpcentrets utseende ställs in under **Kunskapsbas → Design** (`/knowledge/design`)

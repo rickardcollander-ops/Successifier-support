@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { product } from '@/lib/products';
 import { getTenantId } from '@/lib/products/tenant';
 import { getHelpCenterConfig, DEFAULT_HELP_CENTER } from '@/lib/services/help-center';
+import HelpChat from '@/components/help/HelpChat';
 
 export const metadata: Metadata = {
   title: `Hjälpcenter – ${product.displayName}`,
@@ -38,6 +39,7 @@ export default async function HelpLayout({ children }: { children: React.ReactNo
       <footer className="mx-auto max-w-4xl px-4 py-8 text-sm text-[color:var(--kb-muted)]">
         © {new Date().getFullYear()} {product.brandName}
       </footer>
+      <HelpChat />
     </div>
   );
 }

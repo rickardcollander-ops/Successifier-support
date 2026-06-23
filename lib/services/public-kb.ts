@@ -170,6 +170,28 @@ export async function searchPublicArticles(
   );
 }
 
+/**
+ * Fetch full content for a set of public slugs, in the order requested.
+ * Used to ground the help-center chatbot: only published, public, non
+ * auto-learned articles are ever returned, so the bot can never cite
+ * internal or PII-bearing content.
+ */
+export async function getPublicArticleContentsBySlugs(
+  tenantId: string,
+  slugs: string[]
+): Promise<Array<{ slug: string; title: string; content: string }>> {
+  if (slugs.length === 0) return [];
+  const rows = await prisma.knowledgeBase.findMany({
+    where: { ...publicWhere(tenantId), slug: { in: slugs } },
+    select: { slug: true, title: true, content: true },
+  });
+  const bySlug = new Map(rows.map((r) => [r.slug, r]));
+  return slugs
+    .map((s) => bySlug.get(s))
+    .filter((r): r is { slug: string; title: string; content: string } => !!r && !!r.slug)
+    .map((r) => ({ slug: r.slug as string, title: r.title, content: r.content }));
+}
+
 /** Resolve the article id behind a public slug (for view counting / feedback). */
 export async function getPublicArticleId(tenantId: string, slug: string): Promise<string | null> {
   const row = await prisma.knowledgeBase.findFirst({
