@@ -182,15 +182,20 @@ Content-Type: application/json
           <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">Request Body</h4>
           <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto mb-4">
             <code>{`{
-  "customerEmail": "customer@example.com",
-  "customerName": "John Doe",
-  "subject": "Need help with billing",
-  "message": "I have a question about my invoice...",
-  "priority": "normal" // optional: low, normal, high, urgent
+  "customerEmail": "customer@example.com",   // required
+  "customerName": "John Doe",                // optional
+  "subject": "Need help with billing",       // required
+  "originalMessage": "I have a question about my invoice...", // required
+  "priority": "normal"                       // optional: low, normal, high, urgent
 }`}</code>
           </pre>
 
           <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">Response</h4>
+          <p className="text-slate-600 dark:text-slate-400 mb-2 text-sm">
+            The ticket is returned immediately with <code className="font-mono">aiResponse: null</code>.
+            The AI draft is generated asynchronously and filled in shortly after — fetch the ticket
+            again to read it.
+          </p>
           <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
             <code>{`{
   "id": "cmlb49srj00003se5j3w",
@@ -201,8 +206,8 @@ Content-Type: application/json
   "status": "new",
   "priority": "normal",
   "originalMessage": "I have a question about my invoice...",
-  "aiResponse": "Thank you for reaching out...",
-  "aiConfidence": 0.92,
+  "aiResponse": null,
+  "aiConfidence": null,
   "createdAt": "2026-02-11T15:30:00.000Z",
   "updatedAt": "2026-02-11T15:30:00.000Z"
 }`}</code>
@@ -224,11 +229,11 @@ Content-Type: application/json
           <div className="space-y-2 mb-4">
             <div className="flex gap-2">
               <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">status</code>
-              <span className="text-slate-600 dark:text-slate-400">Filter by status (new, in_progress, review, sent, closed)</span>
+              <span className="text-slate-600 dark:text-slate-400">Pass <code className="font-mono">archived</code> to list archived tickets; otherwise archived tickets are excluded</span>
             </div>
             <div className="flex gap-2">
-              <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">priority</code>
-              <span className="text-slate-600 dark:text-slate-400">Filter by priority (low, normal, high, urgent)</span>
+              <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">since</code>
+              <span className="text-slate-600 dark:text-slate-400">ISO timestamp — returns only tickets changed since then (delta poll)</span>
             </div>
           </div>
 
@@ -348,13 +353,28 @@ Content-Type: application/json
       {/* Rate Limiting */}
       <section className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">Rate Limiting</h2>
-        <p className="text-slate-600 dark:text-slate-400">
-          API requests are limited to 100 requests per minute per API key. Rate limit information is included in response headers:
+        <p className="text-slate-600 dark:text-slate-400 mb-4">
+          There is no global per-key limit. Specific expensive endpoints are rate-limited per client
+          IP; exceeding a limit returns <code className="font-mono">429 Too Many Requests</code> with a{' '}
+          <code className="font-mono">Retry-After</code> header (in seconds). Current limits:
         </p>
+        <div className="space-y-2">
+          <div className="flex gap-2 flex-wrap">
+            <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">POST /tickets/:id/send</code>
+            <span className="text-slate-600 dark:text-slate-400">30 / min</span>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">GET /api/public/kb/search</code>
+            <span className="text-slate-600 dark:text-slate-400">60 / min</span>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">POST /api/public/kb/chat</code>
+            <span className="text-slate-600 dark:text-slate-400">12 / min</span>
+          </div>
+        </div>
         <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto mt-4">
-          <code>{`X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 95
-X-RateLimit-Reset: 1707667200`}</code>
+          <code>{`HTTP/1.1 429 Too Many Requests
+Retry-After: 42`}</code>
         </pre>
       </section>
     </div>

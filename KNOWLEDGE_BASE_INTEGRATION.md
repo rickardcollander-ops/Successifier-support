@@ -35,7 +35,9 @@ Klistra in på valfri sida:
         data-kb-base="https://DIN-APP-DOMÄN"></script>
 ```
 
-En flytande "Hjälp"-knapp med livesök läggs till.
+En flytande "Hjälp"-knapp läggs till med två flikar: **Fråga AI**
+(chatboten – streamande svar grundade i publicerade artiklar, med källänkar)
+och **Sök** (livesök).
 
 ### 3. Publikt JSON-API (egen rendering)
 Hämta innehåll och rendera i hemsidans egen design. Inget API-nyckel krävs.
