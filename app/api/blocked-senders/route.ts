@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db/client';
 import { getTenantId } from '@/lib/products/tenant';
+import { requireSettingsAdmin } from '@/lib/api-auth';
 import { invalidateBlocklistCache } from '@/lib/services/blocked-senders';
 
 async function resolveTenantId(): Promise<string | null> {
@@ -28,10 +29,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authResult = await requireSettingsAdmin();
+  if (!authResult.ok) return authResult.response;
   const tenantId = await resolveTenantId();
   if (!tenantId) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
@@ -58,7 +57,7 @@ export async function POST(request: NextRequest) {
         tenantId,
         pattern,
         reason: body.reason ?? null,
-        createdBy: session.user.name || session.user.email || null,
+        createdBy: authResult.userEmail,
       },
     });
     invalidateBlocklistCache(tenantId);
@@ -73,10 +72,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authResult = await requireSettingsAdmin();
+  if (!authResult.ok) return authResult.response;
   const tenantId = await resolveTenantId();
   if (!tenantId) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 

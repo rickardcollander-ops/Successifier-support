@@ -1,12 +1,19 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import TicketList from '@/components/TicketList';
 import TicketDetail from '@/components/TicketDetail';
 import { t } from '@/lib/i18n';
 import type { Ticket } from '@/lib/types';
 import { product } from '@/lib/products';
 import { isVendorTicket, isBounceTicket } from '@/lib/ticket-filters';
+import {
+  buildTabList,
+  ticketMatchesRules,
+  BUILTIN_TAB_KEYS,
+  type StoredTab,
+  type InboxTabConfig,
+} from '@/lib/inbox-tabs';
 
 interface EmailSyncStatus {
   lastSyncAt: Date | null;
@@ -93,6 +100,10 @@ export default function TicketsPage() {
   const [loading, setLoading] = useState(true);
   const [loadingArchived, setLoadingArchived] = useState(false);
   const [activeStatus, setActiveStatus] = useState<string>('all');
+  // Per-tenant inbox-tab configuration (visibility, order, renames, custom
+  // folders). Empty = use the built-in defaults. Loaded once on mount; the
+  // Settings → Inkorgsflikar admin UI writes it.
+  const [tabConfig, setTabConfig] = useState<StoredTab[]>([]);
   const [archivedSearch, setArchivedSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   // Default to "senaste aktivitet" so any ticket that just got a new
@@ -355,6 +366,14 @@ export default function TicketsPage() {
       cancelled = true;
     };
   }, [deepLinkTicketId]);
+
+  // Load the inbox-tab configuration once on mount.
+  useEffect(() => {
+    fetch('/api/inbox-tabs')
+      .then((r) => (r.ok ? r.json() : { tabs: [] }))
+      .then((d) => setTabConfig(Array.isArray(d.tabs) ? d.tabs : []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchTickets({ force: true });
@@ -658,53 +677,89 @@ export default function TicketsPage() {
     }
   };
 
-  // Folder partitions and tab counts depend only on the ticket set, so memoize
-  // them. With 2000+ tickets in memory, recomputing ~10 filter passes on every
-  // render (each 3s poll, every keystroke, every presence update) was a real
-  // source of the inbox jank — useMemo keeps it to once per ticket-set change.
-  const { billectaTickets, bounceTickets, statusCounts } = useMemo(() => {
-    const billecta = tickets.filter(isVendorTicket);
-    const bounce = tickets.filter(isBounceTicket);
-    // Excludes Billecta, bounces and dubletter from "normal" counters so
-    // the status tabs stay focused on real customer mail.
-    const isExcludedFromNormal = (t: Ticket) => isVendorTicket(t) || isBounceTicket(t);
-    const counts = {
-      all: tickets.filter(t => !isExcludedFromNormal(t) && t.status !== 'duplicate').length,
-      billecta: billecta.length,
-      bounce: bounce.length,
-      urgent: tickets.filter(t => isUrgentTicket(t) && !isExcludedFromNormal(t) && t.status !== 'duplicate' && t.status !== 'closed' && t.status !== 'sent').length,
-      new: tickets.filter(t => t.status === 'new' && !isExcludedFromNormal(t)).length,
-      in_progress: tickets.filter(t => t.status === 'in_progress' && !isExcludedFromNormal(t)).length,
-      review: tickets.filter(t => t.status === 'review' && !isExcludedFromNormal(t)).length,
-      sent: tickets.filter(t => t.status === 'sent' && !isExcludedFromNormal(t)).length,
-      closed: tickets.filter(t => t.status === 'closed' && !isExcludedFromNormal(t)).length,
-      duplicate: tickets.filter(t => t.status === 'duplicate').length,
+  // Folder partitions depend only on the ticket set, so memoize them. With
+  // 2000+ tickets in memory, recomputing these filter passes on every render
+  // (each 3s poll, every keystroke, every presence update) was a real source
+  // of the inbox jank — useMemo keeps it to once per ticket-set change.
+  const billectaTickets = useMemo(() => tickets.filter(isVendorTicket), [tickets]);
+  const bounceTickets = useMemo(() => tickets.filter(isBounceTicket), [tickets]);
+
+  // The tickets that belong in a given tab (before search/sort). Built-in tabs
+  // use their fixed predicates; custom tabs evaluate their stored rules.
+  const ticketsForTab = useCallback(
+    (tab: { key: string; isCustom: boolean; rules?: InboxTabConfig['rules'] }) => {
+      if (tab.isCustom) return tickets.filter((tk) => ticketMatchesRules(tk, tab.rules ?? null));
+      switch (tab.key) {
+        case 'all':
+          return tickets.filter((t) => !isVendorTicket(t) && t.status !== 'duplicate' && !isBounceTicket(t));
+        case 'billecta':
+          return billectaTickets;
+        case 'duplicate':
+          return tickets.filter((t) => t.status === 'duplicate');
+        case 'bounce':
+          return bounceTickets;
+        case 'urgent':
+          // "Akut ärende" — every open ticket flagged red (urgent/high), so
+          // support finds the cases needing attention first. Closed/sent are
+          // excluded since they're already handled.
+          return tickets.filter((t) => isUrgentTicket(t) && !isVendorTicket(t) && !isBounceTicket(t) && t.status !== 'duplicate' && t.status !== 'closed' && t.status !== 'sent');
+        case 'archived':
+          return archivedTickets;
+        default:
+          // A status folder (new/in_progress/review/sent/closed): that status,
+          // minus the vendor/bounce folders which have their own tabs.
+          return tickets.filter((t) => t.status === tab.key && !isVendorTicket(t) && !isBounceTicket(t));
+      }
+    },
+    [tickets, billectaTickets, bounceTickets, archivedTickets],
+  );
+
+  // Resolve the configured tabs: built-in defaults (with localized labels)
+  // merged with the tenant's stored visibility/order/renames + custom folders.
+  const resolvedTabs = useMemo(() => {
+    const builtinLabels: Record<string, string> = {
+      urgent: t('Akut ärende'),
+      new: t('Nya'),
+      in_progress: t('Öppna'),
+      review: t('Granskning'),
+      sent: t('Skickade'),
+      closed: t('Stängda'),
+      all: t('Alla'),
+      billecta: product.vendorFolder.label,
+      bounce: t('Studsade'),
+      duplicate: t('Dubletter'),
+      archived: t('Arkiverade'),
     };
-    return { billectaTickets: billecta, bounceTickets: bounce, statusCounts: counts };
-  }, [tickets]);
+    const defs = BUILTIN_TAB_KEYS.map((k) => ({ key: k, label: builtinLabels[k] ?? k }));
+    return buildTabList(defs, tabConfig);
+  }, [tabConfig]);
+
+  const visibleTabs = useMemo(() => resolvedTabs.filter((tb) => tb.visible), [resolvedTabs]);
+
+  const tabCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const tb of resolvedTabs) m[tb.key] = ticketsForTab(tb).length;
+    return m;
+  }, [resolvedTabs, ticketsForTab]);
+
+  // The tab currently selected (may be built-in or custom).
+  const activeTab = useMemo(
+    () => resolvedTabs.find((tb) => tb.key === activeStatus) ?? null,
+    [resolvedTabs, activeStatus],
+  );
+
+  // If the selected tab disappears (e.g. a custom tab was deleted in Settings),
+  // fall back to "Alla" so the list never points at a non-existent folder.
+  useEffect(() => {
+    if (resolvedTabs.length > 0 && !resolvedTabs.some((tb) => tb.key === activeStatus)) {
+      setActiveStatus('all');
+    }
+  }, [resolvedTabs, activeStatus]);
 
   // The visible list: filter by the active tab + search box, then sort. Also
   // memoized so switching tabs doesn't re-run on unrelated re-renders.
   const filteredTickets = useMemo(() => {
-    // Filter by status. Billecta and Kivra-notifications from Billecta used to
-    // live in two separate tabs; they're now merged into a single "Billecta"
-    // folder per user request. Bounces are excluded from every "normal" tab
-    // and only appear under the "Studsade" tab.
-    const statusFilteredTickets = activeStatus === 'all'
-      ? tickets.filter(t => !isVendorTicket(t) && t.status !== 'duplicate' && !isBounceTicket(t))
-      : activeStatus === 'billecta'
-      ? billectaTickets
-      : activeStatus === 'duplicate'
-      ? tickets.filter(t => t.status === 'duplicate')
-      : activeStatus === 'bounce'
-      ? bounceTickets
-      : activeStatus === 'urgent'
-      // "Akut ärende" — every open ticket flagged red (urgent/high priority),
-      // regardless of which status tab it would otherwise sit under, so
-      // support can find the cases that need attention first. Closed/sent
-      // tickets are excluded since they're already handled.
-      ? tickets.filter(t => isUrgentTicket(t) && !isVendorTicket(t) && !isBounceTicket(t) && t.status !== 'duplicate' && t.status !== 'closed' && t.status !== 'sent')
-      : tickets.filter(t => t.status === activeStatus && !isVendorTicket(t) && !isBounceTicket(t));
+    const statusFilteredTickets = activeTab ? ticketsForTab(activeTab) : [];
 
     const q = searchQuery.toLowerCase();
     const searchFilteredTickets = searchQuery
@@ -742,7 +797,7 @@ export default function TicketsPage() {
 
       return sortOrder === 'asc' ? comparison : -comparison;
     });
-  }, [tickets, billectaTickets, bounceTickets, activeStatus, searchQuery, sortBy, sortOrder]);
+  }, [activeTab, ticketsForTab, searchQuery, sortBy, sortOrder]);
 
   const filteredArchivedTickets = useMemo(() => archivedTickets.filter(t => {
     if (!archivedSearch) return true;
@@ -766,19 +821,14 @@ export default function TicketsPage() {
     );
   }
 
-  const tabs = [
-    { id: 'urgent', label: t('Akut ärende'), count: statusCounts.urgent },
-    { id: 'new', label: t('Nya'), count: statusCounts.new },
-    { id: 'in_progress', label: t('Öppna'), count: statusCounts.in_progress },
-    { id: 'review', label: t('Granskning'), count: statusCounts.review },
-    { id: 'sent', label: t('Skickade'), count: statusCounts.sent },
-    { id: 'closed', label: t('Stängda'), count: statusCounts.closed },
-    { id: 'all', label: t('Alla'), count: statusCounts.all },
-    { id: 'billecta', label: product.vendorFolder.label, count: statusCounts.billecta },
-    { id: 'bounce', label: t('Studsade'), count: statusCounts.bounce },
-    { id: 'duplicate', label: t('Dubletter'), count: statusCounts.duplicate },
-    { id: 'archived', label: t('Arkiverade'), count: archivedTickets.length || '...' },
-  ];
+  const tabs = visibleTabs.map((tb) => ({
+    id: tb.key,
+    label: tb.label,
+    // Archived is lazy-loaded, so show a placeholder until its list arrives.
+    count: tb.key === 'archived'
+      ? (archivedTickets.length || '...')
+      : (tabCounts[tb.key] ?? 0),
+  }));
 
   return (
     <div className="flex flex-col h-full">

@@ -125,3 +125,19 @@ export async function requireSuperadmin(): Promise<SessionAuth | AuthFailure> {
   }
   return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role };
 }
+
+/**
+ * Require a signed-in settings admin (Ida or a superadmin). Use for every
+ * Settings-area API: integrations, blocked senders, inbox tabs, users, etc.
+ * API keys are not accepted — these are operator-only actions.
+ */
+export async function requireSettingsAdmin(): Promise<SessionAuth | AuthFailure> {
+  const session = await auth();
+  if (!session?.user?.email) {
+    return unauthorized();
+  }
+  if (!session.user.isSettingsAdmin) {
+    return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+  return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role || 'agent' };
+}

@@ -32,6 +32,7 @@ export const serus: ProductConfig = {
     senders: ['no-reply@stripe.com', 'support@stripe.com'],
   },
   allowedDomains: ['serus.ai'],
+  adminEmails: ['ida@serus.ai'],
   // Same support team as Doldadress, plus Anthon Wansland and Argjent Sahiti.
   // Names must match how the agents appear in their Google accounts.
   agents: ['Ida Rosell', 'Malin Sundberg', 'Filippa Kramp', 'Anthon Wansland', 'Argjent Sahiti'],

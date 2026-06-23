@@ -21,11 +21,12 @@ import {
 } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 
-type NavItem = { 
-  href: string; 
-  label: string; 
+type NavItem = {
+  href: string;
+  label: string;
   icon: React.ElementType;
   superadminOnly?: boolean;
+  settingsAdminOnly?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -33,8 +34,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/developer", label: "Developer", icon: Code },
-  { href: "/settings/email-accounts", label: "Email Accounts", icon: Mail },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/settings/email-accounts", label: "Email Accounts", icon: Mail, settingsAdminOnly: true },
+  { href: "/settings", label: "Settings", icon: Settings, settingsAdminOnly: true },
   { href: "/admin", label: "Admin", icon: Shield, superadminOnly: true },
 ];
 
@@ -44,6 +45,7 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const { data: session } = useSession();
   const isSuperadmin = session?.user?.role === "superadmin";
+  const isSettingsAdmin = Boolean(session?.user?.isSettingsAdmin);
 
   // Load collapsed state from localStorage
   useEffect(() => {
@@ -103,7 +105,10 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
         <ul className="flex flex-col gap-1">
-          {NAV_ITEMS.filter((item) => !item.superadminOnly || isSuperadmin).map((item) => {
+          {NAV_ITEMS.filter((item) =>
+            (!item.superadminOnly || isSuperadmin) &&
+            (!item.settingsAdminOnly || isSettingsAdmin),
+          ).map((item) => {
             const Icon = item.icon;
             const active =
               item.href === "/"

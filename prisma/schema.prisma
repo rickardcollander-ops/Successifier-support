@@ -25,6 +25,42 @@ model Tenant {
   kbEvents       KnowledgeEvent[]
   helpCenter     HelpCenterConfig?
   reportSettings ReportSettings?
+  inboxTabs      InboxTab[]
+}
+
+// Per-tenant configuration of the inbox tabs (folders) shown on the tickets
+// page. When a tenant has no rows here the UI falls back to the built-in
+// default set. Built-in tabs (status/folder views like "Nya", "Akut",
+// vendor folder…) are stored with their stable `key` and may be hidden,
+// renamed and reordered. Custom tabs (isCustom = true) carry a `rules`
+// payload that the inbox evaluates client-side to decide which tickets
+// belong in them.
+model InboxTab {
+  id        String   @id @default(cuid())
+  tenantId  String
+  // Stable identifier: a built-in folder id ("new", "in_progress", "review",
+  // "sent", "closed", "all", "urgent", "billecta", "bounce", "duplicate",
+  // "archived") or, for custom tabs, a generated slug.
+  key       String
+  label     String
+  order     Int      @default(0)
+  visible   Boolean  @default(true)
+  isCustom  Boolean  @default(false)
+  // Custom-tab matcher, e.g.
+  //   { "match": "all", "conditions": [
+  //       { "field": "status",   "op": "in",       "value": ["new","in_progress"] },
+  //       { "field": "sender",   "op": "contains", "value": "stripe.com" },
+  //       { "field": "subject",  "op": "contains", "value": "refund" },
+  //       { "field": "priority", "op": "in",       "value": ["urgent","high"] }
+  //   ] }
+  rules     Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
 }
 
 // Tenant-level knobs for the value/ROI reporting: what an agent costs and

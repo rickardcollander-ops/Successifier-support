@@ -56,6 +56,15 @@ export interface ProductConfig {
   /** Domains (besides superadmins) allowed to sign in. */
   allowedDomains: string[];
 
+  /**
+   * Emails (besides the global superadmins) granted access to the Settings
+   * area on THIS deployment — managing integrations, inbox tabs, users, etc.
+   * Matched case-insensitively. Superadmins (SUPERADMIN_EMAILS) always have
+   * access regardless of this list. Can be extended per deployment via the
+   * SETTINGS_ADMIN_EMAILS env var.
+   */
+  adminEmails: string[];
+
   /** Agents who can be assigned tickets and are broken out in reports. */
   agents: string[];
 
