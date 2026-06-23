@@ -5,17 +5,22 @@
 Lägg till följande i Vercel Dashboard → Settings → Environment Variables:
 
 ### 1. Database
+> ⚠️ Hämta de faktiska värdena från Neon-konsolen. Lägg ALDRIG riktiga
+> lösenord i den här filen — den är committad i git. Databasen ska ligga i
+> EU (t.ex. eu-central-1 Frankfurt) av GDPR-skäl.
 ```
-DATABASE_URL=postgresql://neondb_owner:npg_GuEe9BOY3Srv@ep-rapid-bird-akvjmjl9-pooler.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
-DATABASE_URL_UNPOOLED=postgresql://neondb_owner:npg_GuEe9BOY3Srv@ep-rapid-bird-akvjmjl9.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+DATABASE_URL=postgresql://neondb_owner:<DB_PASSWORD>@<endpoint>-pooler.<region>.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+DATABASE_URL_UNPOOLED=postgresql://neondb_owner:<DB_PASSWORD>@<endpoint>.<region>.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 ```
 
 ### 2. Security - Encryption Key ⚠️ KRITISK
+> ⚠️ Hämta värdet ENBART från Vercel Environment Variables. Lägg ALDRIG den
+> riktiga nyckeln i den här filen.
 ```
-ENCRYPTION_KEY=a74fa64ce3d2d95be9979282fa540690ddd4c3388cddf8c93f64390f18fda2bc
+ENCRYPTION_KEY=<32-byte hex, finns i Vercel env>
 ```
 
-**VIKTIGT:** Denna nyckel krypterar alla API-nycklar och integration credentials i databasen. Utan denna kommer appen inte fungera.
+**VIKTIGT:** Denna nyckel krypterar alla API-nycklar och integration credentials i databasen. Utan den kommer appen inte fungera. Om nyckeln roteras måste alla lagrade credentials krypteras om — gör inte det utan en migreringsplan.
 
 ### 3. NextAuth
 ```
