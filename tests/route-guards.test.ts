@@ -23,6 +23,7 @@ const ALLOWLIST: Record<string, string> = {
   'app/api/public/kb/articles/[slug]/route.ts': 'Public help center — read-only, published content only',
   'app/api/public/kb/articles/[slug]/feedback/route.ts': 'Public help center — anonymous helpful/unhelpful vote, rate-limited',
   'app/api/public/kb/search/route.ts': 'Public help center — read-only search, published content only',
+  'app/api/public/kb/chat/route.ts': 'Public help center — AI chatbot grounded only in published, public articles via lib/services/public-kb.ts; rate-limited',
 };
 
 // Guards from lib/api-auth.ts. A route calling one of these (and returning
