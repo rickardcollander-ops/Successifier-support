@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenantId } from '@/lib/products/tenant';
 import { encryptJSON } from '@/lib/crypto';
-import { requireSession } from '@/lib/api-auth';
+import { requireSettingsAdmin } from '@/lib/api-auth';
 import { decryptCredentials, maskCredentials, mergeCredentials } from '@/lib/integrations/credentials';
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await requireSession();
+  const authResult = await requireSettingsAdmin();
   if (!authResult.ok) return authResult.response;
 
   try {
@@ -57,7 +57,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await requireSession();
+  const authResult = await requireSettingsAdmin();
   if (!authResult.ok) return authResult.response;
 
   try {

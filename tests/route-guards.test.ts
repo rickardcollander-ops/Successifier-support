@@ -28,7 +28,7 @@ const ALLOWLIST: Record<string, string> = {
 
 // Guards from lib/api-auth.ts. A route calling one of these (and returning
 // the failure response) is considered protected.
-const LIB_GUARDS = /requireApiAuth|requireSession|requireSuperadmin|validateApiKey/;
+const LIB_GUARDS = /requireApiAuth|requireSession|requireSuperadmin|requireSettingsAdmin|validateApiKey/;
 
 // Routes doing session checks by hand must both call auth() and reject
 // (401 for APIs, redirect for browser flows like the Gmail OAuth dance).

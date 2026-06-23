@@ -1,0 +1,1200 @@
+{
+  "categories": [
+    {
+      "name": "Jag vill bli kund",
+      "slug": "jag-vill-bli-kund",
+      "sortOrder": 0
+    },
+    {
+      "name": "Ny kund",
+      "slug": "ny-kund",
+      "sortOrder": 1
+    },
+    {
+      "name": "Avindexering",
+      "slug": "avindexering",
+      "sortOrder": 2
+    },
+    {
+      "name": "Registrering",
+      "slug": "registrering",
+      "sortOrder": 3
+    },
+    {
+      "name": "Upplysningar",
+      "slug": "upplysningar",
+      "sortOrder": 4
+    },
+    {
+      "name": "Adresslarm",
+      "slug": "adresslarm",
+      "sortOrder": 5
+    },
+    {
+      "name": "Hackskydd och dark web-bevakning",
+      "slug": "hackskydd-och-dark-web-bevakning",
+      "sortOrder": 6
+    },
+    {
+      "name": "Prenumeration",
+      "slug": "prenumeration",
+      "sortOrder": 7
+    },
+    {
+      "name": "Fakturasupport",
+      "slug": "fakturasupport",
+      "sortOrder": 8
+    },
+    {
+      "name": "Övrigt",
+      "slug": "ovrigt",
+      "sortOrder": 9
+    },
+    {
+      "name": "Kortbetalning / Betala direkt",
+      "slug": "kortbetalning-betala-direkt",
+      "sortOrder": 10
+    },
+    {
+      "name": "Kontoinställningar",
+      "slug": "kontoinstallningar",
+      "sortOrder": 11
+    },
+    {
+      "name": "Uppsägning och ångerrätt",
+      "slug": "uppsagning-och-angerratt",
+      "sortOrder": 12
+    },
+    {
+      "name": "Teknisk support",
+      "slug": "teknisk-support",
+      "sortOrder": 13
+    },
+    {
+      "name": "Vår support",
+      "slug": "var-support",
+      "sortOrder": 14
+    },
+    {
+      "name": "Övriga frågor",
+      "slug": "ovriga-fragor",
+      "sortOrder": 15
+    },
+    {
+      "name": "ID-skydd",
+      "slug": "id-skydd",
+      "sortOrder": 16
+    },
+    {
+      "name": "Betalning",
+      "slug": "betalning",
+      "sortOrder": 17
+    }
+  ],
+  "articles": [
+    {
+      "slug": "jag-ar-intresserad-av-era-tjanster-beratta-lite-mer-om-vad-det-innebar",
+      "title": "Jag är intresserad av era tjänster. Berätta lite mer om vad det innebär?",
+      "content": "Vad roligt att du är intresserad! Våra tjänster hjälper dig att skydda din privata information online genom att ta bort känsliga uppgifter som kan utnyttjas av andra. På så sätt minskar vi din synlighet på nätet och gör det svårare för obehöriga att komma åt dina privata uppgifter.\n\nVi avindexerar länkar på Google som innehåller information du inte vill ska vara synlig, till exempel från upplysningssajter, Flashback-trådar, bilder på Google, nyhetsartiklar eller Lexbase. Det kan handla om länkar som visas när någon söker på ditt namn eller dina personuppgifter. Vi hjälper dig att ta bort dessa länkar från Googles sökresultat. Vi kan avindexera alla länkar om dig, så länge de inte berör allmänintresse.\n\nUtöver detta hjälper vi dig att bli borttagen från upplysningssajters hemsidor: **Mrkoll.se, Ratsit.se, Hitta.se, Birthday.se, Merinfo.se, Eniro.se och Upplysning.se**. Vi övervakar även din synlighet på dessa sajter. Om du blir återpublicerad får du en varning direkt från oss, allt kan du följa på Mina sidor.\n\nAdresslarm ingår också i tjänsten. Vi övervakar din folkbokföringsadress och skickar en varning direkt om någon obehörig skriver sig där.\n\nDärtill erbjuder vi hack-skydd som innebär att vi kontinuerligt övervakar konton kopplade till din registrerade e-postadress. Vi meddelar dig direkt om dina uppgifter dyker upp, så att du kan agera omedelbart.\n\nFler detaljer om hur våra tjänster fungerar i detalj hittar du här: [Doldadress | Hur det fungerar](https://www.doldadress.se/tjanster).",
+      "excerpt": "Vad roligt att du är intresserad! Våra tjänster hjälper dig att skydda din privata information online genom att ta bort känsliga uppgifter som kan utnyttjas av…",
+      "category": "Jag vill bli kund",
+      "categorySlug": "jag-vill-bli-kund",
+      "tags": [
+        "Jag vill bli kund"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "hur-blir-jag-kund-hos-er",
+      "title": "Hur blir jag kund hos er?",
+      "content": "Klicka på knappen \"Kom igång\" uppe till höger på vår webbplats, välj det paket som passar dig och registrera dig. Därefter är du igång och får tillgång till våra tjänster. Välkommen!",
+      "excerpt": "Klicka på knappen \"Kom igång\" uppe till höger på vår webbplats, välj det paket som passar dig och registrera dig.",
+      "category": "Jag vill bli kund",
+      "categorySlug": "jag-vill-bli-kund",
+      "tags": [
+        "Jag vill bli kund"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "behover-jag-teckna-en-prenumeration-for-att-bli-kund",
+      "title": "Behöver jag teckna en prenumeration för att bli kund?",
+      "content": "Ja, det är en prenumerationstjänst. När du registrerar dig väljer du själv det betalningsalternativ som passar dig bäst.",
+      "excerpt": "Ja, det är en prenumerationstjänst. När du registrerar dig väljer du själv det betalningsalternativ som passar dig bäst.",
+      "category": "Jag vill bli kund",
+      "categorySlug": "jag-vill-bli-kund",
+      "tags": [
+        "Jag vill bli kund"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "hur-kommer-man-igang-med-tjansten-blev-precis-kund",
+      "title": "Hur kommer man igång med tjänsten, blev precis kund?",
+      "content": "Välkommen till oss! För att komma igång behöver du först skapa ditt konto på Mina sidor. Klicka på registrerings länken i mailet du fått från oss och följ instruktionerna. När kontot är skapat kan du logga in och börja använda våra tjänster direkt.",
+      "excerpt": "Välkommen till oss! För att komma igång behöver du först skapa ditt konto på Mina sidor.",
+      "category": "Ny kund",
+      "categorySlug": "ny-kund",
+      "tags": [
+        "Ny kund"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "hur-loggar-jag-in",
+      "title": "Hur loggar jag in?",
+      "content": "Klicka på knappen \"Logga in\" uppe till höger på vår webbplats. Logga sedan in med din registrerade e-postadress och ditt lösenord.",
+      "excerpt": "Klicka på knappen \"Logga in\" uppe till höger på vår webbplats. Logga sedan in med din registrerade e-postadress och ditt lösenord.",
+      "category": "Ny kund",
+      "categorySlug": "ny-kund",
+      "tags": [
+        "Ny kund"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "vad-behover-jag-gora",
+      "title": "Vad behöver jag göra?",
+      "content": "När ditt konto är skapat kan du börja dölja dig från upplysningssajternas hemsidor direkt via våra guider på Mina sidor.\n\nAvindexeringen på Google sköter vi åt dig. Du väljer själv vilka länkar du vill att vi ska ta bort. På Mina sidor hittar du en lista med rekommenderade länkar vi redan identifierat, och du kan även skicka in fler länkar på egen hand.\n\nVi övervakar kontinuerligt nya länkar som dyker upp på Google och skickar en notis till dig så snart vi hittar något nytt. Vi bevakar även din synlighet på upplysningssajternas hemsidor.\n\nHar du ett Premium-abonnemang kan du lägga till två e-postadresser på ditt konto. Vi bevakar dessa för att upptäcka eventuella dataläckor och skydda dig mot att dina uppgifter sprids eller missbrukas.\n\nAdresslarm ingår i alla våra paket. Vi övervakar om någon skriver sig på din adress och skickar en notis direkt om det skulle hända.",
+      "excerpt": "När ditt konto är skapat kan du börja dölja dig från upplysningssajternas hemsidor direkt via våra guider på Mina sidor.",
+      "category": "Ny kund",
+      "categorySlug": "ny-kund",
+      "tags": [
+        "Ny kund"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "vad-innebar-det-att-bli-avindexerad-pa-google",
+      "title": "Vad innebär det att bli avindexerad på Google?",
+      "content": "Att bli avindexerad på Google innebär att vi tar bort specifika länkar från sökresultatet, till exempel när man söker på ditt namn. När en länk är avindexerad visas den alltså inte längre bland sökträffarna på Google.",
+      "excerpt": "Att bli avindexerad på Google innebär att vi tar bort specifika länkar från sökresultatet, till exempel när man söker på ditt namn.",
+      "category": "Avindexering",
+      "categorySlug": "avindexering",
+      "tags": [
+        "Avindexering"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "vilka-lankar-kan-ni-ta-bort",
+      "title": "Vilka länkar kan ni ta bort?",
+      "content": "Vi kan ta bort länkar som innehåller personliga uppgifter om dig, till exempel namn, adress, telefonnummer, personnummer, lön eller arbetsplats. Det gäller även bilder där du syns eller där dina uppgifter framgår, liksom forumtrådar, nyhetsartiklar och uppgifter från upplysningssajter (t.ex. Mrkoll.se, Hitta.se, Eniro.se), Lexbase, Krimfup samt profilinformation kopplad till biluppgifter.",
+      "excerpt": "Vi kan ta bort länkar som innehåller personliga uppgifter om dig, till exempel namn, adress, telefonnummer, personnummer, lön eller arbetsplats.",
+      "category": "Avindexering",
+      "categorySlug": "avindexering",
+      "tags": [
+        "Avindexering"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "vilka-lankar-kan-ni-inte-ta-bort",
+      "title": "Vilka länkar kan ni inte ta bort?",
+      "content": "Vi kan inte ta bort länkar som inte handlar om dig, som berör allmänintresse eller ta bort dina egna konton på sociala medier. Vi kan ta bort viss information som gäller exempelvis bolagsuppgifter, vissa kriminella handlingar eller brott, information om dig som politiker, men inte allt eftersom det kan beröra allmänt intresse.",
+      "excerpt": "Vi kan inte ta bort länkar som inte handlar om dig, som berör allmänintresse eller ta bort dina egna konton på sociala medier.",
+      "category": "Avindexering",
+      "categorySlug": "avindexering",
+      "tags": [
+        "Avindexering"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "kan-jag-valja-vilka-lankar-som-ska-avindexeras",
+      "title": "Kan jag välja vilka länkar som ska avindexeras?",
+      "content": "Ja. Du väljer själv vilka länkar du vill få avindexerade. Vi tar fram rekommendationer som du kan skicka in med ett klick, men vi rekommenderar också att du själv googlar ditt namn för att se om det finns fler länkar du vill skicka in.",
+      "excerpt": "Ja. Du väljer själv vilka länkar du vill få avindexerade. Vi tar fram rekommendationer som du kan skicka in med ett klick, men vi rekommenderar också att du…",
+      "category": "Avindexering",
+      "categorySlug": "avindexering",
+      "tags": [
+        "Avindexering"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "hur-lang-tid-tar-det-innan-lankar-blir-avindexerade",
+      "title": "Hur lång tid tar det innan länkar blir avindexerade?",
+      "content": "Vår genomsnittliga handläggningstid är cirka 13 dagar. I vissa fall kan det ta upp till 8 veckor, men det är mer ovanligt.",
+      "excerpt": "Vår genomsnittliga handläggningstid är cirka 13 dagar. I vissa fall kan det ta upp till 8 veckor, men det är mer ovanligt.",
+      "category": "Avindexering",
+      "categorySlug": "avindexering",
+      "tags": [
+        "Avindexering"
+      ],
+      "sortOrder": 4
+    },
+    {
+      "slug": "var-kan-jag-folja-mina-arenden",
+      "title": "Var kan jag följa mina ärenden?",
+      "content": "På Mina sidor under fliken Avindexering kan du följa alla dina ärenden. Där ser du vilka länkar som skickats in, vilka som bearbetas och vilka som har blivit borttagna.",
+      "excerpt": "På Mina sidor under fliken Avindexering kan du följa alla dina ärenden.",
+      "category": "Avindexering",
+      "categorySlug": "avindexering",
+      "tags": [
+        "Avindexering"
+      ],
+      "sortOrder": 5
+    },
+    {
+      "slug": "kostar-rekommenderade-lankar-extra-nar-ni-gor-lanksokning-at-mig",
+      "title": "Kostar rekommenderade länkar extra när ni gör länksökning åt mig?",
+      "content": "Nej, självklart inte. Våra rekommenderade länkar är en service för att underlätta för dig, så att du med ett knapptryck kan välja vilka länkar du vill att vi ska avindexera.",
+      "excerpt": "Nej, självklart inte. Våra rekommenderade länkar är en service för att underlätta för dig, så att du med ett knapptryck kan välja vilka länkar du vill att vi…",
+      "category": "Avindexering",
+      "categorySlug": "avindexering",
+      "tags": [
+        "Avindexering"
+      ],
+      "sortOrder": 6
+    },
+    {
+      "slug": "jag-blev-precis-kund-men-fick-ingen-registreringslank-hur-gor-jag",
+      "title": "Jag blev precis kund men fick ingen registreringslänk, hur gör jag?",
+      "content": "Om du saknar din registreringslänk, börja med att kontrollera skräppost. Ibland kan länken dröja någon timme. Se också till att du fått en beställningsbekräftelse och att du angivit rätt e-postadress vid registreringen. Har du råkat skriva fel e-postadress, eller om något annat inte stämmer, kontakta vår support så hjälper vi dig.",
+      "excerpt": "Om du saknar din registreringslänk, börja med att kontrollera skräppost. Ibland kan länken dröja någon timme.",
+      "category": "Registrering",
+      "categorySlug": "registrering",
+      "tags": [
+        "Registrering"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "kan-jag-registrera-mig-hos-er-om-jag-har-sekretessmarkering",
+      "title": "Kan jag registrera mig hos er om jag har sekretessmarkering?",
+      "content": "Nej, tyvärr är det inte möjligt.",
+      "excerpt": "Nej, tyvärr är det inte möjligt.",
+      "category": "Registrering",
+      "categorySlug": "registrering",
+      "tags": [
+        "Registrering"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "behover-jag-ha-mobilt-bankid-for-att-kunna-registrera-mig-hos-er",
+      "title": "Behöver jag ha mobilt BankID för att kunna registrera mig hos er?",
+      "content": "Ja, du behöver ha tillgång till mobilt BankID för att kunna bli kund hos oss.",
+      "excerpt": "Ja, du behöver ha tillgång till mobilt BankID för att kunna bli kund hos oss.",
+      "category": "Registrering",
+      "categorySlug": "registrering",
+      "tags": [
+        "Registrering"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "kan-jag-registrera-flera-konton-pa-samma-e-postadress",
+      "title": "Kan jag registrera flera konton på samma e-postadress?",
+      "content": "Nej, varje konto är knutet till en unik e-postadress.",
+      "excerpt": "Nej, varje konto är knutet till en unik e-postadress.",
+      "category": "Registrering",
+      "categorySlug": "registrering",
+      "tags": [
+        "Registrering"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "jag-har-varit-kund-hos-er-tidigare-kan-jag-registrera-mig-igen",
+      "title": "Jag har varit kund hos er tidigare, kan jag registrera mig igen?",
+      "content": "Självklart, det går utmärkt att registrera sig på nytt.",
+      "excerpt": "Självklart, det går utmärkt att registrera sig på nytt.",
+      "category": "Registrering",
+      "categorySlug": "registrering",
+      "tags": [
+        "Registrering"
+      ],
+      "sortOrder": 4
+    },
+    {
+      "slug": "vilka-kriterier-har-ni-for-registrering-av-kunder",
+      "title": "Vilka kriterier har ni för registrering av kunder?",
+      "content": "För att kunna bli kund hos oss behöver du vara minst 18 år gammal, vara folkbokförd i Sverige samt inte ha skyddade uppgifter. Tjänsten kan alltså erbjudas till myndiga personer som finns i det svenska folkbokföringsregistret, och tyvärr inte till personer med sekretessmarkerad identitet.",
+      "excerpt": "För att kunna bli kund hos oss behöver du vara minst 18 år gammal, vara folkbokförd i Sverige samt inte ha skyddade uppgifter.",
+      "category": "Registrering",
+      "categorySlug": "registrering",
+      "tags": [
+        "Registrering"
+      ],
+      "sortOrder": 5
+    },
+    {
+      "slug": "vilka-upplysningssajter-blir-jag-borttagen-fran",
+      "title": "Vilka upplysningssajter blir jag borttagen från?",
+      "content": "Vi hjälper dig att bli borttagen från Mrkoll.se, Ratsit.se, Hitta.se, Birthday.se, Merinfo.se, Eniro.se och Upplysning.se. När du blir dold på sajterna innebär det att din profil tas bort från deras hemsidor och att det inte längre går att hitta din profil där.",
+      "excerpt": "Vi hjälper dig att bli borttagen från Mrkoll.se, Ratsit.se, Hitta.se, Birthday.se, Merinfo.se, Eniro.se och Upplysning.se.",
+      "category": "Upplysningar",
+      "categorySlug": "upplysningar",
+      "tags": [
+        "Upplysningar"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "blir-min-profil-helt-borttagen-fran-ratsit-och-mrkoll",
+      "title": "Blir min profil helt borttagen från Ratsit och Mrkoll?",
+      "content": "Ja. Hela din profil tas bort från Ratsit och Mrkoll, vilket innebär att varken ditt namn eller dina uppgifter längre finns synliga på deras hemsidor.",
+      "excerpt": "Ja. Hela din profil tas bort från Ratsit och Mrkoll, vilket innebär att varken ditt namn eller dina uppgifter längre finns synliga på deras hemsidor.",
+      "category": "Upplysningar",
+      "categorySlug": "upplysningar",
+      "tags": [
+        "Upplysningar"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "hur-lang-tid-tar-det-att-bli-borttagen-fran-sajterna",
+      "title": "Hur lång tid tar det att bli borttagen från sajterna?",
+      "content": "Borttagningen sker oftast direkt eller inom en vecka, men i vissa fall kan det ta upp till två månader.",
+      "excerpt": "Borttagningen sker oftast direkt eller inom en vecka, men i vissa fall kan det ta upp till två månader.",
+      "category": "Upplysningar",
+      "categorySlug": "upplysningar",
+      "tags": [
+        "Upplysningar"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "vad-hander-om-nagon-av-sajterna-aterpublicerar-min-profil",
+      "title": "Vad händer om någon av sajterna återpublicerar min profil?",
+      "content": "Det händer ibland att en upplysningssajt, exempelvis Mrkoll.se, återpublicerar en profil. Men ingen fara, vi övervakar din synlighet på sajterna och skickar en varning direkt om du blir återpublicerad, så att du snabbt kan bli dold igen.",
+      "excerpt": "Det händer ibland att en upplysningssajt, exempelvis Mrkoll.se, återpublicerar en profil.",
+      "category": "Upplysningar",
+      "categorySlug": "upplysningar",
+      "tags": [
+        "Upplysningar"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "var-hittar-jag-adresslarmet",
+      "title": "Var hittar jag Adresslarmet?",
+      "content": "Du hittar Adresslarm på Mina sidor under fliken Adresslarm.",
+      "excerpt": "Du hittar Adresslarm på Mina sidor under fliken Adresslarm.",
+      "category": "Adresslarm",
+      "categorySlug": "adresslarm",
+      "tags": [
+        "Adresslarm"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "hur-fungerar-adresslarmet",
+      "title": "Hur fungerar Adresslarmet?",
+      "content": "Vi bevakar din folkbokföringsadress och meddelar dig om någon registrerar sig där utan din vetskap, en metod som tyvärr ofta utnyttjas av kriminella. Via ditt konto kan du enkelt se vilka som är folkbokförda på din adress. Vid en nyregistrering på din adress får du en omedelbar notis från oss, så att du kan agera i tid.",
+      "excerpt": "Vi bevakar din folkbokföringsadress och meddelar dig om någon registrerar sig där utan din vetskap, en metod som tyvärr ofta utnyttjas av kriminella.",
+      "category": "Adresslarm",
+      "categorySlug": "adresslarm",
+      "tags": [
+        "Adresslarm"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "skyddar-adresslarmet-alla-som-bor-pa-min-adress",
+      "title": "Skyddar Adresslarmet alla som bor på min adress?",
+      "content": "Nej. Ditt konto är personligt, och det är endast du som registrerad användare som får notiser från oss om någon skriver sig på din adress.",
+      "excerpt": "Nej. Ditt konto är personligt, och det är endast du som registrerad användare som får notiser från oss om någon skriver sig på din adress.",
+      "category": "Adresslarm",
+      "categorySlug": "adresslarm",
+      "tags": [
+        "Adresslarm"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "vad-gor-jag-om-nagon-obehorig-folkbokfor-sig-pa-min-adress",
+      "title": "Vad gör jag om någon obehörig folkbokför sig på min adress?",
+      "content": "Om någon är felaktigt folkbokförd på din adress bör du omgående meddela Skatteverket via deras tjänst \"Meddela felaktig folkbokföring\".",
+      "excerpt": "Om någon är felaktigt folkbokförd på din adress bör du omgående meddela Skatteverket via deras tjänst \"Meddela felaktig folkbokföring\".",
+      "category": "Adresslarm",
+      "categorySlug": "adresslarm",
+      "tags": [
+        "Adresslarm"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "vad-innebar-hackskydd",
+      "title": "Vad innebär hackskydd?",
+      "content": "Hackskydd (Dark Web-bevakning) innebär att vi kontinuerligt övervakar konton kopplade till din registrerade e-postadress. Vårt system genomsöker över 15 miljarder läckta konton på Dark Web och meddelar dig direkt om dina uppgifter dyker upp, så att du kan agera omedelbart.",
+      "excerpt": "Hackskydd (Dark Web-bevakning) innebär att vi kontinuerligt övervakar konton kopplade till din registrerade e-postadress.",
+      "category": "Hackskydd och dark web-bevakning",
+      "categorySlug": "hackskydd-och-dark-web-bevakning",
+      "tags": [
+        "Hackskydd och dark web-bevakning"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "jag-har-fatt-mejl-om-att-mina-uppgifter-finns-i-en-datalacka-vad-gor-jag",
+      "title": "Jag har fått mejl om att mina uppgifter finns i en dataläcka, vad gör jag?",
+      "content": "Om vi hittar dina uppgifter i en läcka får du en notis av oss med information om var läckan skett och vilken typ av data som exponerats. På Mina sidor kan du söka på den e-postadress du bevakar för att se mer detaljer. Det viktigaste du kan göra är att omedelbart byta lösenord på de berörda kontona. För extra skydd rekommenderar vi också att du aktiverar tvåstegsverifiering.",
+      "excerpt": "Om vi hittar dina uppgifter i en läcka får du en notis av oss med information om var läckan skett och vilken typ av data som exponerats.",
+      "category": "Hackskydd och dark web-bevakning",
+      "categorySlug": "hackskydd-och-dark-web-bevakning",
+      "tags": [
+        "Hackskydd och dark web-bevakning"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "kan-jag-kontrollera-om-min-e-postadress-finns-i-en-lacka",
+      "title": "Kan jag kontrollera om min e-postadress finns i en läcka?",
+      "content": "Ja. Som Premiumkund kan du bevaka upp till två e-postadresser samtidigt. Vi kontrollerar dem automatiskt och meddelar dig om de påträffas i en läcka.",
+      "excerpt": "Ja. Som Premiumkund kan du bevaka upp till två e-postadresser samtidigt. Vi kontrollerar dem automatiskt och meddelar dig om de påträffas i en läcka.",
+      "category": "Hackskydd och dark web-bevakning",
+      "categorySlug": "hackskydd-och-dark-web-bevakning",
+      "tags": [
+        "Hackskydd och dark web-bevakning"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "hur-vet-jag-vilken-prenumeration-jag-har-valt",
+      "title": "Hur vet jag vilken prenumeration jag har valt?",
+      "content": "När du blir kund väljer du det paket du önskar. På ditt kvitto står vilket paket du köpt, och på Mina sidor under fliken prenumeration hittar du ytterligare detaljer om ditt abonnemang.",
+      "excerpt": "När du blir kund väljer du det paket du önskar. På ditt kvitto står vilket paket du köpt, och på Mina sidor under fliken prenumeration hittar du ytterligare…",
+      "category": "Prenumeration",
+      "categorySlug": "prenumeration",
+      "tags": [
+        "Prenumeration"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "fornyas-min-prenumeration-automatiskt",
+      "title": "Förnyas min prenumeration automatiskt?",
+      "content": "Ja. Din prenumeration förnyas automatiskt. På Mina sidor under fliken Prenumeration ser du detaljer om ditt abonnemang, till exempel förnyelsedatum, fakturor och betalningsmetod.",
+      "excerpt": "Ja. Din prenumeration förnyas automatiskt. På Mina sidor under fliken Prenumeration ser du detaljer om ditt abonnemang, till exempel förnyelsedatum, fakturor…",
+      "category": "Prenumeration",
+      "categorySlug": "prenumeration",
+      "tags": [
+        "Prenumeration"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "kan-jag-uppgradera-min-prenumeration",
+      "title": "Kan jag uppgradera min prenumeration?",
+      "content": "Ja. Om du behöver uppgradera ditt abonnemang kan du exempelvis utöka din länkkredit direkt på Mina sidor. Under fliken Prenumeration kan du köpa fler länkar, och uppgraderingen sker direkt på ditt konto.",
+      "excerpt": "Ja. Om du behöver uppgradera ditt abonnemang kan du exempelvis utöka din länkkredit direkt på Mina sidor.",
+      "category": "Prenumeration",
+      "categorySlug": "prenumeration",
+      "tags": [
+        "Prenumeration"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "kan-jag-lagga-till-familjemedlemmar-pa-mitt-konto",
+      "title": "Kan jag lägga till familjemedlemmar på mitt konto?",
+      "content": "Nej. Ditt konto är personligt och kopplat till ditt personnummer. Om dina familjemedlemmar också vill ansluta sig till oss är de självklart varmt välkomna att teckna egna konton.",
+      "excerpt": "Nej. Ditt konto är personligt och kopplat till ditt personnummer.",
+      "category": "Prenumeration",
+      "categorySlug": "prenumeration",
+      "tags": [
+        "Prenumeration"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "jag-har-fatt-en-faktura-men-trodde-att-mitt-abonnemang-var-uppsagt",
+      "title": "Jag har fått en faktura men trodde att mitt abonnemang var uppsagt",
+      "content": "Om du har sagt upp ditt abonnemang avslutas det alltid vid bindningstidens slut. Det betyder att du får fakturor fram till dess att bindningstiden löper ut. Du kan se exakt slutdatum på Mina sidor → Prenumeration.",
+      "excerpt": "Om du har sagt upp ditt abonnemang avslutas det alltid vid bindningstidens slut. Det betyder att du får fakturor fram till dess att bindningstiden löper ut.",
+      "category": "Fakturasupport",
+      "categorySlug": "fakturasupport",
+      "tags": [
+        "Fakturasupport"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "jag-hittar-inte-min-faktura-var-ligger-den",
+      "title": "Jag hittar inte min faktura, var ligger den?",
+      "content": "Fakturan levereras alltid på det sätt som passar dig bäst och om du inte själv har valt något annat skickas den automatiskt till Kivra. Du kan även få din faktura via mejl (kom ihåg att kontrollera skräpposten), per SMS eller som postutskick. Oavsett hur du får fakturan finns en kopia alltid på Mina sidor under \"Fakturor\".",
+      "excerpt": "Fakturan levereras alltid på det sätt som passar dig bäst och om du inte själv har valt något annat skickas den automatiskt till Kivra.",
+      "category": "Fakturasupport",
+      "categorySlug": "fakturasupport",
+      "tags": [
+        "Fakturasupport"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "jag-har-fatt-en-paminnelse-fast-jag-redan-betalat",
+      "title": "Jag har fått en påminnelse fast jag redan betalat",
+      "content": "Om du har fått en påminnelse trots att du redan har betalat kan det bero på att betalningen registrerades efter att påminnelsen skickades, eller att betalningen saknade OCR-nummer och därför inte kunde matchas direkt. Har du betalat men ändå fått en påminnelse är du alltid välkommen att kontakta oss. Skicka då gärna med belopp, fakturanummer och betalningsdatum så hjälper vi dig att matcha betalningen.",
+      "excerpt": "Om du har fått en påminnelse trots att du redan har betalat kan det bero på att betalningen registrerades efter att påminnelsen skickades, eller att…",
+      "category": "Fakturasupport",
+      "categorySlug": "fakturasupport",
+      "tags": [
+        "Fakturasupport"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "jag-rakade-betala-med-fel-ocr-fel-referens",
+      "title": "Jag råkade betala med fel OCR / fel referens",
+      "content": "Ingen fara om du har råkat betala med fel OCR eller på annat sätt. Skicka bara in beloppet, datumet för betalningen och ditt namn så hittar vi transaktionen och matchar den manuellt åt dig.",
+      "excerpt": "Ingen fara om du har råkat betala med fel OCR eller på annat sätt.",
+      "category": "Fakturasupport",
+      "categorySlug": "fakturasupport",
+      "tags": [
+        "Fakturasupport"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "jag-vill-betala-med-autogiro-istallet-for-manadsfaktura-hur-gor-jag",
+      "title": "Jag vill betala med autogiro istället för månadsfaktura, hur gör jag?",
+      "content": "Logga in på Mina sidor, klicka på fliken \"Prenumeration\" och lägg till autogiro.",
+      "excerpt": "Logga in på Mina sidor, klicka på fliken \"Prenumeration\" och lägg till autogiro.",
+      "category": "Fakturasupport",
+      "categorySlug": "fakturasupport",
+      "tags": [
+        "Fakturasupport"
+      ],
+      "sortOrder": 4
+    },
+    {
+      "slug": "jag-har-rakat-betala-samma-faktura-tva-ganger-vad-gor-jag",
+      "title": "Jag har råkat betala samma faktura två gånger, vad gör jag?",
+      "content": "Ingen fara. Om du råkat betala en faktura dubbelt dras det överbetalda beloppet automatiskt av från din nästa faktura.",
+      "excerpt": "Ingen fara. Om du råkat betala en faktura dubbelt dras det överbetalda beloppet automatiskt av från din nästa faktura.",
+      "category": "Fakturasupport",
+      "categorySlug": "fakturasupport",
+      "tags": [
+        "Fakturasupport"
+      ],
+      "sortOrder": 5
+    },
+    {
+      "slug": "jag-vill-ha-en-kopia-av-fakturan",
+      "title": "Jag vill ha en kopia av fakturan",
+      "content": "Du kan ladda ner alla fakturor på Mina sidor → Prenumeration.",
+      "excerpt": "Du kan ladda ner alla fakturor på Mina sidor → Prenumeration.",
+      "category": "Fakturasupport",
+      "categorySlug": "fakturasupport",
+      "tags": [
+        "Fakturasupport"
+      ],
+      "sortOrder": 6
+    },
+    {
+      "slug": "nar-kommer-fakturan",
+      "title": "När kommer fakturan?",
+      "content": "Fakturan skapas månadsvis enligt ditt abonnemang. Den skickas normalt samma dag den skapas via ditt valda leveranssätt samt finns på Mina sidor.",
+      "excerpt": "Fakturan skapas månadsvis enligt ditt abonnemang. Den skickas normalt samma dag den skapas via ditt valda leveranssätt samt finns på Mina sidor.",
+      "category": "Fakturasupport",
+      "categorySlug": "fakturasupport",
+      "tags": [
+        "Fakturasupport"
+      ],
+      "sortOrder": 7
+    },
+    {
+      "slug": "min-faktura-ser-fel-ut",
+      "title": "Min faktura ser fel ut",
+      "content": "Kontrollera följande innan du kontaktar oss:\nHar du ett aktivt abonnemang?\nHar du uppdaterat eller ändrat något?\nHar du en bindningstid som fortfarande löper?\nOm något fortfarande ser fel ut, mejla oss så hjälper vi dig.",
+      "excerpt": "Kontrollera följande innan du kontaktar oss: Har du ett aktivt abonnemang? Har du uppdaterat eller ändrat något? Har du en bindningstid som fortfarande löper?",
+      "category": "Fakturasupport",
+      "categorySlug": "fakturasupport",
+      "tags": [
+        "Fakturasupport"
+      ],
+      "sortOrder": 8
+    },
+    {
+      "slug": "jag-har-inte-kivra-var-hamnar-min-faktura-da",
+      "title": "Jag har inte Kivra, var hamnar min faktura då?",
+      "content": "Ingen fara. Om du inte har Kivra skickas dina fakturor automatiskt till din postadress. Kontakta support om du vill byta leveranssätt.",
+      "excerpt": "Ingen fara. Om du inte har Kivra skickas dina fakturor automatiskt till din postadress. Kontakta support om du vill byta leveranssätt.",
+      "category": "Fakturasupport",
+      "categorySlug": "fakturasupport",
+      "tags": [
+        "Fakturasupport"
+      ],
+      "sortOrder": 9
+    },
+    {
+      "slug": "kan-jag-se-om-min-faktura-ar-betald",
+      "title": "Kan jag se om min faktura är betald?",
+      "content": "Ja. Logga in på Mina sidor och gå till fliken \"Prenumeration\" för att se betalstatus.",
+      "excerpt": "Ja. Logga in på Mina sidor och gå till fliken \"Prenumeration\" för att se betalstatus.",
+      "category": "Fakturasupport",
+      "categorySlug": "fakturasupport",
+      "tags": [
+        "Fakturasupport"
+      ],
+      "sortOrder": 10
+    },
+    {
+      "slug": "vad-hander-med-min-tjanst-om-jag-flyttar",
+      "title": "Vad händer med min tjänst om jag flyttar?",
+      "content": "Du behöver inte göra någonting. Vi bevakar folkbokförings­registret och uppdaterar din tjänst automatiskt så snart din nya adress registreras.",
+      "excerpt": "Du behöver inte göra någonting. Vi bevakar folkbokförings­registret och uppdaterar din tjänst automatiskt så snart din nya adress registreras.",
+      "category": "Övrigt",
+      "categorySlug": "ovrigt",
+      "tags": [
+        "Övrigt"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "hur-kontaktar-jag-er",
+      "title": "Hur kontaktar jag er?",
+      "content": "Har du frågor, behöver support eller vill diskutera hur vi skyddar dina personuppgifter? Fyll i kontakt­formuläret på vår [kontaktsida](https://www.doldadress.se/kontakt) så hör vi av oss inom 48 timmar på helgfria vardagar.",
+      "excerpt": "Har du frågor, behöver support eller vill diskutera hur vi skyddar dina personuppgifter?",
+      "category": "Övrigt",
+      "categorySlug": "ovrigt",
+      "tags": [
+        "Övrigt"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "har-ni-telefonsupport",
+      "title": "Har ni telefonsupport?",
+      "content": "Nej. För att hålla abonnemangskostnaderna för våra kunder erbjuder vi support exklusivt via vårt kontaktformulär. Skicka in din fråga där, så återkommer vi inom 48 timmar på helgfria vardagar med den hjälp du behöver.",
+      "excerpt": "Nej. För att hålla abonnemangskostnaderna för våra kunder erbjuder vi support exklusivt via vårt kontaktformulär.",
+      "category": "Övrigt",
+      "categorySlug": "ovrigt",
+      "tags": [
+        "Övrigt"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "paverkar-en-doldadress-prenumeration-min-vanliga-post",
+      "title": "Påverkar en Doldadress-prenumeration min vanliga post?",
+      "content": "Nej. Din vanliga post påverkas inte. DoldAdress skyddar endast dina personuppgifter online och är helt fristående från Postnord, myndigheter och andra postsystem. Leveransen av fysisk post fortsätter därför precis som vanligt.",
+      "excerpt": "Nej. Din vanliga post påverkas inte. DoldAdress skyddar endast dina personuppgifter online och är helt fristående från Postnord, myndigheter och andra…",
+      "category": "Övrigt",
+      "categorySlug": "ovrigt",
+      "tags": [
+        "Övrigt"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "kan-alla-bli-kunder-eller-finns-det-nagra-kriterier",
+      "title": "Kan alla bli kunder eller finns det några kriterier?",
+      "content": "Ja, men det finns tre grundkrav:\n\n1. Minst 18 år. Tjänsten är endast tillgänglig för myndiga personer.\n2. Folkbokförd i Sverige. Vi kan enbart erbjuda tjänsten till adresser som finns i det svenska folkbokföringsregistret.\n3. Inga skyddade personuppgifter. Personer med sekretessmarkerad identitet kan tyvärr inte bli kunder.\n\nUppfyller du alla kriterier är du varmt välkommen att ansluta dig.",
+      "excerpt": "Ja, men det finns tre grundkrav: 1. Minst 18 år. Tjänsten är endast tillgänglig för myndiga personer. 2. Folkbokförd i Sverige.",
+      "category": "Övrigt",
+      "categorySlug": "ovrigt",
+      "tags": [
+        "Övrigt"
+      ],
+      "sortOrder": 4
+    },
+    {
+      "slug": "publicerar-ni-lankar-som-tagits-bort-om-jag-avslutar-mitt-abonnemang",
+      "title": "Publicerar ni länkar som tagits bort om jag avslutar mitt abonnemang?",
+      "content": "Nej. Länkar som vi redan har tagit bort publiceras inte igen. Observera dock att nya länkar publiceras över tid. Så länge du är kund identifierar och avindexerar vi dem löpande. Om du avslutar ditt abonnemang upphör den bevakningen, vilket innebär att nya länkar kan bli synliga framöver.",
+      "excerpt": "Nej. Länkar som vi redan har tagit bort publiceras inte igen. Observera dock att nya länkar publiceras över tid.",
+      "category": "Övrigt",
+      "categorySlug": "ovrigt",
+      "tags": [
+        "Övrigt"
+      ],
+      "sortOrder": 5
+    },
+    {
+      "slug": "ar-kortbetalning-som-autogiro",
+      "title": "Är kortbetalning som autogiro?",
+      "content": "Ja! Vid kortbetalning dras beloppet automatiskt från ditt konto varje period, precis som exempelvis en Spotify-prenumeration. Du behöver inte godkänna något manuellt.",
+      "excerpt": "Ja! Vid kortbetalning dras beloppet automatiskt från ditt konto varje period, precis som exempelvis en Spotify-prenumeration.",
+      "category": "Kortbetalning / Betala direkt",
+      "categorySlug": "kortbetalning-betala-direkt",
+      "tags": [
+        "Kortbetalning / Betala direkt"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "kan-jag-betala-med-swish-istallet-for-kort",
+      "title": "Kan jag betala med Swish istället för kort?",
+      "content": "Nej, i dagsläget är vi inte anslutna till Swish.",
+      "excerpt": "Nej, i dagsläget är vi inte anslutna till Swish.",
+      "category": "Kortbetalning / Betala direkt",
+      "categorySlug": "kortbetalning-betala-direkt",
+      "tags": [
+        "Kortbetalning / Betala direkt"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "min-betalning-misslyckades-pa-grund-av-otillrackligt-saldo-vad-gor-jag",
+      "title": "Min betalning misslyckades på grund av otillräckligt saldo, vad gör jag?",
+      "content": "Ingen fara. Om betalningen misslyckas görs ett nytt försök nästa vardag.",
+      "excerpt": "Ingen fara. Om betalningen misslyckas görs ett nytt försök nästa vardag.",
+      "category": "Kortbetalning / Betala direkt",
+      "categorySlug": "kortbetalning-betala-direkt",
+      "tags": [
+        "Kortbetalning / Betala direkt"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "min-betalning-misslyckades-och-jag-vet-inte-varfor-vad-kan-det-bero-pa",
+      "title": "Min betalning misslyckades och jag vet inte varför, vad kan det bero på?",
+      "content": "En betalning kan misslyckas av flera anledningar, till exempel:\n\n• Otillräckligt saldo vid dragningen → kontrollera ditt konto.\n• Kortets giltighetstid har gått ut → uppdatera eller lägg till ett nytt kort på Mina sidor under **Prenumeration**.\n• Kortet är spärrat → beställ ett nytt kort från banken och lägg till det på Mina sidor.\n• Kortet är spärrat för internetköp → öppna det för säkra internetköp i samband med betalning.\n• En säkerhetskontroll (t.ex. Verified by Visa eller Mastercard SecureCode) saknas → kontakta din bank.\n• Kortet har en daglig/månatlig gräns som överskridits → höj gränsen eller be banken om andra alternativ.",
+      "excerpt": "En betalning kan misslyckas av flera anledningar, till exempel: • Otillräckligt saldo vid dragningen → kontrollera ditt konto.",
+      "category": "Kortbetalning / Betala direkt",
+      "categorySlug": "kortbetalning-betala-direkt",
+      "tags": [
+        "Kortbetalning / Betala direkt"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "jag-har-bytt-kort-hur-uppdaterar-jag-mina-kortuppgifter",
+      "title": "Jag har bytt kort, hur uppdaterar jag mina kortuppgifter?",
+      "content": "Logga in på Mina sidor, gå till fliken Prenumeration och lägg till ditt nya kort.",
+      "excerpt": "Logga in på Mina sidor, gå till fliken Prenumeration och lägg till ditt nya kort.",
+      "category": "Kortbetalning / Betala direkt",
+      "categorySlug": "kortbetalning-betala-direkt",
+      "tags": [
+        "Kortbetalning / Betala direkt"
+      ],
+      "sortOrder": 4
+    },
+    {
+      "slug": "vi-ar-flera-i-familjen-med-konton-hos-er-kan-vi-anvanda-samma-kort",
+      "title": "Vi är flera i familjen med konton hos er, kan vi använda samma kort?",
+      "content": "Ja, det går alldeles utmärkt att använda samma betalkort för flera konton.",
+      "excerpt": "Ja, det går alldeles utmärkt att använda samma betalkort för flera konton.",
+      "category": "Kortbetalning / Betala direkt",
+      "categorySlug": "kortbetalning-betala-direkt",
+      "tags": [
+        "Kortbetalning / Betala direkt"
+      ],
+      "sortOrder": 5
+    },
+    {
+      "slug": "jag-fick-mejl-om-att-mitt-abonnemang-sagts-upp-eftersom-jag-missade-betalningen-",
+      "title": "Jag fick mejl om att mitt abonnemang sagts upp eftersom jag missade betalningen, vad gör jag?",
+      "content": "Om du fått ett mejl om att ditt konto sagts upp beror det på utebliven betalning. Men ingen fara, du kan enkelt registrera ett nytt konto med samma mejladress som tidigare.",
+      "excerpt": "Om du fått ett mejl om att ditt konto sagts upp beror det på utebliven betalning.",
+      "category": "Kortbetalning / Betala direkt",
+      "categorySlug": "kortbetalning-betala-direkt",
+      "tags": [
+        "Kortbetalning / Betala direkt"
+      ],
+      "sortOrder": 6
+    },
+    {
+      "slug": "var-hittar-jag-specifikation-over-mina-betalningar",
+      "title": "Var hittar jag specifikation över mina betalningar?",
+      "content": "Logga in på Mina sidor och gå till fliken Prenumeration. Där hittar du detaljer om alla dina betalningar, kortuppgifter och betalstatus.",
+      "excerpt": "Logga in på Mina sidor och gå till fliken Prenumeration. Där hittar du detaljer om alla dina betalningar, kortuppgifter och betalstatus.",
+      "category": "Kortbetalning / Betala direkt",
+      "categorySlug": "kortbetalning-betala-direkt",
+      "tags": [
+        "Kortbetalning / Betala direkt"
+      ],
+      "sortOrder": 7
+    },
+    {
+      "slug": "kan-jag-byta-e-postadressen-som-ar-kopplad-till-mitt-konto",
+      "title": "Kan jag byta e-postadressen som är kopplad till mitt konto?",
+      "content": "Ja. Logga in på Mina sidor och gå till fliken Inställningar. Där kan du enkelt uppdatera din e-postadress.",
+      "excerpt": "Ja. Logga in på Mina sidor och gå till fliken Inställningar. Där kan du enkelt uppdatera din e-postadress.",
+      "category": "Kontoinställningar",
+      "categorySlug": "kontoinstallningar",
+      "tags": [
+        "Kontoinställningar"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "hur-byter-jag-losenord",
+      "title": "Hur byter jag lösenord?",
+      "content": "Logga in på Mina sidor och gå till fliken Inställningar. Där kan du smidigt ändra ditt lösenord.",
+      "excerpt": "Logga in på Mina sidor och gå till fliken Inställningar. Där kan du smidigt ändra ditt lösenord.",
+      "category": "Kontoinställningar",
+      "categorySlug": "kontoinstallningar",
+      "tags": [
+        "Kontoinställningar"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "hur-loggar-jag-ut-fran-mitt-konto",
+      "title": "Hur loggar jag ut från mitt konto?",
+      "content": "Scrolla längst ner i menyraden, där hittar du knappen Logga ut.",
+      "excerpt": "Scrolla längst ner i menyraden, där hittar du knappen Logga ut.",
+      "category": "Kontoinställningar",
+      "categorySlug": "kontoinstallningar",
+      "tags": [
+        "Kontoinställningar"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "hur-lang-angerratt-har-jag",
+      "title": "Hur lång ångerrätt har jag?",
+      "content": "Som kund hos oss har du 14 dagars ångerrätt enligt distansavtalslagen. Ångerrätten gäller i 14 dagar från den dag du registrerade dig.",
+      "excerpt": "Som kund hos oss har du 14 dagars ångerrätt enligt distansavtalslagen. Ångerrätten gäller i 14 dagar från den dag du registrerade dig.",
+      "category": "Uppsägning och ångerrätt",
+      "categorySlug": "uppsagning-och-angerratt",
+      "tags": [
+        "Uppsägning och ångerrätt"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "hur-gor-jag-for-att-angra-mitt-kop",
+      "title": "Hur gör jag för att ångra mitt köp?",
+      "content": "För att nyttja ångerrätten kontaktar du vår support och uppger att du vill ångra ditt köp. Skicka med kvitto, ditt fullständiga namn och kundnummer. Om det gått mindre än 14 dagar sedan du registrerade dig avslutar vi ditt avtal direkt och återbetalar dig, alternativt krediterar obetalda fakturor.",
+      "excerpt": "För att nyttja ångerrätten kontaktar du vår support och uppger att du vill ångra ditt köp. Skicka med kvitto, ditt fullständiga namn och kundnummer.",
+      "category": "Uppsägning och ångerrätt",
+      "categorySlug": "uppsagning-och-angerratt",
+      "tags": [
+        "Uppsägning och ångerrätt"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "hur-sager-jag-upp-mitt-abonnemang",
+      "title": "Hur säger jag upp mitt abonnemang?",
+      "content": "Du kan när som helst säga upp ditt abonnemang till nästa förnyelseperiod genom att logga in på Mina sidor. Gå till fliken Prenumeration, välj Information och scrolla ner till Ändra din prenumeration för att avsluta.",
+      "excerpt": "Du kan när som helst säga upp ditt abonnemang till nästa förnyelseperiod genom att logga in på Mina sidor.",
+      "category": "Uppsägning och ångerrätt",
+      "categorySlug": "uppsagning-och-angerratt",
+      "tags": [
+        "Uppsägning och ångerrätt"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "kan-jag-saga-upp-nar-som-helst",
+      "title": "Kan jag säga upp när som helst?",
+      "content": "Ja, du kan säga upp ditt abonnemang inför nästa förnyelseperiod. Beroende på vilket abonnemang du valt gäller 3, 6 eller 12 månaders bindningstid. Abonnemanget förnyas automatiskt och detaljer hittar du på Mina sidor.",
+      "excerpt": "Ja, du kan säga upp ditt abonnemang inför nästa förnyelseperiod. Beroende på vilket abonnemang du valt gäller 3, 6 eller 12 månaders bindningstid.",
+      "category": "Uppsägning och ångerrätt",
+      "categorySlug": "uppsagning-och-angerratt",
+      "tags": [
+        "Uppsägning och ångerrätt"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "kan-ni-saga-upp-avtalet-at-mig",
+      "title": "Kan ni säga upp avtalet åt mig?",
+      "content": "Ja, kontakta vår support om du vill ha hjälp med uppsägningen. Skicka då med ditt fullständiga namn, kundnummer och e-postadress så vi kan identifiera dig. På Mina sidor kan du också se datum för sista betalning och när ditt abonnemang upphör efter vi genomfört din uppsägning.",
+      "excerpt": "Ja, kontakta vår support om du vill ha hjälp med uppsägningen. Skicka då med ditt fullständiga namn, kundnummer och e-postadress så vi kan identifiera dig.",
+      "category": "Uppsägning och ångerrätt",
+      "categorySlug": "uppsagning-och-angerratt",
+      "tags": [
+        "Uppsägning och ångerrätt"
+      ],
+      "sortOrder": 4
+    },
+    {
+      "slug": "jag-far-meddelandet-att-min-e-postadress-inte-ar-registrerad-vad-gor-jag",
+      "title": "Jag får meddelandet att min e-postadress inte är registrerad, vad gör jag?",
+      "content": "Det beror på att du ännu inte har registrerat ditt konto på Mina sidor. För att kunna logga in behöver du först skapa ditt konto via registreringslänken du fick när du blev kund. Länken är giltig i 7 dagar från registreringsdatumet. Har tiden gått ut kan du kontakta vår support så skickar vi en ny länk. När ditt konto är registrerat loggar du in som vanligt med e-postadress och lösenord.",
+      "excerpt": "Det beror på att du ännu inte har registrerat ditt konto på Mina sidor.",
+      "category": "Teknisk support",
+      "categorySlug": "teknisk-support",
+      "tags": [
+        "Teknisk support"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "jag-kan-inte-logga-in-med-mitt-losenord-hur-gor-jag",
+      "title": "Jag kan inte logga in med mitt lösenord, hur gör jag?",
+      "content": "Klicka på Glömt lösenord vid inloggningen. Då får du en engångskod skickad till din e-post, som du använder för att logga in och sedan ändra ditt lösenord direkt på Mina sidor. Om du får felmeddelande även vid återställning, kontakta vår support så hjälper vi dig att återställa kontot. Av säkerhetsskäl behöver vi då först verifiera din identitet.",
+      "excerpt": "Klicka på Glömt lösenord vid inloggningen. Då får du en engångskod skickad till din e-post, som du använder för att logga in och sedan ändra ditt lösenord…",
+      "category": "Teknisk support",
+      "categorySlug": "teknisk-support",
+      "tags": [
+        "Teknisk support"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "jag-kan-inte-logga-in-eftersom-jag-inte-har-betalat-avgiften-vad-gor-jag",
+      "title": "Jag kan inte logga in eftersom jag inte har betalat avgiften, vad gör jag?",
+      "content": "Om ditt abonnemang har avslutats på grund av utebliven betalning går det tyvärr inte att återuppta kontot. Du kan däremot registrera ett nytt konto och använda samma e-postadress som tidigare.",
+      "excerpt": "Om ditt abonnemang har avslutats på grund av utebliven betalning går det tyvärr inte att återuppta kontot.",
+      "category": "Teknisk support",
+      "categorySlug": "teknisk-support",
+      "tags": [
+        "Teknisk support"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "nar-jag-forsoker-registrera-mig-star-det-att-mitt-personnummer-ar-ogiltigt-varfo",
+      "title": "När jag försöker registrera mig står det att mitt personnummer är ogiltigt, varför?",
+      "content": "Det kan bero på flera orsaker, de vanligaste orsakerna är: att du inte är folkbokförd i Sverige, att du är under 18 år, att du har skyddade uppgifter. Om inget av detta stämmer in på dig, kontakta vår support för teknisk felsökning, så hjälper vi dig.",
+      "excerpt": "Det kan bero på flera orsaker, de vanligaste orsakerna är: att du inte är folkbokförd i Sverige, att du är under 18 år, att du har skyddade uppgifter.",
+      "category": "Teknisk support",
+      "categorySlug": "teknisk-support",
+      "tags": [
+        "Teknisk support"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "nar-jag-forsoker-skicka-in-lankar-for-avindexering-pa-mina-sidor-far-jag-felmedd",
+      "title": "När jag försöker skicka in länkar för avindexering på Mina sidor får jag felmeddelandet \"ange giltig URL\", vad betyder det?",
+      "content": "Det betyder att länken du försöker skicka in inte är korrekt ifylld. Kontrollera att du kopierat hela webbadressen direkt från webbläsarens adressfält. Om du behöver hjälp kan du följa vår steg-för-steg-guide här: Avindexeringsguide.",
+      "excerpt": "Det betyder att länken du försöker skicka in inte är korrekt ifylld. Kontrollera att du kopierat hela webbadressen direkt från webbläsarens adressfält.",
+      "category": "Teknisk support",
+      "categorySlug": "teknisk-support",
+      "tags": [
+        "Teknisk support"
+      ],
+      "sortOrder": 4
+    },
+    {
+      "slug": "hur-kontaktar-jag-supporten-pa-basta-satt",
+      "title": "Hur kontaktar jag supporten på bästa sätt?",
+      "content": "Du når oss via kontaktformuläret på vår hemsida. När du skickar in ditt ärende får du alltid en bekräftelse via e-post med ett ärendenummer.",
+      "excerpt": "Du når oss via kontaktformuläret på vår hemsida. När du skickar in ditt ärende får du alltid en bekräftelse via e-post med ett ärendenummer.",
+      "category": "Vår support",
+      "categorySlug": "var-support",
+      "tags": [
+        "Vår support"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "hur-snabbt-far-jag-svar-fran-supporten",
+      "title": "Hur snabbt får jag svar från supporten?",
+      "content": "Vår support är bemannad under helgfria vardagar. Vi gör alltid vårt bästa för att återkomma så snabbt som möjligt och normalt får du svar inom två arbetsdagar.",
+      "excerpt": "Vår support är bemannad under helgfria vardagar. Vi gör alltid vårt bästa för att återkomma så snabbt som möjligt och normalt får du svar inom två arbetsdagar.",
+      "category": "Vår support",
+      "categorySlug": "var-support",
+      "tags": [
+        "Vår support"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "vad-gor-jag-om-jag-inte-fatt-nagot-svar-fran-supporten",
+      "title": "Vad gör jag om jag inte fått något svar från supporten?",
+      "content": "Kontrollera gärna först att vårt bekräftelsemejl med ditt ärendenummer inte har hamnat i skräppost. Skicka in en ny förfrågan om du inte fått något bekräftelsemail. Om du däremot har fått ett ärendenummer betyder det att ditt ärende är registrerat hos oss, och då återkommer vi så snart vi kan.",
+      "excerpt": "Kontrollera gärna först att vårt bekräftelsemejl med ditt ärendenummer inte har hamnat i skräppost.",
+      "category": "Vår support",
+      "categorySlug": "var-support",
+      "tags": [
+        "Vår support"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "har-ni-telefonsupport-2",
+      "title": "Har ni telefonsupport?",
+      "content": "Nej, vi erbjuder support via kontaktformulär med e-post.",
+      "excerpt": "Nej, vi erbjuder support via kontaktformulär med e-post.",
+      "category": "Vår support",
+      "categorySlug": "var-support",
+      "tags": [
+        "Vår support"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "kan-ni-skydda-mig-som-brottsoffer-jag-ar-utsatt-for-hot-och-behover-dolja-min-id",
+      "title": "Kan ni skydda mig som brottsoffer? Jag är utsatt för hot och behöver dölja min identitet.",
+      "content": "Om du är utsatt för brott eller hot rekommenderar vi starkt att du kontaktar polisen. Polismyndigheten kan erbjuda ett mer omfattande skydd för brottsoffer. Med vår tjänst blir det svårare att hitta dina uppgifter online, men vi kan inte ersätta det skydd polisen kan ge. Du är självklart också välkommen att bli kund hos oss också.",
+      "excerpt": "Om du är utsatt för brott eller hot rekommenderar vi starkt att du kontaktar polisen. Polismyndigheten kan erbjuda ett mer omfattande skydd för brottsoffer.",
+      "category": "Övriga frågor",
+      "categorySlug": "ovriga-fragor",
+      "tags": [
+        "Övriga frågor"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "kan-jag-kopa-licenser-till-mitt-foretag-for-mina-anstallda",
+      "title": "Kan jag köpa licenser till mitt företag för mina anställda?",
+      "content": "Ja! Vi erbjuder flexibla företagslösningar anpassade efter ert behov, oavsett antal anställda eller verksamhetens omfattning. En gemensam företagsprenumeration är ofta betydligt mer kostnadseffektiv än flera enskilda abonnemang. Skicka din förfrågan här så hjälper vi dig att hitta rätt lösning: doldadress.se/foretag",
+      "excerpt": "Ja! Vi erbjuder flexibla företagslösningar anpassade efter ert behov, oavsett antal anställda eller verksamhetens omfattning.",
+      "category": "Övriga frågor",
+      "categorySlug": "ovriga-fragor",
+      "tags": [
+        "Övriga frågor"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "jag-vill-reklamera-hur-gor-jag",
+      "title": "Jag vill reklamera, hur gör jag?",
+      "content": "Vid reklamationsärenden kontaktar du vår support.",
+      "excerpt": "Vid reklamationsärenden kontaktar du vår support.",
+      "category": "Övriga frågor",
+      "categorySlug": "ovriga-fragor",
+      "tags": [
+        "Övriga frågor"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "tar-ni-bort-information-om-min-bil-pa-biluppgifter-se",
+      "title": "Tar ni bort information om min bil på Biluppgifter.se?",
+      "content": "Ja, din profillänk tas bort från Biluppgifter.se när du döljs på upplysningssajterna. Då går det inte längre att klicka vidare till din profil. Själva fordonsuppgifterna hämtas dock från Transportstyrelsen och dessa kan vi inte radera. Om det är en Google-länk till Biluppgifter.se kan vi däremot hjälpa dig att avindexera den.",
+      "excerpt": "Ja, din profillänk tas bort från Biluppgifter.se när du döljs på upplysningssajterna. Då går det inte längre att klicka vidare till din profil.",
+      "category": "Övriga frågor",
+      "categorySlug": "ovriga-fragor",
+      "tags": [
+        "Övriga frågor"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "paverkas-min-postutdelning-nar-jag-ar-kund-hos-er",
+      "title": "Påverkas min postutdelning när jag är kund hos er?",
+      "content": "Nej, din postutdelning påverkas inte.",
+      "excerpt": "Nej, din postutdelning påverkas inte.",
+      "category": "Övriga frågor",
+      "categorySlug": "ovriga-fragor",
+      "tags": [
+        "Övriga frågor"
+      ],
+      "sortOrder": 4
+    },
+    {
+      "slug": "vad-hander-om-jag-flyttar-nar-jag-ar-kund-hos-er",
+      "title": "Vad händer om jag flyttar när jag är kund hos er?",
+      "content": "För dig blir det ingen skillnad. Vi övervakar din folkbokföringsadress och den uppdateras automatiskt på Mina sidor när du flyttar. Om din nya adress gör att du blir synlig på någon upplysningssajt får du en varning direkt från oss. Vi kan även hjälpa dig att avindexera nya Google-länkar som dyker upp kopplade till din nya adress.",
+      "excerpt": "För dig blir det ingen skillnad. Vi övervakar din folkbokföringsadress och den uppdateras automatiskt på Mina sidor när du flyttar.",
+      "category": "Övriga frågor",
+      "categorySlug": "ovriga-fragor",
+      "tags": [
+        "Övriga frågor"
+      ],
+      "sortOrder": 5
+    },
+    {
+      "slug": "ar-id-skydd-samma-sak-som-skyddad-identitet",
+      "title": "Är ID-skydd samma sak som skyddad identitet?",
+      "content": "Nej, ID-skydd är inte samma sak som skyddad identitet. Vårt ID-skydd hjälper dig istället att upptäcka och förebygga ID-kapningar.",
+      "excerpt": "Nej, ID-skydd är inte samma sak som skyddad identitet. Vårt ID-skydd hjälper dig istället att upptäcka och förebygga ID-kapningar.",
+      "category": "ID-skydd",
+      "categorySlug": "id-skydd",
+      "tags": [
+        "ID-skydd"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "kan-foretag-gora-en-kreditupplysning-pa-mig-om-jag-anvander-ert-id-skydd",
+      "title": "Kan företag göra en kreditupplysning på mig om jag använder ert ID-skydd?",
+      "content": "Ja. Företag kan göra kreditupplysningar på dig precis som vanligt. Skillnaden är att du blir direkt notifierad varje gång en kreditupplysning görs i ditt namn.",
+      "excerpt": "Ja. Företag kan göra kreditupplysningar på dig precis som vanligt. Skillnaden är att du blir direkt notifierad varje gång en kreditupplysning görs i ditt namn.",
+      "category": "ID-skydd",
+      "categorySlug": "id-skydd",
+      "tags": [
+        "ID-skydd"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "paverkas-min-creditscore-av-att-jag-har-ett-id-skydd",
+      "title": "Påverkas min creditscore av att jag har ett ID-skydd?",
+      "content": "Nej. Att använda vårt ID-skydd påverkar inte din kreditscore. Med ID-skyddet kan du istället följa din kreditvärdighet i realtid. Vi varnar dig vid förändringar och hjälper dig att bestrida felaktiga uppgifter om det skulle behövas.",
+      "excerpt": "Nej. Att använda vårt ID-skydd påverkar inte din kreditscore. Med ID-skyddet kan du istället följa din kreditvärdighet i realtid.",
+      "category": "ID-skydd",
+      "categorySlug": "id-skydd",
+      "tags": [
+        "ID-skydd"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "jag-har-fatt-en-notis-om-mitt-skuldsaldo-ar-det-en-skuld-hos-er",
+      "title": "Jag har fått en notis om mitt skuldsaldo, är det en skuld hos er?",
+      "content": "Nej. Skuldsaldo är det totala belopp som är registrerat på dig hos Kronofogden. Det avser inte några fakturor eller skulder hos oss. Vi övervakar endast informationen för att kunna uppmärksamma dig på förändringar.",
+      "excerpt": "Nej. Skuldsaldo är det totala belopp som är registrerat på dig hos Kronofogden. Det avser inte några fakturor eller skulder hos oss.",
+      "category": "ID-skydd",
+      "categorySlug": "id-skydd",
+      "tags": [
+        "ID-skydd"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "min-betalning-misslyckades-vad-ska-jag-gora",
+      "title": "Min betalning misslyckades, vad ska jag göra?",
+      "content": "Ingen fara! Om din kortbetalning misslyckades första gången idag, kommer vi automatiskt att göra nya försök nästkommande vardag.",
+      "excerpt": "Ingen fara! Om din kortbetalning misslyckades första gången idag, kommer vi automatiskt att göra nya försök nästkommande vardag.",
+      "category": "Betalning",
+      "categorySlug": "betalning",
+      "tags": [
+        "Betalning"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "jag-har-sagt-upp-mitt-avtal-och-far-fakturor-manadsvis-kan-ni-skicka-en-slutfakt",
+      "title": "Jag har sagt upp mitt avtal och får fakturor månadsvis, kan ni skicka en slutfaktura direkt?",
+      "content": "Ja, det kan vi. Om du önskar få en slutfaktura för resterande månader, vänligen kontakta vår support via kontaktformuläret: https://www.doldadress.se/support",
+      "excerpt": "Ja, det kan vi. Om du önskar få en slutfaktura för resterande månader, vänligen kontakta vår support via kontaktformuläret: https://www.doldadress.se/support",
+      "category": "Betalning",
+      "categorySlug": "betalning",
+      "tags": [
+        "Betalning"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "jag-fick-mejl-om-att-mitt-abonnemang-ar-uppsagt-jag-glomde-betala-fornyelsen-vad",
+      "title": "Jag fick mejl om att mitt abonnemang är uppsagt, jag glömde betala förnyelsen. Vad händer nu?",
+      "content": "Om din kortbetalning misslyckas stängs ditt konto. Om du har fått mejl om att ditt abonnemang sagts upp, kan du inte längre logga in.\n\nVill du fortsätta använda våra tjänster? Inga problem, registrera ett nytt konto med din e-postadress. Du kan använda samma adress som tidigare.",
+      "excerpt": "Om din kortbetalning misslyckas stängs ditt konto. Om du har fått mejl om att ditt abonnemang sagts upp, kan du inte längre logga in.",
+      "category": "Betalning",
+      "categorySlug": "betalning",
+      "tags": [
+        "Betalning"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "kan-jag-betala-med-swish",
+      "title": "Kan jag betala med Swish?",
+      "content": "Nej, i dagsläget erbjuder vi tyvärr inte Swish som betalningsalternativ.",
+      "excerpt": "Nej, i dagsläget erbjuder vi tyvärr inte Swish som betalningsalternativ.",
+      "category": "Betalning",
+      "categorySlug": "betalning",
+      "tags": [
+        "Betalning"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "jag-har-bytt-kort-kan-jag-uppdatera-mina-kortuppgifter",
+      "title": "Jag har bytt kort,  kan jag uppdatera mina kortuppgifter?",
+      "content": "Självklart! Logga in på Mina sidor, gå till fliken ”Prenumeration” och uppdatera dina kortuppgifter där.",
+      "excerpt": "Självklart! Logga in på Mina sidor, gå till fliken ”Prenumeration” och uppdatera dina kortuppgifter där.",
+      "category": "Betalning",
+      "categorySlug": "betalning",
+      "tags": [
+        "Betalning"
+      ],
+      "sortOrder": 4
+    },
+    {
+      "slug": "gar-det-att-registrera-ett-kort-som-inte-ar-mitt-till-exempel-ett-familjekort",
+      "title": "Går det att registrera ett kort som inte är mitt, till exempel ett familjekort?",
+      "content": "Ja, det går bra. Flera personer kan skapa egna konton och använda samma betalkort.",
+      "excerpt": "Ja, det går bra. Flera personer kan skapa egna konton och använda samma betalkort.",
+      "category": "Betalning",
+      "categorySlug": "betalning",
+      "tags": [
+        "Betalning"
+      ],
+      "sortOrder": 5
+    }
+  ]
+}

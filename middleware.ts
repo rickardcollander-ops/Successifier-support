@@ -51,6 +51,12 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/tickets", req.url));
   }
 
+  // Settings is restricted to settings admins (Ida + superadmins). Regular
+  // agents are bounced back to the inbox.
+  if (pathname.startsWith("/settings") && !req.auth.user?.isSettingsAdmin) {
+    return NextResponse.redirect(new URL("/tickets", req.url));
+  }
+
   return NextResponse.next();
 });
 

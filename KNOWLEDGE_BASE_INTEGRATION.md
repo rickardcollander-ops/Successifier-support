@@ -104,3 +104,24 @@ publiceras.
 Visningar, sökningar (inkl. sökningar utan träff) och hjälpsam-röster loggas i
 `KnowledgeEvent` och aggregeras i `GET /api/knowledge/analytics` (kräver
 inloggning). Sökningar utan träff visar innehållsluckor att fylla.
+
+## Seed: FAQ:n från doldadress.se
+
+Hela den publika FAQ:n från `https://www.doldadress.se/vanliga-fragor`
+(18 kategorier, 92 frågor och svar) finns som färdig seed-data i
+`scripts/doldadress-faq.json`. Importera och publicera den med:
+
+```bash
+DATABASE_URL="<doldadress-db>" node scripts/import-doldadress-faq.js
+```
+
+Skriptet är idempotent (matchar kategorier och artiklar på `slug`, så det är
+säkert att köra om). Det
+
+- skapar en publik `KnowledgeCategory` per FAQ-kategori,
+- lägger varje fråga som en artikel som är både **AI-aktiv** (`isActive`) och
+  **publicerad i hjälpcentret** (`isPublic = true`, `status = 'published'`),
+- sätter slug, excerpt och ordning så att artiklarna renderas och rankas direkt.
+
+Efter körning syns allt under `/help` och via det publika API:t – färdigt att
+använda av både hjälpcentret och AI-chatboten.

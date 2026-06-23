@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 
-const OLD_DB_URL = "postgresql://neondb_owner:npg_WhB2Ibp7nqyP@ep-crimson-math-agxb86ws-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require";
+const OLD_DB_URL = "postgresql://neondb_owner:REDACTED_OLD_ROTATED@ep-crimson-math-agxb86ws-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require";
 const oldDb = new PrismaClient({ datasources: { db: { url: OLD_DB_URL } } });
 
 async function check() {

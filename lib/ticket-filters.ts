@@ -17,6 +17,32 @@ export interface TicketLike {
 export const isVendorTicket = (t: TicketLike) =>
   product.vendorFolder.senders.includes(t.customerEmail.toLowerCase());
 
+// "Red traffic-light" tickets (urgent/high) drive the "Akut ärende" folder so
+// support finds the cases needing attention first.
+export interface PriorityLike {
+  priority: string;
+}
+export const isUrgentPriority = (t: PriorityLike) =>
+  t.priority === 'urgent' || t.priority === 'high';
+
+// Bounce detection sources — exported so the inbox-tab rule descriptions can
+// reference the exact same lists they're matched against (no hand-written
+// duplicate text that can drift from the predicate).
+export const BOUNCE_SENDER_PREFIXES = [
+  'mailer-daemon@',
+  'postmaster@',
+  'mailer-noreply@',
+  'mail-daemon@',
+] as const;
+
+export const BOUNCE_SUBJECT_MARKERS = [
+  'delivery status notification',
+  'undeliverable',
+  'mail delivery failed',
+  'returned mail',
+  'failure notice',
+] as const;
+
 // Bounces (mailer-daemon, postmaster, delivery-status-notification…) get
 // their own folder so they don't clutter the inbox. Match on sender prefix
 // AND on the standard subject lines that bounce notifications use, since some
@@ -24,18 +50,17 @@ export const isVendorTicket = (t: TicketLike) =>
 // subject.
 export const isBounceTicket = (t: TicketLike) => {
   const email = t.customerEmail.toLowerCase();
+  // 'mail-daemon@' historically appeared mid-address, so it stays a substring
+  // match; the rest are sender prefixes.
   if (
-    email.startsWith('mailer-daemon@') ||
-    email.startsWith('postmaster@') ||
-    email.startsWith('mailer-noreply@') ||
-    email.includes('mail-daemon@')
+    BOUNCE_SENDER_PREFIXES.some((p) =>
+      p === 'mail-daemon@' ? email.includes(p) : email.startsWith(p),
+    )
   ) return true;
   const subj = t.subject.toLowerCase();
-  return (
-    subj.includes('delivery status notification') ||
-    subj.includes('undeliverable') ||
-    subj.includes('mail delivery failed') ||
-    subj.includes('returned mail') ||
-    subj.startsWith('failure notice')
+  // 'failure notice' is historically a subject prefix; the rest can appear
+  // anywhere in the subject.
+  return BOUNCE_SUBJECT_MARKERS.some((m) =>
+    m === 'failure notice' ? subj.startsWith(m) : subj.includes(m),
   );
 };

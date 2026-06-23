@@ -4,6 +4,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db/client";
 import { product } from "@/lib/products";
 import { getTenant } from "@/lib/products/tenant";
+import { isSettingsAdmin } from "@/lib/access";
 
 declare module "next-auth" {
   interface Session {
@@ -13,6 +14,9 @@ declare module "next-auth" {
       email?: string | null;
       image?: string | null;
       role: string;
+      // Whether this user may access the Settings/admin area on this
+      // deployment (superadmin, or the product's admin allowlist e.g. Ida).
+      isSettingsAdmin: boolean;
     };
   }
 }
@@ -110,12 +114,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (email && SUPERADMIN_EMAILS.includes(email)) {
         token.role = 'superadmin';
       }
+      // Settings/admin access: superadmins plus the product's admin allowlist
+      // (e.g. Ida). Stored on the token so the middleware and session can gate
+      // the Settings area without another DB lookup.
+      token.isSettingsAdmin = isSettingsAdmin(email, token.role as string);
       return token;
     },
     async session({ session, token }) {
       if (session.user && token) {
         session.user.id = token.id as string;
         session.user.role = (token.role as string) || 'agent';
+        session.user.isSettingsAdmin = Boolean(token.isSettingsAdmin);
       }
       return session;
     },
