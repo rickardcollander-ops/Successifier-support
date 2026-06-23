@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import TicketList from '@/components/TicketList';
 import TicketDetail from '@/components/TicketDetail';
 import { t } from '@/lib/i18n';
@@ -58,6 +58,10 @@ const MOCK_TICKETS = [
 
 // Vendor- and bounce-folder predicates live in lib/ticket-filters so the
 // reports API counts exactly the same ticket population as the inbox tabs.
+
+// Red traffic-light tickets (urgent/high) drive the "Akut ärende" folder.
+// Module-level so it's a stable reference inside the memoized filtering.
+const isUrgentTicket = (t: Ticket) => t.priority === 'urgent' || t.priority === 'high';
 
 export default function TicketsPage() {
   // Deep-link param: `/tickets?ticket=<id>` lands here from the Settings
@@ -662,72 +666,93 @@ export default function TicketsPage() {
     }
   };
 
-  const billectaTickets = tickets.filter(isVendorTicket);
-  const bounceTickets = tickets.filter(isBounceTicket);
+  // Folder partitions and tab counts depend only on the ticket set, so memoize
+  // them. With 2000+ tickets in memory, recomputing ~10 filter passes on every
+  // render (each 3s poll, every keystroke, every presence update) was a real
+  // source of the inbox jank — useMemo keeps it to once per ticket-set change.
+  const { billectaTickets, bounceTickets, statusCounts } = useMemo(() => {
+    const billecta = tickets.filter(isVendorTicket);
+    const bounce = tickets.filter(isBounceTicket);
+    // Excludes Billecta, bounces and dubletter from "normal" counters so
+    // the status tabs stay focused on real customer mail.
+    const isExcludedFromNormal = (t: Ticket) => isVendorTicket(t) || isBounceTicket(t);
+    const counts = {
+      all: tickets.filter(t => !isExcludedFromNormal(t) && t.status !== 'duplicate').length,
+      billecta: billecta.length,
+      bounce: bounce.length,
+      urgent: tickets.filter(t => isUrgentTicket(t) && !isExcludedFromNormal(t) && t.status !== 'duplicate' && t.status !== 'closed' && t.status !== 'sent').length,
+      new: tickets.filter(t => t.status === 'new' && !isExcludedFromNormal(t)).length,
+      in_progress: tickets.filter(t => t.status === 'in_progress' && !isExcludedFromNormal(t)).length,
+      review: tickets.filter(t => t.status === 'review' && !isExcludedFromNormal(t)).length,
+      sent: tickets.filter(t => t.status === 'sent' && !isExcludedFromNormal(t)).length,
+      closed: tickets.filter(t => t.status === 'closed' && !isExcludedFromNormal(t)).length,
+      duplicate: tickets.filter(t => t.status === 'duplicate').length,
+    };
+    return { billectaTickets: billecta, bounceTickets: bounce, statusCounts: counts };
+  }, [tickets]);
 
-  // Red traffic-light tickets (urgent/high) drive the "Akut ärende" folder.
-  // Mirrors the priority ranking shown in the ticket list/detail.
-  const isUrgentTicket = (t: Ticket) => t.priority === 'urgent' || t.priority === 'high';
+  // The visible list: filter by the active tab + search box, then sort. Also
+  // memoized so switching tabs doesn't re-run on unrelated re-renders.
+  const filteredTickets = useMemo(() => {
+    // Filter by status. Billecta and Kivra-notifications from Billecta used to
+    // live in two separate tabs; they're now merged into a single "Billecta"
+    // folder per user request. Bounces are excluded from every "normal" tab
+    // and only appear under the "Studsade" tab.
+    const statusFilteredTickets = activeStatus === 'all'
+      ? tickets.filter(t => !isVendorTicket(t) && t.status !== 'duplicate' && !isBounceTicket(t))
+      : activeStatus === 'billecta'
+      ? billectaTickets
+      : activeStatus === 'duplicate'
+      ? tickets.filter(t => t.status === 'duplicate')
+      : activeStatus === 'bounce'
+      ? bounceTickets
+      : activeStatus === 'urgent'
+      // "Akut ärende" — every open ticket flagged red (urgent/high priority),
+      // regardless of which status tab it would otherwise sit under, so
+      // support can find the cases that need attention first. Closed/sent
+      // tickets are excluded since they're already handled.
+      ? tickets.filter(t => isUrgentTicket(t) && !isVendorTicket(t) && !isBounceTicket(t) && t.status !== 'duplicate' && t.status !== 'closed' && t.status !== 'sent')
+      : tickets.filter(t => t.status === activeStatus && !isVendorTicket(t) && !isBounceTicket(t));
 
-  // Filter by status. Billecta and Kivra-notifications from Billecta used to
-  // live in two separate tabs; they're now merged into a single "Billecta"
-  // folder per user request. Bounces are excluded from every "normal" tab
-  // and only appear under the "Studsade" tab.
-  let statusFilteredTickets = activeStatus === 'all'
-    ? tickets.filter(t => !isVendorTicket(t) && t.status !== 'duplicate' && !isBounceTicket(t))
-    : activeStatus === 'billecta'
-    ? billectaTickets
-    : activeStatus === 'duplicate'
-    ? tickets.filter(t => t.status === 'duplicate')
-    : activeStatus === 'bounce'
-    ? bounceTickets
-    : activeStatus === 'urgent'
-    // "Akut ärende" — every open ticket flagged red (urgent/high priority),
-    // regardless of which status tab it would otherwise sit under, so
-    // support can find the cases that need attention first. Closed/sent
-    // tickets are excluded since they're already handled.
-    ? tickets.filter(t => isUrgentTicket(t) && !isVendorTicket(t) && !isBounceTicket(t) && t.status !== 'duplicate' && t.status !== 'closed' && t.status !== 'sent')
-    : tickets.filter(t => t.status === activeStatus && !isVendorTicket(t) && !isBounceTicket(t));
+    const q = searchQuery.toLowerCase();
+    const searchFilteredTickets = searchQuery
+      ? statusFilteredTickets.filter(t =>
+          t.subject.toLowerCase().includes(q) ||
+          t.customerEmail.toLowerCase().includes(q) ||
+          (t.customerName || '').toLowerCase().includes(q) ||
+          t.originalMessage.toLowerCase().includes(q)
+        )
+      : statusFilteredTickets;
 
-  // Apply search filter
-  const searchFilteredTickets = searchQuery
-    ? statusFilteredTickets.filter(t => 
-        t.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (t.customerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.originalMessage.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : statusFilteredTickets;
+    return [...searchFilteredTickets].sort((a, b) => {
+      let comparison = 0;
 
-  // Apply sorting
-  const filteredTickets = [...searchFilteredTickets].sort((a, b) => {
-    let comparison = 0;
-    
-    if (sortBy === 'activity') {
-      // Senaste aktivitet — updatedAt bumps when a follow-up mail is
-      // merged in, so tickets needing attention rise to the top.
-      comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
-    } else if (sortBy === 'received') {
-      // Mail-ankomsttid — sync routes write Gmail's internalDate into
-      // createdAt, so this reflects when the customer actually sent it.
-      comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    } else if (sortBy === 'priority') {
-      const priorityOrder: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 };
-      comparison = (priorityOrder[a.priority] || 999) - (priorityOrder[b.priority] || 999);
-    } else if (sortBy === 'status') {
-      const statusOrder: Record<string, number> = { new: 0, in_progress: 1, waiting_ai: 1, review: 2, sent: 3, closed: 4, archived: 5 };
-      comparison = (statusOrder[a.status] || 999) - (statusOrder[b.status] || 999);
-    } else if (sortBy === 'email') {
-      const emailCmp = a.customerEmail.toLowerCase().localeCompare(b.customerEmail.toLowerCase());
-      comparison = emailCmp !== 0
-        ? emailCmp
-        : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    }
-    
-    return sortOrder === 'asc' ? comparison : -comparison;
-  });
+      if (sortBy === 'activity') {
+        // Senaste aktivitet — updatedAt bumps when a follow-up mail is
+        // merged in, so tickets needing attention rise to the top.
+        comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+      } else if (sortBy === 'received') {
+        // Mail-ankomsttid — sync routes write Gmail's internalDate into
+        // createdAt, so this reflects when the customer actually sent it.
+        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      } else if (sortBy === 'priority') {
+        const priorityOrder: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 };
+        comparison = (priorityOrder[a.priority] || 999) - (priorityOrder[b.priority] || 999);
+      } else if (sortBy === 'status') {
+        const statusOrder: Record<string, number> = { new: 0, in_progress: 1, waiting_ai: 1, review: 2, sent: 3, closed: 4, archived: 5 };
+        comparison = (statusOrder[a.status] || 999) - (statusOrder[b.status] || 999);
+      } else if (sortBy === 'email') {
+        const emailCmp = a.customerEmail.toLowerCase().localeCompare(b.customerEmail.toLowerCase());
+        comparison = emailCmp !== 0
+          ? emailCmp
+          : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
 
-  const filteredArchivedTickets = archivedTickets.filter(t => {
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [tickets, billectaTickets, bounceTickets, activeStatus, searchQuery, sortBy, sortOrder]);
+
+  const filteredArchivedTickets = useMemo(() => archivedTickets.filter(t => {
     if (!archivedSearch) return true;
     const search = archivedSearch.toLowerCase();
     return (
@@ -735,25 +760,7 @@ export default function TicketsPage() {
       t.customerEmail.toLowerCase().includes(search) ||
       (t.customerName || '').toLowerCase().includes(search)
     );
-  });
-
-  // Excludes Billecta, bounces and dubletter from "normal" counters so
-  // the status tabs stay focused on real customer mail.
-  const isExcludedFromNormal = (t: Ticket) =>
-    isVendorTicket(t) || isBounceTicket(t);
-
-  const statusCounts = {
-    all: tickets.filter(t => !isExcludedFromNormal(t) && t.status !== 'duplicate').length,
-    billecta: billectaTickets.length,
-    bounce: bounceTickets.length,
-    urgent: tickets.filter(t => isUrgentTicket(t) && !isExcludedFromNormal(t) && t.status !== 'duplicate' && t.status !== 'closed' && t.status !== 'sent').length,
-    new: tickets.filter(t => t.status === 'new' && !isExcludedFromNormal(t)).length,
-    in_progress: tickets.filter(t => t.status === 'in_progress' && !isExcludedFromNormal(t)).length,
-    review: tickets.filter(t => t.status === 'review' && !isExcludedFromNormal(t)).length,
-    sent: tickets.filter(t => t.status === 'sent' && !isExcludedFromNormal(t)).length,
-    closed: tickets.filter(t => t.status === 'closed' && !isExcludedFromNormal(t)).length,
-    duplicate: tickets.filter(t => t.status === 'duplicate').length,
-  };
+  }), [archivedTickets, archivedSearch]);
 
   const tabs = [
     { id: 'urgent', label: t('Akut ärende'), count: statusCounts.urgent },
