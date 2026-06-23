@@ -83,23 +83,47 @@ export async function GET(
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
     }
 
-    const customerTickets = await prisma.ticket.findMany({
-      where: {
-        tenantId: ticket.tenantId,
-        customerEmail: ticket.customerEmail,
-      },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        subject: true,
-        originalMessage: true,
-        status: true,
-        priority: true,
-        createdAt: true,
-        customerName: true,
-        contextData: true,
-      },
-    });
+    // Automated senders (support@stripe.com, billecta, no-reply addresses…)
+    // can have thousands of tickets. Pulling every one of them — each with a
+    // full `originalMessage` (db.Text) and `contextData` (can be megabytes) —
+    // is what made opening such a ticket freeze the tab. We only need the
+    // most recent handful for the "previous/similar issues" panels, so cap
+    // the candidate set and get the running totals via cheap COUNTs instead.
+    const HISTORY_CANDIDATE_LIMIT = 50;
+    // Upper bound on how much message text we feed the token-overlap
+    // similarity check, so one giant merged thread can't dominate the CPU.
+    const SIMILARITY_TEXT_CAP = 4000;
+
+    const [totalTickets, openTickets, customerTickets] = await Promise.all([
+      prisma.ticket.count({
+        where: { tenantId: ticket.tenantId, customerEmail: ticket.customerEmail },
+      }),
+      prisma.ticket.count({
+        where: {
+          tenantId: ticket.tenantId,
+          customerEmail: ticket.customerEmail,
+          status: { notIn: ['closed', 'sent'] },
+        },
+      }),
+      prisma.ticket.findMany({
+        where: {
+          tenantId: ticket.tenantId,
+          customerEmail: ticket.customerEmail,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: HISTORY_CANDIDATE_LIMIT,
+        select: {
+          id: true,
+          subject: true,
+          originalMessage: true,
+          status: true,
+          priority: true,
+          createdAt: true,
+          customerName: true,
+          contextData: true,
+        },
+      }),
+    ]);
 
     const ticketWithBillectaContext = customerTickets.find((item) => {
       const context = item.contextData as BillectaContextPayload | null;
@@ -156,12 +180,12 @@ export async function GET(
       .filter((item) => item.id !== ticket.id)
       .slice(0, 10);
 
-    const currentText = `${ticket.subject} ${ticket.originalMessage}`;
+    const currentText = `${ticket.subject} ${ticket.originalMessage}`.slice(0, SIMILARITY_TEXT_CAP);
     const similarIssues = previousTickets
       .map((item) => {
         const similarityScore = calculateSimilarity(
           currentText,
-          `${item.subject} ${item.originalMessage}`
+          `${item.subject} ${item.originalMessage}`.slice(0, SIMILARITY_TEXT_CAP)
         );
 
         return {
@@ -178,15 +202,11 @@ export async function GET(
       .sort((a, b) => b.similarityScore - a.similarityScore)
       .slice(0, 5);
 
-    const openTickets = customerTickets.filter(
-      (item) => item.status !== 'closed' && item.status !== 'sent'
-    ).length;
-
     return NextResponse.json({
       customer: {
         email: ticket.customerEmail,
         name: ticket.customerName || customerTickets.find((item) => item.customerName)?.customerName || null,
-        totalTickets: customerTickets.length,
+        totalTickets,
         openTickets,
         lastTicketAt: customerTickets[0]?.createdAt || null,
       },

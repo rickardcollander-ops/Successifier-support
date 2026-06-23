@@ -14,7 +14,17 @@ interface TicketListProps {
   onDelete?: (ticketId: string) => void;
 }
 
+// Cap how many rows we put in the DOM at once. Folders like "Alla" and
+// "Stängda" can hold 2000+ tickets, and rendering every one as a rich row
+// (with no virtualization) froze the tab. Support scans the top of the list
+// or uses search, so showing the most recent slice is enough; the count in
+// the header still reflects the true total.
+const MAX_RENDERED_ROWS = 200;
+
 export default function TicketList({ tickets, selectedTicket, onSelectTicket, presence = {}, onDelete }: TicketListProps) {
+  const visibleTickets = tickets.length > MAX_RENDERED_ROWS
+    ? tickets.slice(0, MAX_RENDERED_ROWS)
+    : tickets;
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'new':
@@ -85,7 +95,8 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
             {t('Inga ärenden ännu')}
           </div>
         ) : (
-          tickets.map((ticket) => {
+          <>
+          {visibleTickets.map((ticket) => {
             const prio = getPriorityStripe(ticket.priority);
             const handleRowClick = () => onSelectTicket(ticket);
             const handleRowKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -232,7 +243,13 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
               </div>
             </div>
             );
-          })
+          })}
+          {tickets.length > visibleTickets.length && (
+            <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400">
+              {t('Visar')} {visibleTickets.length} {t('av')} {tickets.length} {t('ärenden — använd sökrutan för att hitta fler.')}
+            </div>
+          )}
+          </>
         )}
       </div>
     </div>
