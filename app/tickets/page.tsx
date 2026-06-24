@@ -599,6 +599,20 @@ export default function TicketsPage() {
     }
   };
 
+  // The open-time context refresh (fired inside TicketDetail) re-fetches the
+  // customer's live data (invoices, subscriptions …) and persists it server
+  // side. Merge the returned contextData straight into local state so the
+  // cards update on open. The 3s poll omits contextData (it can be megabytes),
+  // so without this the freshly-fetched data never reached the UI and only a
+  // manual "Generera AI" — which returns the full ticket — would surface it.
+  // This is a local state update only: no PATCH, so updatedAt isn't bumped and
+  // the ticket doesn't jump to the top of the list.
+  const handleContextRefreshed = (ticketId: string, contextData: any) => {
+    if (contextData == null) return;
+    setTickets((prev) => prev.map((t) => (t.id === ticketId ? { ...t, contextData } : t)));
+    setSelectedTicket((curr) => (curr && curr.id === ticketId ? { ...curr, contextData } : curr));
+  };
+
   const handleSendResponse = async (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string, attachments?: Array<{ name: string; mimeType: string; data: string }>, cc?: string, bcc?: string): Promise<{ ok: boolean; error?: string }> => {
     try {
       const res = await fetch(`/api/tickets/${ticketId}/send`, {
@@ -967,6 +981,7 @@ export default function TicketsPage() {
                     ticket={selectedTicket}
                     onUpdate={handleTicketUpdate}
                     onGenerateAI={handleGenerateAIResponse}
+                    onContextRefreshed={handleContextRefreshed}
                     onSend={handleSendResponse}
                     onDelete={handleDeleteTicket}
                     onSpam={handleSpamTicket}
@@ -1000,6 +1015,7 @@ export default function TicketsPage() {
                 ticket={selectedTicket}
                 onUpdate={handleTicketUpdate}
                 onGenerateAI={handleGenerateAIResponse}
+                onContextRefreshed={handleContextRefreshed}
                 onSend={handleSendResponse}
                 onDelete={handleDeleteTicket}
                 onSpam={handleSpamTicket}

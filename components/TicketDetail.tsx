@@ -78,6 +78,10 @@ interface TicketDetailProps {
   ticket: Ticket;
   onUpdate: (ticketId: string, updates: Partial<Ticket>) => void;
   onGenerateAI: (ticketId: string) => Promise<string | null>;
+  // Deliver freshly re-fetched customer data (from the open-time context
+  // refresh) straight into the parent's state so the cards update without a
+  // manual regenerate. Local state only — does not bump updatedAt.
+  onContextRefreshed?: (ticketId: string, contextData: any) => void;
   onSend: (ticketId: string, response: string, fromAccountId?: string, recipientEmail?: string, attachments?: Array<{ name: string; mimeType: string; data: string }>, cc?: string, bcc?: string) => Promise<{ ok: boolean; error?: string }>;
   onDelete?: (ticketId: string) => void;
   onSpam?: (ticketId: string) => void;
@@ -186,7 +190,7 @@ function sortInvoicesDesc(invoices: any[]): any[] {
   });
 }
 
-export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, onDelete, onSpam, onSelectTicket, viewers = [], onComposingChange }: TicketDetailProps) {
+export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onContextRefreshed, onSend, onDelete, onSpam, onSelectTicket, viewers = [], onComposingChange }: TicketDetailProps) {
   const [response, setResponse] = useState(ticket.finalResponse || ticket.aiResponse || '');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -430,11 +434,17 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     // fails we just keep whatever contextData we already had.
     const refreshContext = async () => {
       try {
-        await fetch(`/api/tickets/${ticket.id}/refresh-context`, { method: 'POST' });
-        // The endpoint persists contextData via raw SQL without touching
-        // updatedAt. The 3-second poll will pick up the fresh data.
-        // Do NOT call onUpdate here — that triggers a PATCH which bumps
-        // updatedAt and moves this ticket to the top of the sorted list.
+        const res = await fetch(`/api/tickets/${ticket.id}/refresh-context`, { method: 'POST' });
+        // Hand the freshly-fetched data straight to the parent's state. The
+        // endpoint persists it via raw SQL without touching updatedAt, but the
+        // 3s poll OMITS contextData (it can be megabytes), so the poll alone
+        // never delivered it to the cards — that's why customer data only
+        // refreshed on a manual regenerate. Merging the response here is a
+        // local update: no PATCH, so the ticket doesn't jump to the top.
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data?.contextData) onContextRefreshed?.(ticket.id, data.contextData);
+        }
       } catch (error) {
         console.error('Error refreshing ticket context:', error);
       }
