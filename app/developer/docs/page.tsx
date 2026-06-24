@@ -161,6 +161,118 @@ Content-Type: application/json
         </div>
       </section>
 
+      {/* Logged-in chatbot */}
+      <section id="logged-in-chatbot" className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 space-y-5 scroll-mt-6">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+            Logged-in chatbot (answers about the customer&apos;s own account)
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400">
+            The same chat widget can run in <strong>logged-in mode</strong> on your site. On top of the
+            public help center it then also answers a signed-in customer&apos;s questions about{' '}
+            <strong>their own account</strong> — subscription, invoices, payments — by reading live data
+            from your connected systems (Stripe, Billecta, Retool, Resend) for that customer.
+            It is <strong>read-only</strong>: it never changes anything on the account.
+          </p>
+          <p className="text-slate-600 dark:text-slate-400 mt-2">
+            Because the widget runs in the visitor&apos;s browser, the chat never trusts an email sent
+            from the browser. Instead <strong>your backend</strong> signs a short-lived token after the
+            customer logs in, and the endpoint reads the email from the <em>signed</em> payload — so a
+            customer can only ever see their own data.
+          </p>
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
+            Step 1 — Set the shared secret
+          </h3>
+          <p className="text-slate-600 dark:text-slate-400">
+            A single secret, <span className="font-mono">IDENTITY_TOKEN_SECRET</span> (≥ 32 chars), is
+            shared between your backend and this deployment. It is configured together with your{' '}
+            {product.displayName} contact and is <strong>never shown in this portal</strong>. Until it
+            is set, logged-in mode stays disabled and the widget behaves as the public chatbot.
+          </p>
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
+            Step 2 — Mint a token on your backend (after login)
+          </h3>
+          <p className="text-slate-600 dark:text-slate-400 mb-3">
+            Token format: <span className="font-mono">base64url(payload).hex(HMAC-SHA256(payload, secret))</span>{' '}
+            where the payload is <span className="font-mono">{`{ email, iat, exp }`}</span> (seconds since
+            epoch). Keep the lifetime short and mint a fresh token per session.
+          </p>
+          <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
+            <code>{`const crypto = require('crypto');
+
+function signIdentityToken(email, secret, ttlSeconds = 900) {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = { email: email.trim().toLowerCase(), iat: now, exp: now + ttlSeconds };
+  const b64 = Buffer.from(JSON.stringify(payload))
+    .toString('base64')
+    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+  const sig = crypto.createHmac('sha256', secret).update(b64).digest('hex');
+  return b64 + '.' + sig;
+}`}</code>
+          </pre>
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
+            Step 3 — Hand the token to the widget
+          </h3>
+          <p className="text-slate-600 dark:text-slate-400 mb-3">
+            Either set it on the widget script, or (recommended, since tokens expire) update it from your
+            app whenever you mint a fresh one. With a token present the widget talks to{' '}
+            <span className="font-mono">/api/me/chat</span>; without one it stays fully public.
+          </p>
+          <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto mb-3">
+            <code>{`<script src="${appDomain}/kb-widget.js"
+        data-kb-base="${appDomain}"
+        data-identity-token="<token minted server-side>"></script>`}</code>
+          </pre>
+          <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
+            <code>{`// Refresh the token at runtime (recommended)
+window.kbWidget.setIdentityToken(freshTokenFromYourBackend);`}</code>
+          </pre>
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">
+            Calling the endpoint directly
+          </h3>
+          <div className="flex gap-2 flex-wrap mb-3">
+            <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">POST /api/me/chat</code>
+            <span className="text-slate-600 dark:text-slate-400">
+              Authenticated by the signed token in the <span className="font-mono">X-Identity-Token</span> header
+            </span>
+          </div>
+          <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto mb-3">
+            <code>{`POST ${appDomain}/api/me/chat
+X-Identity-Token: <signed token>
+Content-Type: application/json
+
+{
+  "question": "När förnyas min prenumeration?",
+  "history": []
+}`}</code>
+          </pre>
+          <p className="text-slate-600 dark:text-slate-400 mb-3">
+            The response is the same streaming NDJSON contract as the public chatbot
+            (<span className="font-mono">delta</span> events then a final <span className="font-mono">done</span>{' '}
+            event with source articles). An invalid or expired token returns{' '}
+            <span className="font-mono">401</span>. The endpoint is rate-limited to 12 requests/min per
+            customer.
+          </p>
+          <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
+            <code>{`{"type":"delta","text":"Din prenumeration förnyas "}
+{"type":"delta","text":"den 3 juli 2026."}
+{"type":"done","sources":[]}`}</code>
+          </pre>
+        </div>
+      </section>
+
       {/* Endpoints */}
       <section className="space-y-6">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Endpoints</h2>
@@ -370,6 +482,10 @@ Content-Type: application/json
           <div className="flex gap-2 flex-wrap">
             <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">POST /api/public/kb/chat</code>
             <span className="text-slate-600 dark:text-slate-400">12 / min</span>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <code className="text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">POST /api/me/chat</code>
+            <span className="text-slate-600 dark:text-slate-400">12 / min (per logged-in customer)</span>
           </div>
         </div>
         <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto mt-4">

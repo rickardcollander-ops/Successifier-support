@@ -126,13 +126,20 @@ export default function DeveloperPage() {
       </div>
 
       {/* Quick Links */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <a
           href="/developer/docs"
           className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 hover:border-[#7C5CFF] transition-colors"
         >
           <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">📚 API Documentation</h3>
           <p className="text-sm text-slate-600 dark:text-slate-400">Complete API reference and guides</p>
+        </a>
+        <a
+          href="/developer/docs#logged-in-chatbot"
+          className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 hover:border-[#7C5CFF] transition-colors"
+        >
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">🔐 Logged-in Chatbot</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400">Add the in-app assistant to your site</p>
         </a>
         <a
           href="/developer/sdk"
