@@ -27,8 +27,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
     }
 
-    // Determine if response was edited
-    const wasEdited = aiResponse !== finalResponse;
+    // Determine if response was edited. Compare on collapsed whitespace so a
+    // verbatim send that differs only by a trailing newline isn't recorded as
+    // an edit — this row is the reports' authoritative "edited?" signal.
+    const norm = (s: unknown) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
+    const wasEdited = norm(aiResponse) !== norm(finalResponse);
 
     // Create feedback entry
     const feedback = await prisma.aIResponseFeedback.create({
