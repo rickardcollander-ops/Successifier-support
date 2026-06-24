@@ -19,7 +19,19 @@
   var base = (script && script.getAttribute('data-kb-base')) || '';
   base = base.replace(/\/$/, '');
 
-  var ACCENT = '#7C5CFF';
+  // Defaults; overwritten by the tenant's published help-center config
+  // (GET /api/public/kb/config) before the widget is built.
+  var cfg = {
+    accentColor: '#7C5CFF',
+    chat: {
+      enabled: true,
+      title: 'Fråga hjälpcentret',
+      welcome: 'Hej! Ställ en fråga så söker jag svar i hjälpcentret.',
+      placeholder: 'Skriv din fråga…',
+      suggestions: [],
+    },
+  };
+  var ACCENT = cfg.accentColor;
   var open = false;
   var tab = 'chat';
   var timer = null;
@@ -90,6 +102,9 @@
       '.kbw-src .kbw-sl{font-size:11px;color:#64748b;margin-bottom:3px}' +
       '.kbw-src a{display:block;font-size:12px;color:' + ACCENT + ';text-decoration:none}' +
       '.kbw-src a:hover{text-decoration:underline}' +
+      '.kbw-sugs{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}' +
+      '.kbw-sug{border:1px solid #cbd5e1;background:#fff;color:#0f172a;border-radius:9999px;padding:6px 10px;font:12px system-ui;cursor:pointer;text-align:left}' +
+      '.kbw-sug:hover{background:#f8fafc}' +
       '.kbw-form{display:flex;gap:8px;padding:10px;border-top:1px solid #eef2f7}' +
       '.kbw-input{flex:1;padding:9px 12px;border:1px solid #cbd5e1;border-radius:10px;font:14px system-ui}' +
       '.kbw-send{background:' + ACCENT + ';color:#fff;border:none;border-radius:10px;padding:0 14px;font:600 14px system-ui;cursor:pointer}' +
@@ -228,10 +243,13 @@
     var panel = el('div', { class: 'kbw-panel' });
     panel.appendChild(el('div', { class: 'kbw-head' }, 'Hjälpcenter'));
 
+    var chatOn = cfg.chat && cfg.chat.enabled;
+    tab = chatOn ? 'chat' : 'search';
+
     var tabs = el('div', { class: 'kbw-tabs' });
-    var tabChat = el('button', { class: 'kbw-tab kbw-tab-chat kbw-active' }, 'Fråga AI');
-    var tabSrch = el('button', { class: 'kbw-tab kbw-tab-srch' }, 'Sök');
-    tabs.appendChild(tabChat);
+    var tabChat = el('button', { class: 'kbw-tab kbw-tab-chat' + (chatOn ? ' kbw-active' : '') }, 'Fråga AI');
+    var tabSrch = el('button', { class: 'kbw-tab kbw-tab-srch' + (chatOn ? '' : ' kbw-active') }, 'Sök');
+    if (chatOn) tabs.appendChild(tabChat);
     tabs.appendChild(tabSrch);
     panel.appendChild(tabs);
 
@@ -240,15 +258,30 @@
     // Chat view
     var chat = el('div', { class: 'kbw-chat', style: 'flex:1;display:flex;flex-direction:column;min-height:0' });
     var msgs = el('div', { class: 'kbw-msgs' });
-    msgs.appendChild(el('div', { class: 'kbw-msg kbw-bot' }, 'Hej! Ställ en fråga så söker jag svar i hjälpcentret.'));
+    msgs.appendChild(el('div', { class: 'kbw-msg kbw-bot' }, escapeHtml(cfg.chat.welcome)));
+    // Suggested starter questions, offered until the visitor asks something.
+    var suggestions = (cfg.chat.suggestions || []);
+    if (suggestions.length) {
+      var sugWrap = el('div', { class: 'kbw-sugs' });
+      suggestions.forEach(function (s) {
+        var chip = el('button', { class: 'kbw-sug', type: 'button' });
+        chip.textContent = s;
+        chip.addEventListener('click', function () {
+          sugWrap.parentNode && sugWrap.parentNode.removeChild(sugWrap);
+          sendChat(s);
+        });
+        sugWrap.appendChild(chip);
+      });
+      msgs.appendChild(sugWrap);
+    }
     chat.appendChild(msgs);
     var form = el('div', { class: 'kbw-form' });
-    var input = el('input', { class: 'kbw-input', type: 'text', placeholder: 'Skriv din fråga…', maxlength: '1000' });
+    var input = el('input', { class: 'kbw-input', type: 'text', placeholder: cfg.chat.placeholder, maxlength: '1000' });
     var send = el('button', { class: 'kbw-send' }, 'Skicka');
     form.appendChild(input);
     form.appendChild(send);
     chat.appendChild(form);
-    body.appendChild(chat);
+    if (chatOn) body.appendChild(chat);
 
     // Search view
     var srch = el('div', { class: 'kbw-srch', style: 'display:none' });
@@ -287,9 +320,32 @@
     document.body.appendChild(panel);
   }
 
+  // Pull the tenant's published help-center config so the widget matches the
+  // configured accent color and chatbot copy, then build. Failures fall back
+  // to the defaults above so the widget always renders.
+  function init() {
+    fetch(base + '/api/public/kb/config')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (d) {
+          if (d.accentColor) cfg.accentColor = d.accentColor;
+          ACCENT = cfg.accentColor;
+          if (d.chat) {
+            cfg.chat.enabled = d.chat.enabled !== false;
+            if (d.chat.title) cfg.chat.title = d.chat.title;
+            if (d.chat.welcome) cfg.chat.welcome = d.chat.welcome;
+            if (d.chat.placeholder) cfg.chat.placeholder = d.chat.placeholder;
+            if (Array.isArray(d.chat.suggestions)) cfg.chat.suggestions = d.chat.suggestions;
+          }
+        }
+      })
+      .catch(function () {})
+      .then(function () { build(); });
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', build);
+    document.addEventListener('DOMContentLoaded', init);
   } else {
-    build();
+    init();
   }
 })();

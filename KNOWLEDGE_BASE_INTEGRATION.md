@@ -85,14 +85,30 @@ frågor utan svar (`resultsCount = 0`) syns som innehållsluckor i analysen.
 Samma chatt finns även i den inbäddningsbara widgeten (`public/kb-widget.js`)
 under fliken **Fråga AI**, så hemsidan kan erbjuda boten utan egen kod.
 
-## Design
+## Anpassning (Design, Kategorier, Chatbot)
 
-Hjälpcentrets utseende ställs in under **Kunskapsbas → Design** (`/knowledge/design`)
-och sparas per tenant (`HelpCenterConfig`). Du kan välja accentfärg, tema
-(ljust/mörkt/auto), logga, rubrik, introtext, layout (rutnät/lista) och om
-sökrutan ska visas. En live-förhandsvisning visar resultatet innan du sparar.
+Hjälpcentret ställs in under **Kunskapsbas → Hjälpcentret** (`/knowledge/design`),
+sparas per tenant (`HelpCenterConfig`) och är uppdelat i tre flikar:
+
+**Design** – accentfärg, tema (ljust/mörkt/auto), logga, rubrik, introtext,
+layout (rutnät/lista), sökruta på/av, sidfotstext och en support-CTA
+(länk + text). En live-förhandsvisning visar resultatet innan du sparar.
 Sidorna under `/help` läser konfigurationen och temats färger styrs av
 CSS-variabler så valt tema alltid gäller – oberoende av appens interna mörka läge.
+
+**Kategorier** – välj **ikon** (från en kuraterad uppsättning, `components/CategoryIcon.tsx`),
+namn, ordning och synlighet per kategori. Ikonerna visas på kategorikorten i
+hjälpcentret. Ändringar sparas direkt (PATCH `/api/knowledge/categories/<id>`).
+
+**Chatbot** – aktivera/inaktivera boten, sätt rubrik, välkomstmeddelande,
+platshållare, **egna instruktioner** (ton/fokus – läggs till i systemprompten
+men de absoluta grounding-reglerna gäller alltid före), eget fallback-svar och
+**förslagsfrågor** som visas som knappar. Instruktionerna är serversidiga och
+exponeras aldrig publikt.
+
+Den inbäddningsbara widgeten hämtar den publika delmängden via
+`GET /api/public/kb/config` (utan instruktioner) och matchar därför accentfärg,
+chattens texter och förslagsfrågor automatiskt.
 
 ## Publik eller intern
 

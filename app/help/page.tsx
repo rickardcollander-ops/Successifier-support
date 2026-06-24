@@ -3,6 +3,7 @@ import { getTenantId } from '@/lib/products/tenant';
 import { getPublicCategories, getPublicArticles } from '@/lib/services/public-kb';
 import { getHelpCenterConfig, DEFAULT_HELP_CENTER } from '@/lib/services/help-center';
 import HelpSearch from '@/components/help/HelpSearch';
+import CategoryIcon from '@/components/CategoryIcon';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,13 +40,21 @@ export default async function HelpHome() {
               <Link
                 key={c.slug}
                 href={`/help/c/${c.slug}`}
-                className="block p-5 rounded-xl border border-[color:var(--kb-border)] bg-[color:var(--kb-surface)] hover:border-[color:var(--kb-accent)] transition-colors"
+                className="flex items-start gap-3 p-5 rounded-xl border border-[color:var(--kb-border)] bg-[color:var(--kb-surface)] hover:border-[color:var(--kb-accent)] transition-colors"
               >
-                <div className="font-medium">{c.name}</div>
-                {c.description && (
-                  <p className="text-sm text-[color:var(--kb-muted)] mt-1">{c.description}</p>
-                )}
-                <p className="text-xs text-[color:var(--kb-muted)] mt-2">{c.articleCount} artiklar</p>
+                <span
+                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg"
+                  style={{ background: 'color-mix(in srgb, var(--kb-accent) 14%, transparent)', color: 'var(--kb-accent)' }}
+                >
+                  <CategoryIcon name={c.icon} size={20} />
+                </span>
+                <div className="min-w-0">
+                  <div className="font-medium">{c.name}</div>
+                  {c.description && (
+                    <p className="text-sm text-[color:var(--kb-muted)] mt-1">{c.description}</p>
+                  )}
+                  <p className="text-xs text-[color:var(--kb-muted)] mt-2">{c.articleCount} artiklar</p>
+                </div>
               </Link>
             ))}
           </div>
