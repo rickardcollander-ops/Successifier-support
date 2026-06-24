@@ -227,6 +227,17 @@ export async function GET(request: NextRequest) {
     const handlingMinutes = (t: { workStartedAt: Date | null; sentAt: Date | null }) =>
       (t.sentAt!.getTime() - t.workStartedAt!.getTime()) / 60000;
 
+    // Active work time (minutes) from accumulated presence — the real "time
+    // inside the ticket", independent of how long it queued. This is the
+    // headline effort metric; workStartedAt→sentAt (above) is kept only for the
+    // legacy handling figure and is no longer shown as effort.
+    const hasActiveWork = (t: { activeWorkSeconds: number | null }) => (t.activeWorkSeconds ?? 0) > 0;
+    const activeWorkMinutes = (t: { activeWorkSeconds: number | null }) => (t.activeWorkSeconds ?? 0) / 60;
+
+    // Median response time is the headline (the mean is dragged up by tickets
+    // left over a weekend); avgResponseTime is kept only as a secondary figure.
+    const medianResponseTime = sentInRange.length > 0 ? median(sentInRange.map(responseHours)) : 0;
+
     // Summarise a group of sent tickets for the dashboard: median is the
     // headline, p90 shows the tail, handledCount tells the UI how solid the
     // handling number is (a median of 1 ticket isn't a claim).
@@ -261,11 +272,13 @@ export async function GET(request: NextRequest) {
           return s >= start && s < end;
         });
         const resp = inBucket.map(responseHours);
-        const hand = inBucket.filter(hasHandling).map(handlingMinutes);
+        const active = inBucket.filter(hasActiveWork).map(activeWorkMinutes);
         trend.push({
           label: fmt(new Date(start)),
           responseMedian: Math.round(median(resp) * 10) / 10,
-          handlingMedian: Math.round(median(hand)),
+          // Active work minutes (presence-based) — not workStartedAt→sentAt,
+          // which is dominated by queue time and produced absurd hour-long bars.
+          handlingMedian: Math.round(median(active) * 10) / 10,
           count: inBucket.length,
         });
       }
@@ -330,24 +343,35 @@ export async function GET(request: NextRequest) {
     const reportSettings = await prisma.reportSettings.findUnique({
       where: { tenantId: tenant.id },
     });
-    const aiAssisted = [...asIs, ...editedGroup];
-    const aiAssistedHand = aiAssisted.filter(hasHandling).map(handlingMinutes);
-    const aiAssistedHandlingMedian = median(aiAssistedHand);
+    // "Time now" is the REAL active work time (presence) — the same few-minute
+    // figure shown elsewhere, NOT the queue-inclusive workStartedAt→sentAt span
+    // that produced absurd hours. The baseline is the team's configured
+    // "before our tool" minutes per ticket; we only fall back to the in-app
+    // no-AI group when it's big enough (≥15) to mean something, otherwise we
+    // leave it null so the UI asks for a baseline instead of inventing one.
+    const MIN_BASELINE_SAMPLE = 15;
+    const MIN_ACTIVE_SAMPLE = 10;
+    const activeNowList = sentInRange.filter(hasActiveWork).map(activeWorkMinutes);
+    const activeNowMedian = median(activeNowList);
 
     let baselineHandlingMinutes: number | null = reportSettings?.baselineHandlingMinutes ?? null;
     let baselineSource: 'configured' | 'no_ai_group' | null =
       baselineHandlingMinutes != null ? 'configured' : null;
-    if (baselineHandlingMinutes == null && aiComparison.none.handledCount >= 3) {
+    if (baselineHandlingMinutes == null && aiComparison.none.handledCount >= MIN_BASELINE_SAMPLE) {
       baselineHandlingMinutes = aiComparison.none.handlingMedian;
       baselineSource = 'no_ai_group';
     }
 
-    const savedMinutesPerTicket =
-      baselineHandlingMinutes != null
-        ? Math.max(0, baselineHandlingMinutes - aiAssistedHandlingMedian)
-        : null;
+    // Only claim a saving when we have both a baseline AND enough measured
+    // active-work tickets to trust the "time now" median.
+    const canMeasureSaving =
+      baselineHandlingMinutes != null && activeNowList.length >= MIN_ACTIVE_SAMPLE;
+    const savedMinutesPerTicket = canMeasureSaving
+      ? Math.max(0, baselineHandlingMinutes! - activeNowMedian)
+      : null;
+    // The per-ticket saving applies to every ticket resolved in range.
     const savedHours =
-      savedMinutesPerTicket != null ? (savedMinutesPerTicket * aiAssistedHand.length) / 60 : null;
+      savedMinutesPerTicket != null ? (savedMinutesPerTicket * sentInRange.length) / 60 : null;
     const hourlyCost = reportSettings?.agentHourlyCost ?? null;
     const moneySaved =
       savedHours != null && hourlyCost != null ? Math.round(savedHours * hourlyCost) : null;
@@ -357,8 +381,9 @@ export async function GET(request: NextRequest) {
       baselineHandlingMinutes,
       baselineResponseHours: reportSettings?.baselineResponseHours ?? null,
       baselineSource,
-      aiAssistedCount: aiAssistedHand.length,
-      aiAssistedHandlingMedian: Math.round(aiAssistedHandlingMedian),
+      ticketsHandled: sentInRange.length,
+      activeWorkMedianMinutes: Math.round(activeNowMedian * 10) / 10,
+      activeWorkSampleCount: activeNowList.length,
       savedMinutesPerTicket: savedMinutesPerTicket != null ? Math.round(savedMinutesPerTicket) : null,
       savedHours: savedHours != null ? Math.round(savedHours * 10) / 10 : null,
       moneySaved,
@@ -497,13 +522,17 @@ export async function GET(request: NextRequest) {
       totalTickets,
       ticketsByStatus,
       ticketsByPriority,
-      avgResponseTime: Math.round(avgResponseTime * 10) / 10, // Round to 1 decimal
-      // Minutes of active work per ticket, plus how many tickets the average
-      // is based on (lets the UI say "saknas ännu" while data builds up).
+      // Median is the headline response time; mean kept as a secondary figure.
+      medianResponseTime: Math.round(medianResponseTime * 10) / 10,
+      avgResponseTime: Math.round(avgResponseTime * 10) / 10,
+      // Legacy workStartedAt→sentAt figure — no longer shown as a headline
+      // (it includes queue time); kept in the payload for backwards-compat.
       avgHandlingMinutes: Math.round(avgHandlingTime),
       handledCount: handledInRange.length,
       resolvedToday,
       pendingTickets,
+      // Total replies sent in range — lets the UI show each agent's share.
+      totalSent: sentInRange.length,
       recentActivity,
       // Tells the client how to label the activity bars ("14:00" vs "3 jun").
       activityInterval: isHourly ? 'hour' : 'day',

@@ -1,9 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, PencilLine, MousePointerClick } from 'lucide-react';
-import { statusLabelSv, priorityLabelSv } from '@/lib/constants';
+import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, PencilLine, MousePointerClick, Wallet, Settings } from 'lucide-react';
+import { statusLabelSv } from '@/lib/constants';
 import { t } from '@/lib/i18n';
+
+// Below this many tickets in a group we don't make comparative claims — a
+// "23% faster" line off a handful of tickets is noise, not a result.
+const MIN_GROUP = 15;
+// One agent handling more than this share of all replies is a key-person risk
+// worth surfacing to whoever reads the report.
+const KEY_PERSON_SHARE = 0.7;
 
 interface AgentStats {
   name: string;
@@ -19,32 +26,37 @@ interface GroupStats {
   handledCount: number;
 }
 
+interface Savings {
+  agentHourlyCost: number | null;
+  baselineHandlingMinutes: number | null;
+  baselineResponseHours: number | null;
+  baselineSource: 'configured' | 'no_ai_group' | null;
+  ticketsHandled: number;
+  activeWorkMedianMinutes: number;
+  activeWorkSampleCount: number;
+  savedMinutesPerTicket: number | null;
+  savedHours: number | null;
+  moneySaved: number | null;
+}
+
 interface ReportData {
   totalTickets: number;
   ticketsByStatus: Record<string, number>;
-  ticketsByPriority: Record<string, number>;
+  medianResponseTime: number;
   avgResponseTime: number;
-  avgHandlingMinutes?: number;
-  handledCount?: number;
   resolvedToday: number;
   pendingTickets: number;
-  recentActivity: Array<{
-    date: string;
-    count: number;
-  }>;
+  totalSent: number;
+  recentActivity: Array<{ date: string; count: number }>;
   activityInterval?: 'hour' | 'day';
   perUserStats?: AgentStats[];
-  trend?: Array<{
-    label: string;
-    responseMedian: number;
-    handlingMedian: number;
-    count: number;
-  }>;
+  trend?: Array<{ label: string; responseMedian: number; handlingMedian: number; count: number }>;
   aiComparison?: {
     asIs: GroupStats;
     edited: GroupStats;
     none: GroupStats;
   };
+  savings?: Savings;
   editStats?: {
     count: number;
     medianChangedPct: number;
@@ -60,26 +72,80 @@ interface ReportData {
   };
 }
 
+interface RoiSettings {
+  agentHourlyCost: number | null;
+  baselineHandlingMinutes: number | null;
+  baselineResponseHours: number | null;
+}
+
 export default function ReportsPage() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'1d' | '7d' | '30d' | '90d'>('30d');
 
+  // ROI inputs (team-specific, not invented): time per ticket before the tool
+  // and the fully-loaded hourly cost of an agent. Without them we don't show a
+  // money figure at all — we ask for them instead.
+  const [roi, setRoi] = useState<RoiSettings | null>(null);
+  const [editingRoi, setEditingRoi] = useState(false);
+  const [roiDraft, setRoiDraft] = useState({ baselineHandlingMinutes: '', agentHourlyCost: '' });
+  const [savingRoi, setSavingRoi] = useState(false);
+
   useEffect(() => {
     fetchReportData();
   }, [timeRange]);
 
+  useEffect(() => {
+    fetchRoiSettings();
+  }, []);
+
   const fetchReportData = async () => {
     try {
       const response = await fetch(`/api/reports?range=${timeRange}`);
-      if (response.ok) {
-        const reportData = await response.json();
-        setData(reportData);
-      }
+      if (response.ok) setData(await response.json());
     } catch (error) {
       console.error('Error fetching report data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRoiSettings = async () => {
+    try {
+      const res = await fetch('/api/reports/settings');
+      if (res.ok) {
+        const s: RoiSettings = await res.json();
+        setRoi(s);
+        setRoiDraft({
+          baselineHandlingMinutes: s.baselineHandlingMinutes != null ? String(s.baselineHandlingMinutes) : '',
+          agentHourlyCost: s.agentHourlyCost != null ? String(s.agentHourlyCost) : '',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching ROI settings:', error);
+    }
+  };
+
+  const saveRoiSettings = async () => {
+    setSavingRoi(true);
+    try {
+      const res = await fetch('/api/reports/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baselineHandlingMinutes: roiDraft.baselineHandlingMinutes,
+          agentHourlyCost: roiDraft.agentHourlyCost,
+        }),
+      });
+      if (res.ok) {
+        setRoi(await res.json());
+        setEditingRoi(false);
+        fetchReportData(); // recompute money saved with the new baseline/cost
+      }
+    } catch (error) {
+      console.error('Error saving ROI settings:', error);
+    } finally {
+      setSavingRoi(false);
     }
   };
 
@@ -110,42 +176,25 @@ export default function ReportsPage() {
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'urgent': return 'bg-red-500';
-      case 'high': return 'bg-orange-500';
-      case 'normal': return 'bg-blue-500';
-      case 'low': return 'bg-slate-500';
-      default: return 'bg-slate-500';
-    }
-  };
-
-  // Active handling time comes from the API in minutes; show it in whichever
-  // unit reads cleanest. "–" while no worked-and-sent tickets exist yet so an
-  // empty POC doesn't claim "0 min" handling time.
-  const formatHandlingTime = (): string => {
-    const minutes = data.avgHandlingMinutes ?? 0;
-    if (!data.handledCount || minutes <= 0) return '–';
-    if (minutes < 60) return `${minutes} min`;
-    return `${Math.round((minutes / 60) * 10) / 10} h`;
-  };
-
-  // Shared minute formatter for the comparison/trend panels.
+  // Minute formatter shared by the active-work and comparison panels.
   const fmtMinutes = (minutes: number): string => {
     if (!minutes || minutes <= 0) return '–';
     if (minutes < 60) return `${Math.round(minutes)} min`;
     return `${Math.round((minutes / 60) * 10) / 10} h`;
   };
+
   const trend = data.trend || [];
   const aiComparison = data.aiComparison;
   const editStats = data.editStats;
   const activeWork = data.activeWork;
+  const savings = data.savings;
 
   const perUserStats = data.perUserStats || [];
-  const maxAgentTotal = Math.max(
-    1,
-    ...perUserStats.map((s) => s.assigned + s.sent)
-  );
+  const maxAgentTotal = Math.max(1, ...perUserStats.map((s) => s.assigned + s.sent));
+  const topShare = data.totalSent > 0
+    ? Math.max(0, ...perUserStats.map((s) => s.sent)) / data.totalSent
+    : 0;
+  const topAgent = perUserStats.find((s) => s.sent === Math.max(0, ...perUserStats.map((p) => p.sent)));
 
   return (
     <div className="space-y-6">
@@ -205,11 +254,14 @@ export default function ReportsPage() {
           </div>
         </div>
 
+        {/* Median (not mean) response time — the mean was dragged to ~48h by
+            tickets left over weekends; median is the honest headline. */}
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-600 dark:text-slate-400">{t('Genomsnittlig svarstid')}</p>
-              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.avgResponseTime}h</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{t('Median svarstid')}</p>
+              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.medianResponseTime}h</p>
+              <p className="text-[11px] text-slate-400 mt-1">{t('snitt')} {data.avgResponseTime}h</p>
             </div>
             <div className="w-12 h-12 rounded-lg border border-purple-300 dark:border-purple-700 flex items-center justify-center">
               <Clock className="w-6 h-6 text-purple-600 dark:text-purple-400" />
@@ -217,15 +269,19 @@ export default function ReportsPage() {
           </div>
         </div>
 
+        {/* Active work time per ticket — real "time inside the ticket" from
+            presence, NOT the queue-inclusive workStartedAt→sentAt span. */}
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-600 dark:text-slate-400">{t('Genomsnittlig handläggningstid')}</p>
-              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{formatHandlingTime()}</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{t('Aktiv arbetstid / ärende')}</p>
+              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
+                {activeWork && activeWork.count > 0 ? fmtMinutes(activeWork.medianMinutes) : '–'}
+              </p>
               <p className="text-[11px] text-slate-400 mt-1">
-                {data.handledCount
-                  ? `${t('Aktiv arbetstid per ärende, baserat på')} ${data.handledCount} ${t('ärenden')}`
-                  : t('Mäts från påbörjat arbete till skickat svar')}
+                {activeWork && activeWork.count > 0
+                  ? `${t('median, baserat på')} ${activeWork.count} ${t('ärenden')}`
+                  : t('Mäts från faktisk närvaro i ärendet')}
               </p>
             </div>
             <div className="w-12 h-12 rounded-lg border border-[#7C5CFF]/40 flex items-center justify-center">
@@ -235,7 +291,134 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* ── Value case: with vs without AI (response time) ──────────────── */}
+      {/* ── Section 1: ROI / value ──────────────────────────────────────── */}
+      {savings && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Värde: tid & pengar sparade')}</h3>
+            </div>
+            <button
+              onClick={() => setEditingRoi((v) => !v)}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            >
+              <Settings className="w-3.5 h-3.5" /> {t('Inställningar')}
+            </button>
+          </div>
+
+          {savings.moneySaved != null ? (
+            <>
+              <div className="flex items-baseline gap-2 mt-2">
+                <span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">
+                  {savings.moneySaved.toLocaleString('sv-SE')} kr
+                </span>
+                <span className="text-sm text-slate-500 dark:text-slate-400">{t('uppskattat sparat i vald period')}</span>
+              </div>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-3">
+                {savings.savedMinutesPerTicket} {t('min sparat per ärende')} × {savings.ticketsHandled} {t('ärenden')} ≈ {savings.savedHours} {t('timmar')}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {t('Före verktyget')}: {savings.baselineHandlingMinutes} {t('min/ärende')} → {t('nu')}: {savings.activeWorkMedianMinutes} {t('min aktiv arbetstid')} ({t('timkostnad')} {savings.agentHourlyCost} kr)
+                {savings.baselineSource === 'no_ai_group' && ` · ${t('baslinje uppskattad från ärenden utan AI')}`}
+              </p>
+            </>
+          ) : (
+            <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              <p>{t('För att visa sparad tid och pengar behövs:')}</p>
+              <ul className="list-disc ml-5 mt-1 space-y-0.5">
+                {savings.baselineHandlingMinutes == null && <li>{t('Tid per ärende före verktyget (min)')}</li>}
+                {savings.agentHourlyCost == null && <li>{t('Timkostnad för en agent (kr)')}</li>}
+                {savings.activeWorkSampleCount < 10 && (
+                  <li>{t('Fler ärenden med uppmätt aktiv arbetstid')} ({savings.activeWorkSampleCount}/10)</li>
+                )}
+              </ul>
+              {!editingRoi && (
+                <button
+                  onClick={() => setEditingRoi(true)}
+                  className="mt-3 px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700"
+                >
+                  {t('Ange baslinje & timkostnad')}
+                </button>
+              )}
+            </div>
+          )}
+
+          {editingRoi && (
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+              <div>
+                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Tid/ärende före verktyget (min)')}</label>
+                <input
+                  type="number" min="0" inputMode="decimal"
+                  value={roiDraft.baselineHandlingMinutes}
+                  onChange={(e) => setRoiDraft((d) => ({ ...d, baselineHandlingMinutes: e.target.value }))}
+                  placeholder={t('t.ex. 15')}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Timkostnad agent (kr)')}</label>
+                <input
+                  type="number" min="0" inputMode="decimal"
+                  value={roiDraft.agentHourlyCost}
+                  onChange={(e) => setRoiDraft((d) => ({ ...d, agentHourlyCost: e.target.value }))}
+                  placeholder={t('t.ex. 300')}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                />
+              </div>
+              <button
+                onClick={saveRoiSettings}
+                disabled={savingRoi}
+                className="px-4 py-2 rounded-md bg-[#7C5CFF] text-white text-sm font-medium hover:brightness-110 disabled:opacity-50"
+              >
+                {savingRoi ? t('Sparar…') : t('Spara')}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Section 2: how much does the AI actually do? ────────────────── */}
+      {editStats && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <PencilLine className="w-5 h-5 text-[#7C5CFF]" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Hur mycket bygger svaren på AI-utkastet?')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Andel av det skickade svaret som kommer från AI-utkastet (ordöverlapp – nedkortning räknas som behållet). Bör stiga över tid.')}
+          </p>
+          {editStats.count === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t('Ingen data ännu – mäts på svar som hade ett AI-utkast.')}</p>
+          ) : (
+            <>
+              <div className="flex items-baseline gap-2 mb-4">
+                <span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">{editStats.medianKeptPct}%</span>
+                <span className="text-sm text-slate-500 dark:text-slate-400">{t('av det skickade svaret kommer från AI-utkastet (median)')}</span>
+              </div>
+              {([
+                { label: t('Skickat ~som AI-utkastet (<10% nytt)'), value: editStats.unchanged, color: 'bg-emerald-500' },
+                { label: t('Byggt på AI-utkastet (10–50% nytt)'), value: editStats.light, color: 'bg-amber-500' },
+                { label: t('Mestadels nyskrivet (>50% nytt)'), value: editStats.heavy, color: 'bg-slate-400' },
+              ] as const).map(({ label, value, color }) => (
+                <div key={label} className="mb-2.5">
+                  <div className="flex items-center justify-between mb-1 text-xs text-slate-600 dark:text-slate-400">
+                    <span>{label}</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                    <div className={`${color} h-2 rounded-full transition-all`} style={{ width: `${(value / editStats.count) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+              <p className="text-[11px] text-slate-400 mt-3">{t('Baserat på')} {editStats.count} {t('svar med AI-utkast.')}</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Response time with vs without AI — only the medians, with a small-n
+          guard on the comparative claim. */}
       {aiComparison && (
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-1">
@@ -248,7 +431,7 @@ export default function ReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {([
               { key: 'asIs', label: t('AI-utkast skickat ~oförändrat'), g: aiComparison.asIs, accent: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
-              { key: 'edited', label: t('AI-utkast omskrivet'), g: aiComparison.edited, accent: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
+              { key: 'edited', label: t('AI-utkast redigerat'), g: aiComparison.edited, accent: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
               { key: 'none', label: t('Utan AI-utkast'), g: aiComparison.none, accent: 'text-slate-600 dark:text-slate-300', dot: 'bg-slate-400' },
             ] as const).map(({ key, label, g, accent, dot }) => (
               <div key={key} className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
@@ -259,97 +442,54 @@ export default function ReportsPage() {
                 <p className={`text-2xl font-bold ${accent}`}>
                   {g.count > 0 ? `${g.responseMedian} h` : '–'}
                 </p>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-0.5">
-                  <p>{g.count} {t('ärenden')}</p>
-                  {g.handledCount > 0 && <p>{t('handläggningstid median:')} {fmtMinutes(g.handlingMedian)}</p>}
-                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">{g.count} {t('ärenden')}</p>
               </div>
             ))}
           </div>
-          {aiComparison.asIs.count > 0 && aiComparison.none.count > 0 && aiComparison.none.responseMedian > aiComparison.asIs.responseMedian && (
+          {aiComparison.asIs.count >= MIN_GROUP && aiComparison.none.count >= MIN_GROUP && aiComparison.none.responseMedian > aiComparison.asIs.responseMedian ? (
             <p className="text-sm text-emerald-700 dark:text-emerald-400 mt-4 font-medium">
               {t('AI-utkast som skickas oförändrat besvaras')} {Math.round((1 - aiComparison.asIs.responseMedian / aiComparison.none.responseMedian) * 100)}% {t('snabbare än ärenden utan AI-stöd.')}
+            </p>
+          ) : (
+            <p className="text-xs text-slate-400 mt-4">
+              {t('För få ärenden i någon grupp för en säker jämförelse (kräver minst')} {MIN_GROUP} {t('per grupp).')}
             </p>
           )}
         </div>
       )}
 
-      {/* ── How the team works: edit amount + active time ───────────────── */}
-      {(editStats || activeWork) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Edit amount: how much of the AI draft is kept vs changed. */}
-          {editStats && (
-            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
-              <div className="flex items-center gap-2 mb-1">
-                <PencilLine className="w-5 h-5 text-[#7C5CFF]" />
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Hur mycket bygger svaren på AI-utkastet?')}</h3>
+      {/* Active time detail panel */}
+      {activeWork && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <MousePointerClick className="w-5 h-5 text-[#7C5CFF]" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Faktisk aktiv arbetstid per ärende')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Tid en agent faktiskt är inne i ärendet, mätt från närvaro (inte total liggtid).')}
+          </p>
+          {activeWork.count === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t('Ingen data ännu – mäts framåt medan agenter arbetar i ärenden.')}</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-3xl font-bold text-[#7C5CFF]">{fmtMinutes(activeWork.medianMinutes)}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('median')}</p>
               </div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                {t('Andel av det skickade svaret som kommer från AI-utkastet (ordöverlapp – nedkortning räknas som behållet).')}
-              </p>
-              {editStats.count === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">{t('Ingen data ännu – mäts på svar som hade ett AI-utkast.')}</p>
-              ) : (
-                <>
-                  <div className="flex items-baseline gap-2 mb-4">
-                    <span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">{editStats.medianKeptPct}%</span>
-                    <span className="text-sm text-slate-500 dark:text-slate-400">{t('av det skickade svaret kommer från AI-utkastet (median)')}</span>
-                  </div>
-                  {([
-                    { label: t('Skickat ~som AI-utkastet (<10% nytt)'), value: editStats.unchanged, color: 'bg-emerald-500' },
-                    { label: t('Byggt på AI-utkastet (10–50% nytt)'), value: editStats.light, color: 'bg-amber-500' },
-                    { label: t('Mestadels nyskrivet (>50% nytt)'), value: editStats.heavy, color: 'bg-slate-400' },
-                  ] as const).map(({ label, value, color }) => (
-                    <div key={label} className="mb-2.5">
-                      <div className="flex items-center justify-between mb-1 text-xs text-slate-600 dark:text-slate-400">
-                        <span>{label}</span>
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                        <div className={`${color} h-2 rounded-full transition-all`} style={{ width: `${(value / editStats.count) * 100}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                  <p className="text-[11px] text-slate-400 mt-3">{t('Baserat på')} {editStats.count} {t('svar med AI-utkast.')}</p>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Active time: real "time inside the ticket" from presence. */}
-          {activeWork && (
-            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
-              <div className="flex items-center gap-2 mb-1">
-                <MousePointerClick className="w-5 h-5 text-[#7C5CFF]" />
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Faktisk aktiv arbetstid per ärende')}</h3>
+              <div>
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{fmtMinutes(activeWork.avgMinutes)}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('snitt')}</p>
               </div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                {t('Tid en agent faktiskt är inne i ärendet, mätt från närvaro (inte total liggtid).')}
-              </p>
-              {activeWork.count === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">{t('Ingen data ännu – mäts framåt medan agenter arbetar i ärenden.')}</p>
-              ) : (
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-3xl font-bold text-[#7C5CFF]">{fmtMinutes(activeWork.medianMinutes)}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('median')}</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{fmtMinutes(activeWork.avgMinutes)}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('snitt')}</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{activeWork.count}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('ärenden mätta')}</p>
-                  </div>
-                </div>
-              )}
+              <div>
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{activeWork.count}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('ärenden mätta')}</p>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* ── Value case: trend over time ─────────────────────────────────── */}
+      {/* ── Section 3: trend & operations ───────────────────────────────── */}
       {trend.length > 1 && (
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-1">
@@ -357,15 +497,12 @@ export default function ReportsPage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Utveckling över tid')}</h3>
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-            {t('Median per period – en nedåtgående kurva visar att verktyget kortar tiderna.')}
+            {t('Median per period. Lägre är bättre – följ riktningen över tid.')}
           </p>
           {([
             { title: t('Svarstid (timmar)'), pick: (p: typeof trend[number]) => p.responseMedian, suffix: 'h', color: 'from-purple-500 to-purple-400' },
-            { title: t('Handläggningstid (min)'), pick: (p: typeof trend[number]) => p.handlingMedian, suffix: 'min', color: 'from-[#7C5CFF] to-[#9F7BFF]' },
+            { title: t('Aktiv arbetstid (min)'), pick: (p: typeof trend[number]) => p.handlingMedian, suffix: 'min', color: 'from-[#7C5CFF] to-[#9F7BFF]' },
           ] as const)
-            // Only render a series that actually has data — handling time is
-            // empty until tickets accrue a workStartedAt, and an all-"–" row
-            // just looks broken.
             .filter(({ pick }) => trend.some((p) => pick(p) > 0))
             .map(({ title, pick, suffix, color }) => {
             const max = Math.max(1, ...trend.map(pick));
@@ -407,12 +544,17 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* Per-user stats (always visible, even if zero) */}
+      {/* Per-user stats with share of all replies + key-person flag */}
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
         <div className="flex items-center gap-2 mb-4">
           <Users className="w-5 h-5 text-[#7C5CFF]" />
           <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Ärenden per medarbetare')}</h3>
         </div>
+        {topShare >= KEY_PERSON_SHARE && topAgent && (
+          <div className="mb-4 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
+            {t('Nyckelpersonsrisk:')} {topAgent.name} {t('står för')} {Math.round(topShare * 100)}% {t('av alla skickade svar.')}
+          </div>
+        )}
         {perUserStats.length === 0 ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">
             {t('Ingen statistik tillgänglig ännu. Tilldela eller skicka ärenden för att börja följa upp.')}
@@ -420,7 +562,7 @@ export default function ReportsPage() {
         ) : (
           <div className="space-y-4">
             {perUserStats.map((agent) => {
-              const total = agent.assigned + agent.sent;
+              const share = data.totalSent > 0 ? Math.round((agent.sent / data.totalSent) * 100) : 0;
               return (
                 <div key={agent.name}>
                   <div className="flex items-center justify-between mb-1.5">
@@ -455,7 +597,7 @@ export default function ReportsPage() {
                       title={`${t('Skickade:')} ${agent.sent}`}
                     />
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">{t('Totalt:')} {total}</p>
+                  <p className="text-[10px] text-slate-400 mt-1">{share}% {t('av skickade svar')}</p>
                 </div>
               );
             })}
@@ -471,50 +613,24 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Tickets by Status */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('Ärenden per status')}</h3>
-          <div className="space-y-3">
-            {Object.entries(data.ticketsByStatus).map(([status, count]) => (
-              <div key={status}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm text-slate-600 dark:text-slate-400">
-                    {statusLabelSv(status)}
-                  </span>
-                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{count}</span>
-                </div>
-                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                  <div
-                    className={`${getStatusColor(status)} h-2 rounded-full transition-all`}
-                    style={{ width: `${(count / data.totalTickets) * 100}%` }}
-                  />
-                </div>
+      {/* Tickets by Status */}
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('Ärenden per status')}</h3>
+        <div className="space-y-3">
+          {Object.entries(data.ticketsByStatus).map(([status, count]) => (
+            <div key={status}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm text-slate-600 dark:text-slate-400">{statusLabelSv(status)}</span>
+                <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{count}</span>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Tickets by Priority */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('Ärenden per prioritet')}</h3>
-          <div className="space-y-3">
-            {Object.entries(data.ticketsByPriority).map(([priority, count]) => (
-              <div key={priority}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm text-slate-600 dark:text-slate-400">{priorityLabelSv(priority)}</span>
-                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{count}</span>
-                </div>
-                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                  <div
-                    className={`${getPriorityColor(priority)} h-2 rounded-full transition-all`}
-                    style={{ width: `${(count / data.totalTickets) * 100}%` }}
-                  />
-                </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                <div
+                  className={`${getStatusColor(status)} h-2 rounded-full transition-all`}
+                  style={{ width: `${(count / data.totalTickets) * 100}%` }}
+                />
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -529,9 +645,7 @@ export default function ReportsPage() {
 
           if (activity.length === 0 || totalInRange === 0) {
             return (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {t('Ingen aktivitet i vald tidsperiod.')}
-              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{t('Ingen aktivitet i vald tidsperiod.')}</p>
             );
           }
 
@@ -543,9 +657,6 @@ export default function ReportsPage() {
           const tooltipFor = (iso: string, count: number) =>
             `${formatLabel(iso)} – ${count} ${t('ärenden')}`;
 
-          // With many bars (24 hours, 30/90 days) labelling every bar makes
-          // the axis an unreadable smear. Label every Nth bucket plus the
-          // last one; short ranges still label everything.
           const labelEvery = hourly
             ? 3
             : activity.length > 31 ? 7
@@ -553,28 +664,18 @@ export default function ReportsPage() {
             : 1;
           const showLabel = (index: number) =>
             index % labelEvery === 0 || index === activity.length - 1;
-          // The per-bar count on top only fits up to ~a month of bars; for
-          // 90 days the hover tooltip carries the exact number instead.
           const showCounts = activity.length <= 31;
 
           return (
             <div className="flex items-end justify-between gap-1 sm:gap-2">
               {activity.map((point, index) => {
-                // Baseline of 2% so bars are still visible on zero-count
-                // buckets (makes it clear the chart rendered, not just broke).
                 const ratio = point.count / maxCount;
                 const height = point.count === 0 ? 2 : Math.max(ratio * 100, 4);
                 return (
                   <div key={index} className="flex-1 flex flex-col items-center min-w-0">
                     {showCounts && (
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                        {point.count}
-                      </span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">{point.count}</span>
                     )}
-                    {/* Fixed-height bar area: the percentage heights below
-                        need a definite parent height to resolve against —
-                        with the old auto-height column + h-full chain they
-                        collapsed to 0 and the chart rendered empty. */}
                     <div className="w-full h-48 flex items-end justify-center">
                       <div
                         className={`w-full rounded-t-lg transition-all hover:brightness-110 ${
@@ -587,7 +688,7 @@ export default function ReportsPage() {
                       />
                     </div>
                     <span className="text-xs text-slate-600 dark:text-slate-400 mt-2 truncate w-full text-center">
-                      {showLabel(index) ? formatLabel(point.date) : ' '}
+                      {showLabel(index) ? formatLabel(point.date) : ' '}
                     </span>
                   </div>
                 );
