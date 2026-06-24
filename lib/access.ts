@@ -38,9 +38,10 @@ export function settingsAdminEmails(): string[] {
 }
 
 /**
- * Whether the given identity may access Settings/admin on this deployment.
- * Granted to superadmins, users with the 'admin' role (assignable from the
- * user-admin UI), and the product's admin email allowlist (e.g. Ida).
+ * Whether the given identity may access the Settings area AND the Developer
+ * portal on this deployment. Granted to superadmins, users with the 'admin'
+ * role (assignable from the user-admin UI), and the product's admin email
+ * allowlist (e.g. Ida). Regular agents get neither.
  */
 export function isSettingsAdmin(email?: string | null, role?: string | null): boolean {
   if (role === 'superadmin' || role === 'admin') return true;

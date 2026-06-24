@@ -43,17 +43,17 @@ export default auth((req) => {
     return NextResponse.redirect(signInUrl);
   }
 
-  // Block /admin and /developer routes for non-superadmin (admin) users
-  if (
-    (pathname.startsWith("/admin") || pathname.startsWith("/developer")) &&
-    req.auth.user?.role !== "superadmin"
-  ) {
+  // /admin is the platform operators' area — superadmin only.
+  if (pathname.startsWith("/admin") && req.auth.user?.role !== "superadmin") {
     return NextResponse.redirect(new URL("/tickets", req.url));
   }
 
-  // Settings is restricted to settings admins (Ida + superadmins). Regular
-  // agents are bounced back to the inbox.
-  if (pathname.startsWith("/settings") && !req.auth.user?.isSettingsAdmin) {
+  // Settings and the Developer portal are both restricted to settings admins
+  // (the 'admin' role + superadmins). Regular agents are bounced to the inbox.
+  if (
+    (pathname.startsWith("/settings") || pathname.startsWith("/developer")) &&
+    !req.auth.user?.isSettingsAdmin
+  ) {
     return NextResponse.redirect(new URL("/tickets", req.url));
   }
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
 import { requireSettingsAdmin } from '@/lib/api-auth';
-import { settingsAdminEmails } from '@/lib/access';
+import { isSuperadmin } from '@/lib/access';
 
 // Roles assignable from the user-admin UI. 'superadmin' is intentionally NOT
 // assignable here — it's controlled by SUPERADMIN_EMAILS at the deployment
@@ -42,9 +42,10 @@ export async function PATCH(
     return NextResponse.json({ error: 'Role must be agent or admin' }, { status: 400 });
   }
 
-  // Email-allowlisted superadmins keep their access regardless of the stored
-  // role; don't let the UI imply it can demote them.
-  if (settingsAdminEmails().includes(user.email.toLowerCase())) {
+  // Platform superadmins are controlled by SUPERADMIN_EMAILS at the deploy
+  // level — their role can't be changed here. Product admins (e.g. Ida) are
+  // regular, fully manageable accounts.
+  if (isSuperadmin(user.email, user.role)) {
     return NextResponse.json(
       { error: 'Den här användaren är superadmin och styrs via deploy-inställningar, inte här.' },
       { status: 400 },
@@ -76,7 +77,7 @@ export async function DELETE(
   if (user.email.toLowerCase() === authResult.userEmail.toLowerCase()) {
     return NextResponse.json({ error: 'Du kan inte ta bort ditt eget konto.' }, { status: 400 });
   }
-  if (settingsAdminEmails().includes(user.email.toLowerCase())) {
+  if (isSuperadmin(user.email, user.role)) {
     return NextResponse.json(
       { error: 'Superadmin-konton kan inte tas bort här.' },
       { status: 400 },
