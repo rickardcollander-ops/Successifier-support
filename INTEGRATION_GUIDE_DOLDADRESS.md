@@ -370,6 +370,77 @@ curl -X POST https://doldadress.successifier.com/api/webhook/ticket \
 
 ---
 
+## Logged-in Customer Chatbot (`/api/me/chat`)
+
+The public help-center chatbot (`/api/public/kb/chat`) answers strictly from
+published help articles and knows nothing about the visitor. For a customer who
+is **logged in on your own site**, the chatbot can additionally answer questions
+about *their own account* — subscriptions, invoices, payments — by pulling live
+data from the connected systems (Stripe, Billecta, Retool, Resend) for that
+customer's email.
+
+### How identity is trusted
+
+The widget runs in the customer's browser, so an email sent from the browser can
+never be trusted. Instead **your backend** mints a short-lived signed token
+after the customer logs in, and the widget forwards it. Successifier verifies
+the signature and reads the email out of the *signed* payload — so a customer can
+only ever see their own data.
+
+- **Shared secret:** set `IDENTITY_TOKEN_SECRET` (≥32 chars) to the same value on
+  both your backend and the Successifier deployment. If it is unset, the
+  logged-in chat is disabled.
+- **Token format:** `base64url(JSON) + "." + hex(HMAC-SHA256(base64url(JSON), secret))`
+  where the JSON payload is `{ "email": "...", "iat": <unix-sec>, "exp": <unix-sec> }`.
+- **Lifetime:** keep it short (default 15 min). Mint a fresh token per session
+  and refresh it as needed via `window.kbWidget.setIdentityToken(token)`.
+
+### Minting a token (Node example)
+
+```js
+const crypto = require('crypto');
+
+function signIdentityToken(email, secret, ttlSeconds = 900) {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = { email: email.trim().toLowerCase(), iat: now, exp: now + ttlSeconds };
+  const b64 = Buffer.from(JSON.stringify(payload))
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const sig = crypto.createHmac('sha256', secret).update(b64).digest('hex');
+  return `${b64}.${sig}`;
+}
+```
+
+### Embedding the widget in logged-in mode
+
+```html
+<script src="https://doldadress.successifier.com/kb-widget.js"
+        data-kb-base="https://doldadress.successifier.com"
+        data-identity-token="<token minted server-side>"></script>
+```
+
+Or update the token at runtime (recommended, since it expires):
+
+```js
+window.kbWidget.setIdentityToken(freshTokenFromYourBackend);
+```
+
+### Calling the endpoint directly
+
+```http
+POST /api/me/chat
+X-Identity-Token: <signed token>
+Content-Type: application/json
+
+{ "question": "När förnyas min prenumeration?", "history": [] }
+```
+
+The response is the same streaming NDJSON contract as `/api/public/kb/chat`
+(`{"type":"delta",...}` then `{"type":"done","sources":[...]}`). An invalid or
+expired token returns `401`. This endpoint **reads** account data only — it never
+performs account actions.
+
+---
+
 ## Authentication & Security
 
 ### API Key Security

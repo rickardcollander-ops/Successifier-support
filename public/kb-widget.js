@@ -11,6 +11,14 @@
  *           data-kb-base="https://YOUR-APP-DOMAIN"></script>
  *
  * The script self-initializes on load and injects a floating "Hjälp" button.
+ *
+ * LOGGED-IN MODE (optional): if the embedding site passes a signed identity
+ * token, the chat talks to /api/me/chat instead and can answer questions about
+ * the logged-in customer's own account. The token must be minted server-side
+ * (see lib/identity-token.ts). Provide it either at load:
+ *   <script src=".../kb-widget.js" data-kb-base="..." data-identity-token="…">
+ * or, since tokens are short-lived, update it any time from your app:
+ *   window.kbWidget.setIdentityToken(freshToken)
  */
 (function () {
   'use strict';
@@ -18,6 +26,14 @@
   var script = document.currentScript;
   var base = (script && script.getAttribute('data-kb-base')) || '';
   base = base.replace(/\/$/, '');
+
+  // Signed identity token for logged-in mode. May be set at load and/or
+  // refreshed later via window.kbWidget.setIdentityToken().
+  var identityToken = (script && script.getAttribute('data-identity-token')) || '';
+  window.kbWidget = window.kbWidget || {};
+  window.kbWidget.setIdentityToken = function (token) {
+    identityToken = token || '';
+  };
 
   // Defaults; overwritten by the tenant's published help-center config
   // (GET /api/public/kb/config) before the widget is built.
@@ -177,9 +193,16 @@
     var priorHistory = history.slice();
     history.push({ role: 'user', content: question });
 
-    fetch(base + '/api/public/kb/chat', {
+    // Logged-in mode: when a signed identity token is present, talk to the
+    // authenticated endpoint (which can read the customer's own account data)
+    // and pass the token in the header. Otherwise use the public endpoint.
+    var endpoint = identityToken ? '/api/me/chat' : '/api/public/kb/chat';
+    var headers = { 'Content-Type': 'application/json' };
+    if (identityToken) headers['X-Identity-Token'] = identityToken;
+
+    fetch(base + endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify({ question: question, history: priorHistory })
     }).then(function (res) {
       if (!res.ok || !res.body) throw new Error('failed');
