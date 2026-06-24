@@ -101,7 +101,7 @@ export default function UsersAdmin() {
             <div>
               <h3 className="font-medium text-slate-900 dark:text-slate-100">{t('Hantera teamet')}</h3>
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-                {t('Ändra roll eller ta bort konton. Admin-rollen ger åtkomst till Settings. Superadmin styrs via deploy-inställningar och kan inte ändras här.')}
+                {t('Ändra roll eller ta bort konton. Admin-rollen ger åtkomst till Settings och Developer-portalen. Agenter ser bara inkorgen. Superadmin styrs via deploy-inställningar och visas inte här.')}
               </p>
             </div>
           </div>
@@ -121,8 +121,9 @@ export default function UsersAdmin() {
           <div className="divide-y divide-slate-100 dark:divide-slate-700">
             {users.map((u) => {
               const isSelf = u.email.toLowerCase() === currentUserEmail;
-              const isSuperadmin = u.role === 'superadmin' || (u.isSettingsAdmin && u.role !== 'admin');
-              const lockedRole = u.isSettingsAdmin && u.role !== 'admin';
+              // Platform superadmins are filtered out server-side, so every
+              // listed account (incl. product admins like Ida) is manageable.
+              const lockedRole = u.role === 'superadmin';
               return (
                 <div key={u.id} className="p-4 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -164,7 +165,7 @@ export default function UsersAdmin() {
                     ) : (
                       <select
                         value={u.role === 'superadmin' ? 'admin' : u.role}
-                        disabled={busyId === u.id || isSuperadmin}
+                        disabled={busyId === u.id}
                         onChange={(e) => changeRole(u, e.target.value)}
                         className="text-xs px-2 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:opacity-50"
                       >
@@ -174,8 +175,8 @@ export default function UsersAdmin() {
                     )}
                     <button
                       onClick={() => removeUser(u)}
-                      disabled={busyId === u.id || isSelf || u.isSettingsAdmin}
-                      title={isSelf ? t('Du kan inte ta bort dig själv') : u.isSettingsAdmin ? t('Superadmin kan inte tas bort här') : t('Ta bort användare')}
+                      disabled={busyId === u.id || isSelf}
+                      title={isSelf ? t('Du kan inte ta bort dig själv') : t('Ta bort användare')}
                       className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />

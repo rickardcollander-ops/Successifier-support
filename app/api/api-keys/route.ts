@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { product } from '@/lib/products';
-import { generateApiKey, hashApiKey, maskApiKey, requireSession } from '@/lib/api-auth';
+import { generateApiKey, hashApiKey, maskApiKey, requireSettingsAdmin } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
-  const authResult = await requireSession();
+  const authResult = await requireSettingsAdmin();
   if (!authResult.ok) return authResult.response;
 
   try {
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireSession();
+  const authResult = await requireSettingsAdmin();
   if (!authResult.ok) return authResult.response;
 
   try {
