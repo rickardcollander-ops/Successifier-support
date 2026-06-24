@@ -194,6 +194,38 @@ try {
         </pre>
       </section>
 
+      {/* Logged-in chatbot token */}
+      <section className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">
+          Logged-in chatbot — signing identity tokens
+        </h2>
+        <p className="text-slate-600 dark:text-slate-400 mb-4">
+          To run the chat widget in logged-in mode (answering about the customer&apos;s own account),
+          your backend mints a short-lived signed token after the customer logs in. No SDK is needed —
+          just Node&apos;s built-in <span className="font-mono">crypto</span> and the shared{' '}
+          <span className="font-mono">IDENTITY_TOKEN_SECRET</span>. See{' '}
+          <a href="/developer/docs#logged-in-chatbot" className="text-[#7C5CFF] hover:underline">
+            the full guide
+          </a>{' '}
+          for embedding and the endpoint reference.
+        </p>
+        <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
+          <code>{`const crypto = require('crypto');
+
+// Mint after the customer authenticates, then hand to the widget via
+// window.kbWidget.setIdentityToken(token).
+function signIdentityToken(email, secret = process.env.IDENTITY_TOKEN_SECRET, ttlSeconds = 900) {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = { email: email.trim().toLowerCase(), iat: now, exp: now + ttlSeconds };
+  const b64 = Buffer.from(JSON.stringify(payload))
+    .toString('base64')
+    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+  const sig = crypto.createHmac('sha256', secret).update(b64).digest('hex');
+  return b64 + '.' + sig;
+}`}</code>
+        </pre>
+      </section>
+
       {/* Manual Implementation */}
       <section className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">Manual Implementation (Without SDK)</h2>

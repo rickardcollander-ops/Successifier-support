@@ -25,6 +25,11 @@ const ALLOWLIST: Record<string, string> = {
   'app/api/public/kb/search/route.ts': 'Public help center — read-only search, published content only',
   'app/api/public/kb/chat/route.ts': 'Public help center — AI chatbot grounded only in published, public articles via lib/services/public-kb.ts; rate-limited',
   'app/api/public/kb/config/route.ts': 'Public help center — read-only appearance/chat UI config (safe subset, no operator prompt) for the embeddable widget',
+  // Logged-in customer chatbot: authenticated by a signed identity token
+  // (verifyIdentityToken from lib/identity-token.ts), not a session/API key.
+  // Rejects with 401 on a missing/invalid/expired token before any data is
+  // gathered, and only ever serves data for the email in the SIGNED payload.
+  'app/api/me/chat/route.ts': 'Authenticated via signed identity token (lib/identity-token.ts); 401s before any data access, scopes data to the verified email',
 };
 
 // Guards from lib/api-auth.ts. A route calling one of these (and returning
