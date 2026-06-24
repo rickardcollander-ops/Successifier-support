@@ -57,3 +57,41 @@ export function changeRatio(
   const distance = wordEditDistance(ai, fin);
   return Math.min(1, distance / Math.max(ai.length, fin.length));
 }
+
+// Length of the longest common subsequence of two word arrays. Rolling
+// two-row DP, O(n·m) time and O(min(n,m)) memory.
+export function wordLcsLength(a: string[], b: string[]): number {
+  if (a.length === 0 || b.length === 0) return 0;
+  // Keep the inner loop / rows over the shorter array.
+  if (b.length < a.length) [a, b] = [b, a];
+  let prev = new Array(a.length + 1).fill(0);
+  let curr = new Array(a.length + 1).fill(0);
+  for (let j = 1; j <= b.length; j++) {
+    for (let i = 1; i <= a.length; i++) {
+      curr[i] = a[i - 1] === b[j - 1] ? prev[i - 1] + 1 : Math.max(prev[i], curr[i - 1]);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[a.length];
+}
+
+// How much of the SENT reply was carried over from the AI draft, 0..1.
+// Measured as the share of the final reply's words that also appear, in order,
+// in the draft (longest common subsequence ÷ final length). 1 = every word the
+// customer received came from the draft (sent verbatim OR merely condensed —
+// dropping whole sentences keeps the rest a subsequence, so trimming still
+// counts as "from the AI"); 0 = the agent's words share nothing with the draft.
+//
+// This is deliberately asymmetric where changeRatio is not: a verbose draft the
+// agent shortens is NOT penalised, because we ask "how much of what we sent did
+// the AI write?" rather than "how many words differ?". Returns null when either
+// side is empty so callers can exclude those tickets.
+export function keptFromDraftRatio(
+  aiResponse: string | null | undefined,
+  finalResponse: string | null | undefined
+): number | null {
+  const ai = tokenize(aiResponse);
+  const fin = tokenize(finalResponse);
+  if (ai.length === 0 || fin.length === 0) return null;
+  return Math.min(1, wordLcsLength(ai, fin) / fin.length);
+}

@@ -282,10 +282,10 @@ export default function ReportsPage() {
             <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
               <div className="flex items-center gap-2 mb-1">
                 <PencilLine className="w-5 h-5 text-[#7C5CFF]" />
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Hur mycket ändras AI-svaren?')}</h3>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Hur mycket bygger svaren på AI-utkastet?')}</h3>
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                {t('Ord-för-ord-jämförelse mellan AI-utkast och skickat svar.')}
+                {t('Andel av det skickade svaret som kommer från AI-utkastet (ordöverlapp – nedkortning räknas som behållet).')}
               </p>
               {editStats.count === 0 ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400">{t('Ingen data ännu – mäts på svar som hade ett AI-utkast.')}</p>
@@ -293,12 +293,12 @@ export default function ReportsPage() {
                 <>
                   <div className="flex items-baseline gap-2 mb-4">
                     <span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">{editStats.medianKeptPct}%</span>
-                    <span className="text-sm text-slate-500 dark:text-slate-400">{t('av AI-svaret behålls (median)')}</span>
+                    <span className="text-sm text-slate-500 dark:text-slate-400">{t('av det skickade svaret kommer från AI-utkastet (median)')}</span>
                   </div>
                   {([
-                    { label: t('Skickat ~oförändrat (<10% ändrat)'), value: editStats.unchanged, color: 'bg-emerald-500' },
-                    { label: t('Lätt redigerat (10–50%)'), value: editStats.light, color: 'bg-amber-500' },
-                    { label: t('Omskrivet (>50%)'), value: editStats.heavy, color: 'bg-slate-400' },
+                    { label: t('Skickat ~som AI-utkastet (<10% nytt)'), value: editStats.unchanged, color: 'bg-emerald-500' },
+                    { label: t('Byggt på AI-utkastet (10–50% nytt)'), value: editStats.light, color: 'bg-amber-500' },
+                    { label: t('Mestadels nyskrivet (>50% nytt)'), value: editStats.heavy, color: 'bg-slate-400' },
                   ] as const).map(({ label, value, color }) => (
                     <div key={label} className="mb-2.5">
                       <div className="flex items-center justify-between mb-1 text-xs text-slate-600 dark:text-slate-400">
