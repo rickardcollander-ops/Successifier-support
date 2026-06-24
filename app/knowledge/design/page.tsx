@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
-import CategoryIcon, { CATEGORY_ICON_NAMES } from '@/components/CategoryIcon';
+import CategoryIcon from '@/components/CategoryIcon';
+import IconPicker from '@/components/IconPicker';
 
 interface Config {
   accentColor: string;
@@ -418,15 +419,7 @@ function CategoriesTab() {
             <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-[#7C5CFF]/10 text-[#7C5CFF]">
               <CategoryIcon name={c.icon} size={18} />
             </span>
-            <select
-              value={c.icon || 'HelpCircle'}
-              onChange={(e) => patch(c.id, { icon: e.target.value })}
-              className="px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
-            >
-              {CATEGORY_ICON_NAMES.map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
+            <IconPicker value={c.icon} onChange={(name) => patch(c.id, { icon: name })} />
             <input
               type="text"
               value={c.name}
