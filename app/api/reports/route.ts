@@ -4,7 +4,7 @@ import { getTenant } from '@/lib/products/tenant';
 import { AGENTS, stripAgentSignature } from '@/lib/constants';
 import { isVendorTicket, isBounceTicket } from '@/lib/ticket-filters';
 import { requireApiAuth } from '@/lib/api-auth';
-import { changeRatio } from '@/lib/text-diff';
+import { keptFromDraftRatio } from '@/lib/text-diff';
 
 // Same marker /api/tickets uses to hide imported Zendesk history from the
 // inbox. The reports must exclude them too, or the historical import shows
@@ -364,40 +364,45 @@ export async function GET(request: NextRequest) {
       moneySaved,
     };
 
-    // How much did agents actually change the AI draft before sending? Word-
-    // level diff of aiResponse → finalResponse per sent reply that had a draft.
-    // Buckets: <10% changed = sent ~verbatim, 10–50% = lightly edited, ≥50% =
-    // rewritten. A high "kept" share is the strongest "the AI did the work"
-    // signal we have.
-    const editRatios: number[] = [];
+    // How much of each SENT reply was carried over from the AI draft? We use
+    // word-overlap (longest common subsequence ÷ sent length), NOT raw edit
+    // distance: the AI tends to write long drafts that agents condense, and
+    // edit distance counts every dropped word as a "change" — so condensed
+    // replies looked "rewritten" even when every word the customer received
+    // came from the AI. Overlap asks the question that actually matters: of
+    // what we sent, how much did the AI write? Buckets are by NEW content
+    // (1 − kept): <10% new = sent ~as the draft, 10–50% = built on the draft,
+    // ≥50% = mostly written by the agent.
+    const keptRatios: number[] = [];
     let editUnchanged = 0;
     let editLight = 0;
     let editHeavy = 0;
     for (const tk of sentInRange) {
       // The authoritative feedback flag wins: a reply the agent confirmed as
-      // unedited counts as unchanged even if a stray character differs.
+      // unedited is fully "from the AI" even if a stray character differs.
       if (editedByTicket.get(tk.id) === false) {
         editUnchanged++;
-        editRatios.push(0);
+        keptRatios.push(1);
         continue;
       }
-      // Otherwise diff draft vs sent, comparing only the parts present in both
-      // (no inline-image HTML, no appended signature) so a verbatim or lightly
-      // edited reply isn't pushed into "rewritten" by boilerplate it never
-      // touched. Tickets with no AI draft fall out as null and are excluded —
-      // the histogram describes AI-assisted sends only.
-      const r = changeRatio(comparableBody(tk.aiResponse), comparableBody(tk.finalResponse));
-      if (r == null) continue;
-      editRatios.push(r);
-      if (r < 0.1) editUnchanged++;
-      else if (r < 0.5) editLight++;
+      // Compare only the parts present in both (no inline-image HTML, no
+      // appended signature). Tickets with no AI draft fall out as null and are
+      // excluded — the histogram describes AI-assisted sends only.
+      const kept = keptFromDraftRatio(comparableBody(tk.aiResponse), comparableBody(tk.finalResponse));
+      if (kept == null) continue;
+      keptRatios.push(kept);
+      const newContent = 1 - kept;
+      if (newContent < 0.1) editUnchanged++;
+      else if (newContent < 0.5) editLight++;
       else editHeavy++;
     }
-    const medianChangedPct = editRatios.length > 0 ? Math.round(median(editRatios) * 100) : 0;
+    const medianKeptPct = keptRatios.length > 0 ? Math.round(median(keptRatios) * 100) : 0;
     const editStats = {
-      count: editRatios.length,
-      medianChangedPct,
-      medianKeptPct: 100 - medianChangedPct,
+      count: keptRatios.length,
+      // "Changed" is now the inverse of the kept share — how much of the sent
+      // reply the agent wrote that wasn't in the draft.
+      medianChangedPct: 100 - medianKeptPct,
+      medianKeptPct,
       unchanged: editUnchanged,
       light: editLight,
       heavy: editHeavy,
