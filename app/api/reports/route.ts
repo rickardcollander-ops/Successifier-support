@@ -284,6 +284,12 @@ export async function GET(request: NextRequest) {
     for (const f of feedbackRows) editedByTicket.set(f.ticketId, f.wasEdited); // last write wins
 
     const norm = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim();
+    // Reduce a stored reply to the part that can be fairly compared with the AI
+    // draft: drop the inline-image HTML tail (everything after [INLINE_IMAGES] —
+    // raw <img>/data-URL markup the draft never contained, which otherwise reads
+    // as a wall of inserted "words"), then strip the auto-appended signature.
+    const comparableBody = (s: string | null | undefined) =>
+      stripAgentSignature((s ?? '').split('[INLINE_IMAGES]')[0]);
     const asIs: typeof sentInRange = [];
     const editedGroup: typeof sentInRange = [];
     const noAi: typeof sentInRange = [];
@@ -296,12 +302,12 @@ export async function GET(request: NextRequest) {
         edited = fb;
       } else if (norm(t.aiResponse)) {
         aiUsed = true;
-        // Strip the auto-appended agent signature first: it's added at send
-        // time but is absent from the stored draft, so without this every
-        // verbatim send reads as "edited" and the "skickat oförändrat" group
-        // is starved.
-        const a = norm(stripAgentSignature(t.aiResponse));
-        const f = norm(stripAgentSignature(t.finalResponse));
+        // Compare on equal footing: drop the inline-image HTML tail and the
+        // auto-appended signature (both absent from the draft) before deciding
+        // whether the agent actually edited. Without this every verbatim send
+        // reads as "edited" and the "skickat oförändrat" group is starved.
+        const a = norm(comparableBody(t.aiResponse));
+        const f = norm(comparableBody(t.finalResponse));
         edited = !f || f !== a;
       } else {
         aiUsed = false;
@@ -368,13 +374,19 @@ export async function GET(request: NextRequest) {
     let editLight = 0;
     let editHeavy = 0;
     for (const tk of sentInRange) {
-      // Compare draft vs sent on equal footing — drop the signature the send
-      // step appends, otherwise a verbatim reply scores as the signature's
-      // worth of "changed" words and never lands in the "unchanged" bucket.
-      const r = changeRatio(
-        stripAgentSignature(tk.aiResponse),
-        stripAgentSignature(tk.finalResponse)
-      );
+      // The authoritative feedback flag wins: a reply the agent confirmed as
+      // unedited counts as unchanged even if a stray character differs.
+      if (editedByTicket.get(tk.id) === false) {
+        editUnchanged++;
+        editRatios.push(0);
+        continue;
+      }
+      // Otherwise diff draft vs sent, comparing only the parts present in both
+      // (no inline-image HTML, no appended signature) so a verbatim or lightly
+      // edited reply isn't pushed into "rewritten" by boilerplate it never
+      // touched. Tickets with no AI draft fall out as null and are excluded —
+      // the histogram describes AI-assisted sends only.
+      const r = changeRatio(comparableBody(tk.aiResponse), comparableBody(tk.finalResponse));
       if (r == null) continue;
       editRatios.push(r);
       if (r < 0.1) editUnchanged++;
