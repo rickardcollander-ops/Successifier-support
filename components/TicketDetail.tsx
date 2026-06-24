@@ -488,8 +488,13 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
     setIsSending(true);
     setSendConfirmation(null);
 
-    // Save feedback if AI was used and response was edited
-    if (aiSuggestion && response !== aiSuggestion) {
+    // Record how the AI draft was used on EVERY send where a draft existed,
+    // including verbatim sends. The reports treat this log as the
+    // authoritative "edited?" signal; if we only logged edits (the old
+    // `response !== aiSuggestion` guard), verbatim sends had no row and fell
+    // back to inference — which is exactly what under-counted "sent as-is".
+    // The route derives wasEdited from these two fields.
+    if (aiSuggestion) {
       await fetch('/api/ai-feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -497,7 +502,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onSend, o
           ticketId: ticket.id,
           aiResponse: aiSuggestion,
           finalResponse: response,
-          rating: null, // No explicit rating, just tracking the edit
+          rating: null, // No explicit rating, just tracking how the draft was used
           knowledgeUsed: [],
         }),
       });
