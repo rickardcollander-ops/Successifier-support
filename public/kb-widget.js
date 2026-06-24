@@ -11,6 +11,13 @@
  *           data-kb-base="https://YOUR-APP-DOMAIN"></script>
  *
  * The script self-initializes on load and injects a floating "Hjälp" button.
+ *
+ * SEO option: if the page already contains a static link
+ *   <a href="https://YOUR-APP-DOMAIN/help" data-kb-home>Help center</a>
+ * the widget uses THAT anchor as its launcher instead of injecting the button.
+ * The anchor then stays in the served HTML as a genuine, crawlable, dofollow
+ * backlink (keep it visible — hidden links earn no link-juice and risk being
+ * treated as a link scheme).
  */
 (function () {
   'use strict';
@@ -239,7 +246,6 @@
   function build() {
     style();
 
-    var btn = el('button', { class: 'kbw-btn', 'aria-label': 'Hjälp' }, 'Hjälp');
     var panel = el('div', { class: 'kbw-panel' });
     panel.appendChild(el('div', { class: 'kbw-head' }, 'Hjälpcenter'));
 
@@ -310,13 +316,27 @@
     tabChat.addEventListener('click', function () { showTab('chat'); });
     tabSrch.addEventListener('click', function () { showTab('search'); });
 
-    btn.addEventListener('click', function () {
+    function toggle(e) {
+      if (e) e.preventDefault();
       open = !open;
       panel.classList.toggle('kbw-open', open);
       if (open) showTab(tab);
-    });
+    }
 
-    document.body.appendChild(btn);
+    // Progressive enhancement for SEO: if the embed includes a static
+    // <a data-kb-home href="…/help"> in the host page's HTML, use that real,
+    // crawlable, dofollow anchor as the launcher instead of injecting our own
+    // button. The link stays in the served HTML as a genuine backlink; we just
+    // also make it open the widget. Falls back to the floating button when no
+    // such anchor is present (no backlink in that case).
+    var home = document.querySelector('a[data-kb-home]');
+    if (home) {
+      home.addEventListener('click', toggle);
+    } else {
+      var btn = el('button', { class: 'kbw-btn', 'aria-label': 'Hjälp' }, 'Hjälp');
+      btn.addEventListener('click', toggle);
+      document.body.appendChild(btn);
+    }
     document.body.appendChild(panel);
   }
 

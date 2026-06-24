@@ -83,6 +83,22 @@ Authorization: Bearer ${keyExample}`}</code>
             <code>{`<script src="${appDomain}/kb-widget.js"
         data-kb-base="${appDomain}"></script>`}</code>
           </pre>
+          <p className="text-slate-600 dark:text-slate-400 mt-3 mb-3">
+            <strong>Want a real backlink (SEO)?</strong> Add a static, visible link to the help center
+            and the widget will use it as its launcher instead of the floating button. Because the
+            anchor lives in your page's HTML — not injected by JavaScript — it's a genuine,
+            crawlable, dofollow backlink:
+          </p>
+          <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
+            <code>{`<a href="${appDomain}/help" data-kb-home>Help center</a>
+<script src="${appDomain}/kb-widget.js"
+        data-kb-base="${appDomain}"></script>`}</code>
+          </pre>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+            Keep the link visible and use natural anchor text — do not hide it or add
+            <span className="font-mono"> rel=&quot;nofollow&quot;</span>. Hidden or mass keyword-stuffed
+            widget links can be treated by search engines as a link scheme.
+          </p>
         </div>
 
         <div>
