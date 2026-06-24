@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
-import { AGENTS } from '@/lib/constants';
+import { AGENTS, stripAgentSignature } from '@/lib/constants';
 import { isVendorTicket, isBounceTicket } from '@/lib/ticket-filters';
 import { requireApiAuth } from '@/lib/api-auth';
 import { changeRatio } from '@/lib/text-diff';
@@ -296,8 +296,12 @@ export async function GET(request: NextRequest) {
         edited = fb;
       } else if (norm(t.aiResponse)) {
         aiUsed = true;
-        const a = norm(t.aiResponse);
-        const f = norm(t.finalResponse);
+        // Strip the auto-appended agent signature first: it's added at send
+        // time but is absent from the stored draft, so without this every
+        // verbatim send reads as "edited" and the "skickat oförändrat" group
+        // is starved.
+        const a = norm(stripAgentSignature(t.aiResponse));
+        const f = norm(stripAgentSignature(t.finalResponse));
         edited = !f || f !== a;
       } else {
         aiUsed = false;
@@ -364,7 +368,13 @@ export async function GET(request: NextRequest) {
     let editLight = 0;
     let editHeavy = 0;
     for (const tk of sentInRange) {
-      const r = changeRatio(tk.aiResponse, tk.finalResponse);
+      // Compare draft vs sent on equal footing — drop the signature the send
+      // step appends, otherwise a verbatim reply scores as the signature's
+      // worth of "changed" words and never lands in the "unchanged" bucket.
+      const r = changeRatio(
+        stripAgentSignature(tk.aiResponse),
+        stripAgentSignature(tk.finalResponse)
+      );
       if (r == null) continue;
       editRatios.push(r);
       if (r < 0.1) editUnchanged++;

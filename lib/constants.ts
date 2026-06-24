@@ -58,6 +58,29 @@ export function applyAgentSignature(body: string, nameOrEmail: string | null | u
   return `${trimmed}\n\n${sig}`;
 }
 
+// Every signature applyAgentSignature can attach: the per-agent blocks plus
+// the generic default. Used to undo the auto-appended sign-off before we
+// diff the AI draft against the sent reply.
+const ALL_SIGNATURES = [...Object.values(AGENT_SIGNATURES), DEFAULT_SIGNATURE];
+
+// Remove a trailing agent signature so the sent reply can be compared
+// like-for-like with the AI draft. The draft is stored WITHOUT a sign-off,
+// but send appends one (applyAgentSignature), so a verbatim send otherwise
+// looks "edited" by exactly the signature's worth of words — which made the
+// reports massively over-count manual intervention. Matches the known
+// signature blocks exactly so it never strips a customer's own content.
+export function stripAgentSignature(text: string | null | undefined): string {
+  if (!text) return '';
+  const trimmed = text.replace(/\s+$/, '');
+  for (const sig of ALL_SIGNATURES) {
+    const sigTrimmed = sig.trim();
+    if (sigTrimmed && trimmed.endsWith(sigTrimmed)) {
+      return trimmed.slice(0, trimmed.length - sigTrimmed.length).replace(/\s+$/, '');
+    }
+  }
+  return trimmed;
+}
+
 // Distinct "sharp" colors per agent so it's obvious at a glance who is
 // looking at — or assigned to — a ticket when support is working in
 // parallel. Tailwind hex values rather than classes to keep the color
