@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, PencilLine, MousePointerClick, Wallet, Settings } from 'lucide-react';
-import { statusLabelSv } from '@/lib/constants';
 import { t } from '@/lib/i18n';
 
 // Below this many tickets in a group we don't make comparative claims — a
@@ -52,8 +51,9 @@ interface ReportData {
   perUserStats?: AgentStats[];
   trend?: Array<{ label: string; responseMedian: number; handlingMedian: number; count: number }>;
   aiComparison?: {
-    asIs: GroupStats;
-    edited: GroupStats;
+    fromAi: GroupStats;
+    builtOn: GroupStats;
+    mostlyNew: GroupStats;
     none: GroupStats;
   };
   savings?: Savings;
@@ -164,17 +164,6 @@ export default function ReportsPage() {
       </div>
     );
   }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'new': return 'bg-blue-500';
-      case 'in_progress': return 'bg-yellow-500';
-      case 'review': return 'bg-purple-500';
-      case 'sent': return 'bg-green-500';
-      case 'closed': return 'bg-slate-500';
-      default: return 'bg-slate-500';
-    }
-  };
 
   // Minute formatter shared by the active-work and comparison panels.
   const fmtMinutes = (minutes: number): string => {
@@ -426,13 +415,14 @@ export default function ReportsPage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Svarstid med vs utan AI-utkast')}</h3>
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-            {t('Median svarstid per ärende, uppdelat på hur AI-utkastet användes.')}
+            {t('Median svarstid per ärende, med samma indelning som ovan plus ärenden utan AI-utkast.')}
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {([
-              { key: 'asIs', label: t('AI-utkast skickat ~oförändrat'), g: aiComparison.asIs, accent: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
-              { key: 'edited', label: t('AI-utkast redigerat'), g: aiComparison.edited, accent: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
-              { key: 'none', label: t('Utan AI-utkast'), g: aiComparison.none, accent: 'text-slate-600 dark:text-slate-300', dot: 'bg-slate-400' },
+              { key: 'fromAi', label: t('~som AI-utkastet'), g: aiComparison.fromAi, accent: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
+              { key: 'builtOn', label: t('Byggt på AI-utkastet'), g: aiComparison.builtOn, accent: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
+              { key: 'mostlyNew', label: t('Mestadels nyskrivet'), g: aiComparison.mostlyNew, accent: 'text-slate-600 dark:text-slate-300', dot: 'bg-slate-400' },
+              { key: 'none', label: t('Utan AI-utkast'), g: aiComparison.none, accent: 'text-slate-600 dark:text-slate-300', dot: 'bg-slate-300' },
             ] as const).map(({ key, label, g, accent, dot }) => (
               <div key={key} className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -446,9 +436,9 @@ export default function ReportsPage() {
               </div>
             ))}
           </div>
-          {aiComparison.asIs.count >= MIN_GROUP && aiComparison.none.count >= MIN_GROUP && aiComparison.none.responseMedian > aiComparison.asIs.responseMedian ? (
+          {aiComparison.fromAi.count >= MIN_GROUP && aiComparison.none.count >= MIN_GROUP && aiComparison.none.responseMedian > aiComparison.fromAi.responseMedian ? (
             <p className="text-sm text-emerald-700 dark:text-emerald-400 mt-4 font-medium">
-              {t('AI-utkast som skickas oförändrat besvaras')} {Math.round((1 - aiComparison.asIs.responseMedian / aiComparison.none.responseMedian) * 100)}% {t('snabbare än ärenden utan AI-stöd.')}
+              {t('Svar som skickas ~som AI-utkastet besvaras')} {Math.round((1 - aiComparison.fromAi.responseMedian / aiComparison.none.responseMedian) * 100)}% {t('snabbare än ärenden utan AI-stöd.')}
             </p>
           ) : (
             <p className="text-xs text-slate-400 mt-4">
@@ -613,27 +603,6 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Tickets by Status */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('Ärenden per status')}</h3>
-        <div className="space-y-3">
-          {Object.entries(data.ticketsByStatus).map(([status, count]) => (
-            <div key={status}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm text-slate-600 dark:text-slate-400">{statusLabelSv(status)}</span>
-                <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{count}</span>
-              </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                <div
-                  className={`${getStatusColor(status)} h-2 rounded-full transition-all`}
-                  style={{ width: `${(count / data.totalTickets) * 100}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Recent Activity */}
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('Senaste aktivitet')}</h3>
@@ -664,35 +633,44 @@ export default function ReportsPage() {
             : 1;
           const showLabel = (index: number) =>
             index % labelEvery === 0 || index === activity.length - 1;
-          const showCounts = activity.length <= 31;
 
           return (
-            <div className="flex items-end justify-between gap-1 sm:gap-2">
-              {activity.map((point, index) => {
-                const ratio = point.count / maxCount;
-                const height = point.count === 0 ? 2 : Math.max(ratio * 100, 4);
-                return (
-                  <div key={index} className="flex-1 flex flex-col items-center min-w-0">
-                    {showCounts && (
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">{point.count}</span>
-                    )}
-                    <div className="w-full h-48 flex items-end justify-center">
+            <div>
+              {/* All bars live in one fixed-height track, bottom-aligned, with
+                  an explicit baseline border — so every bar unmistakably starts
+                  at the same line. Exact counts are in the hover tooltip. */}
+              <div className="flex items-end justify-between gap-1 sm:gap-2 h-48 border-b border-slate-200 dark:border-slate-700">
+                {activity.map((point, index) => {
+                  const ratio = maxCount > 0 ? point.count / maxCount : 0;
+                  const height = point.count === 0 ? 1.5 : Math.max(ratio * 100, 4);
+                  return (
+                    <div
+                      key={index}
+                      className="flex-1 flex items-end h-full min-w-0"
+                      title={tooltipFor(point.date, point.count)}
+                    >
                       <div
-                        className={`w-full rounded-t-lg transition-all hover:brightness-110 ${
+                        className={`w-full rounded-t-md transition-all hover:brightness-110 ${
                           point.count === 0
                             ? 'bg-slate-200 dark:bg-slate-700'
                             : 'bg-gradient-to-t from-[#7C5CFF] to-[#9F7BFF]'
                         }`}
                         style={{ height: `${height}%` }}
-                        title={tooltipFor(point.date, point.count)}
                       />
                     </div>
-                    <span className="text-xs text-slate-600 dark:text-slate-400 mt-2 truncate w-full text-center">
-                      {showLabel(index) ? formatLabel(point.date) : ' '}
-                    </span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              <div className="flex justify-between gap-1 sm:gap-2 mt-2">
+                {activity.map((point, index) => (
+                  <span
+                    key={index}
+                    className="flex-1 text-[10px] text-slate-500 dark:text-slate-400 truncate text-center min-w-0"
+                  >
+                    {showLabel(index) ? formatLabel(point.date) : ''}
+                  </span>
+                ))}
+              </div>
             </div>
           );
         })()}

@@ -303,37 +303,49 @@ export async function GET(request: NextRequest) {
     // as a wall of inserted "words"), then strip the auto-appended signature.
     const comparableBody = (s: string | null | undefined) =>
       stripAgentSignature((s ?? '').split('[INLINE_IMAGES]')[0]);
-    const asIs: typeof sentInRange = [];
-    const editedGroup: typeof sentInRange = [];
+    // ONE classification, shared by both the distribution panel and the
+    // response-time comparison, so their ticket counts always reconcile. Per
+    // sent reply we measure how much of what we sent came from the AI draft
+    // (word overlap — condensing is not penalised) and bucket by NEW content
+    // (1 − kept): <10% = sent ~as the draft, 10–50% = built on it, ≥50% =
+    // mostly agent-written. Replies with no draft are the "utan AI" baseline.
+    // The authoritative wasEdited=false flag pins a reply to "from the AI"
+    // regardless of incidental character diffs.
+    const fromAi: typeof sentInRange = [];
+    const builtOn: typeof sentInRange = [];
+    const mostlyNew: typeof sentInRange = [];
     const noAi: typeof sentInRange = [];
+    const keptRatios: number[] = [];
     for (const t of sentInRange) {
       const fb = editedByTicket.get(t.id);
-      let aiUsed: boolean;
-      let edited: boolean;
-      if (fb !== undefined) {
-        aiUsed = true;
-        edited = fb;
-      } else if (norm(t.aiResponse)) {
-        aiUsed = true;
-        // Compare on equal footing: drop the inline-image HTML tail and the
-        // auto-appended signature (both absent from the draft) before deciding
-        // whether the agent actually edited. Without this every verbatim send
-        // reads as "edited" and the "skickat oförändrat" group is starved.
-        const a = norm(comparableBody(t.aiResponse));
-        const f = norm(comparableBody(t.finalResponse));
-        edited = !f || f !== a;
-      } else {
-        aiUsed = false;
-        edited = false;
-      }
-      if (!aiUsed) noAi.push(t);
-      else if (edited) editedGroup.push(t);
-      else asIs.push(t);
+      const hasDraft = norm(comparableBody(t.aiResponse)) !== '';
+      if (!hasDraft && fb === undefined) { noAi.push(t); continue; }
+      const kept = fb === false
+        ? 1
+        : keptFromDraftRatio(comparableBody(t.aiResponse), comparableBody(t.finalResponse));
+      if (kept == null) { noAi.push(t); continue; }
+      keptRatios.push(kept);
+      const newContent = 1 - kept;
+      if (newContent < 0.1) fromAi.push(t);
+      else if (newContent < 0.5) builtOn.push(t);
+      else mostlyNew.push(t);
     }
     const aiComparison = {
-      asIs: groupStats(asIs),
-      edited: groupStats(editedGroup),
+      fromAi: groupStats(fromAi),
+      builtOn: groupStats(builtOn),
+      mostlyNew: groupStats(mostlyNew),
       none: groupStats(noAi),
+    };
+    const medianKeptPct = keptRatios.length > 0 ? Math.round(median(keptRatios) * 100) : 0;
+    const editStats = {
+      count: keptRatios.length,
+      // "Changed" is the inverse of the kept share — how much of the sent reply
+      // the agent wrote that wasn't in the draft.
+      medianChangedPct: 100 - medianKeptPct,
+      medianKeptPct,
+      unchanged: fromAi.length,
+      light: builtOn.length,
+      heavy: mostlyNew.length,
     };
 
     // Money saved = time the AI shaved off each ticket × tickets × agent cost.
@@ -387,50 +399,6 @@ export async function GET(request: NextRequest) {
       savedMinutesPerTicket: savedMinutesPerTicket != null ? Math.round(savedMinutesPerTicket) : null,
       savedHours: savedHours != null ? Math.round(savedHours * 10) / 10 : null,
       moneySaved,
-    };
-
-    // How much of each SENT reply was carried over from the AI draft? We use
-    // word-overlap (longest common subsequence ÷ sent length), NOT raw edit
-    // distance: the AI tends to write long drafts that agents condense, and
-    // edit distance counts every dropped word as a "change" — so condensed
-    // replies looked "rewritten" even when every word the customer received
-    // came from the AI. Overlap asks the question that actually matters: of
-    // what we sent, how much did the AI write? Buckets are by NEW content
-    // (1 − kept): <10% new = sent ~as the draft, 10–50% = built on the draft,
-    // ≥50% = mostly written by the agent.
-    const keptRatios: number[] = [];
-    let editUnchanged = 0;
-    let editLight = 0;
-    let editHeavy = 0;
-    for (const tk of sentInRange) {
-      // The authoritative feedback flag wins: a reply the agent confirmed as
-      // unedited is fully "from the AI" even if a stray character differs.
-      if (editedByTicket.get(tk.id) === false) {
-        editUnchanged++;
-        keptRatios.push(1);
-        continue;
-      }
-      // Compare only the parts present in both (no inline-image HTML, no
-      // appended signature). Tickets with no AI draft fall out as null and are
-      // excluded — the histogram describes AI-assisted sends only.
-      const kept = keptFromDraftRatio(comparableBody(tk.aiResponse), comparableBody(tk.finalResponse));
-      if (kept == null) continue;
-      keptRatios.push(kept);
-      const newContent = 1 - kept;
-      if (newContent < 0.1) editUnchanged++;
-      else if (newContent < 0.5) editLight++;
-      else editHeavy++;
-    }
-    const medianKeptPct = keptRatios.length > 0 ? Math.round(median(keptRatios) * 100) : 0;
-    const editStats = {
-      count: keptRatios.length,
-      // "Changed" is now the inverse of the kept share — how much of the sent
-      // reply the agent wrote that wasn't in the draft.
-      medianChangedPct: 100 - medianKeptPct,
-      medianKeptPct,
-      unchanged: editUnchanged,
-      light: editLight,
-      heavy: editHeavy,
     };
 
     // Real "time inside the ticket": accumulated active presence seconds (see
