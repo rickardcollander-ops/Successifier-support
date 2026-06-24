@@ -1,0 +1,149 @@
+{
+  "source": "https://www.doldadress.se/support",
+  "categories": [
+    {
+      "name": "Jag vill bli kund",
+      "slug": "jag-vill-bli-kund",
+      "sortOrder": 0
+    },
+    {
+      "name": "Ny kund",
+      "slug": "ny-kund",
+      "sortOrder": 1
+    },
+    {
+      "name": "Avindexering",
+      "slug": "avindexering",
+      "sortOrder": 2
+    },
+    {
+      "name": "Upplysningar",
+      "slug": "upplysningar",
+      "sortOrder": 4
+    },
+    {
+      "name": "Adresslarm",
+      "slug": "adresslarm",
+      "sortOrder": 5
+    }
+  ],
+  "articles": [
+    {
+      "slug": "vad-innebar-det-att-vara-kund-hos-doldadress",
+      "title": "Vad innebär det att vara kund hos DoldAdress?",
+      "content": "Vad roligt att du funderar på att bli kund hos oss! Som kund hos DoldAdress får du hjälp att skydda din integritet och minska din synlighet på nätet.\n\nVi avindexerar länkar på Google som innehåller information om dig som du inte vill ska vara synlig i sökresultatet, exempelvis länkar från upplysningssajter, Flashback, Lexbase, nyhetsartiklar eller bilder på Google. Så länge innehållet inte omfattas av allmänintresse kan vi hjälpa dig att ta bort länkarna från Googles sökresultat.\n\nVi hjälper dig även att bli borttagen från flera av Sveriges största upplysningssajter, såsom Mr Koll, Ratsit, Hitta, Birthday, Merinfo med flera. Dessutom övervakar vi din synlighet och varnar dig om dina uppgifter publiceras igen.\n\nI tjänsten ingår också adresslarm som bevakar din folkbokföringsadress och meddelar dig direkt om någon obehörig försöker skriva sig där.\n\nFör ökad trygghet ingår även hackskydd. Vi övervakar kontinuerligt om konton kopplade till din e-postadress förekommer i dataläckor och skickar en varning så att du snabbt kan agera vid behov.\n\nAllt samlas på Mina sidor, där du enkelt kan följa dina ärenden, bevakningar och varningar.",
+      "excerpt": "Vad roligt att du funderar på att bli kund hos oss! Som kund hos DoldAdress får du hjälp att skydda din integritet och minska din synlighet på nätet. Vi…",
+      "category": "Jag vill bli kund",
+      "categorySlug": "jag-vill-bli-kund",
+      "tags": [
+        "Support",
+        "Jag vill bli kund"
+      ],
+      "sortOrder": 0
+    },
+    {
+      "slug": "hur-kommer-jag-igang-som-kund",
+      "title": "Hur kommer jag igång som kund?",
+      "content": "Att komma igång är enkelt! Klicka på knappen ”Kom igång” längst upp till höger på vår webbplats och välj det paket som passar dina behov. Därefter registrerar du dig och får omedelbar tillgång till våra tjänster.\n\nNär ditt konto är aktiverat kan du börja skydda din integritet online direkt, följa dina ärenden på Mina sidor och ta del av våra bevaknings- och säkerhetstjänster.\n\nVälkommen till DoldAdress!",
+      "excerpt": "Att komma igång är enkelt! Klicka på knappen ”Kom igång” längst upp till höger på vår webbplats och välj det paket som passar dina behov. Därefter…",
+      "category": "Jag vill bli kund",
+      "categorySlug": "jag-vill-bli-kund",
+      "tags": [
+        "Support",
+        "Jag vill bli kund"
+      ],
+      "sortOrder": 1
+    },
+    {
+      "slug": "behover-jag-teckna-ett-abonnemang-for-att-anvanda-doldadress",
+      "title": "Behöver jag teckna ett abonnemang för att använda DoldAdress?",
+      "content": "Ja, DoldAdress är en abonnemangstjänst. Du väljer själv det abonnemang och betalningsalternativ som passar dig bäst när du registrerar dig.\n\nSom kund får du tillgång till våra tjänster och ett löpande skydd för din integritet online.",
+      "excerpt": "Ja, DoldAdress är en abonnemangstjänst. Du väljer själv det abonnemang och betalningsalternativ som passar dig bäst när du registrerar dig. Som kund får…",
+      "category": "Jag vill bli kund",
+      "categorySlug": "jag-vill-bli-kund",
+      "tags": [
+        "Support",
+        "Jag vill bli kund"
+      ],
+      "sortOrder": 2
+    },
+    {
+      "slug": "vem-kan-bli-kund-hos-doldadress",
+      "title": "Vem kan bli kund hos DoldAdress?",
+      "content": "För att bli kund hos oss behöver du:\n• Vara minst 18 år gammal\n• Ha tillgång till BankID\n• Vara folkbokförd i Sverige\n\nVåra tjänster är utformade för personer som finns registrerade i det svenska folkbokföringsregistret. Därför kan vi tyvärr inte erbjuda tjänsten till personer som har sekretessmarkerad identitet eller andra former av skyddade personuppgifter.",
+      "excerpt": "För att bli kund hos oss behöver du: • Vara minst 18 år gammal • Ha tillgång till BankID • Vara folkbokförd i Sverige Våra tjänster är utformade för…",
+      "category": "Jag vill bli kund",
+      "categorySlug": "jag-vill-bli-kund",
+      "tags": [
+        "Support",
+        "Jag vill bli kund"
+      ],
+      "sortOrder": 3
+    },
+    {
+      "slug": "vad-hander-efter-jag-har-kopt",
+      "title": "Vad händer efter jag har köpt?",
+      "content": "När du gjort ditt köp hos oss får du en bekräftelse via e-post med en aktiveringslänk. Du måste klicka på länken och skapa ditt konto. Efter det får du tillgång till “Mina Sidor”. I samband med aktivering kommer vi automatiskt att ta bort skadliga sökresultat om dig från upplysnings-sajter på Google.",
+      "excerpt": "När du gjort ditt köp hos oss får du en bekräftelse via e-post med en aktiveringslänk. Du måste klicka på länken och skapa ditt konto. Efter det får du…",
+      "category": "Ny kund",
+      "categorySlug": "ny-kund",
+      "tags": [
+        "Support",
+        "Ny kund"
+      ],
+      "sortOrder": 4
+    },
+    {
+      "slug": "hur-lang-tid-tar-det-innan-jag-forsvinner-pa-google",
+      "title": "Hur lång tid tar det innan jag försvinner på Google?",
+      "content": "Den genomsnittliga behandlingstiden är 13 dagar, men i vissa fall kan det gå så snabbt som 4 dagar. Vissa länkar kräver att vi juridiskt bevisar för Google att de bryter mot EU:s lagstiftning. Om detta blir nödvändigt kan processen förlängas till flera månader, eftersom Google har upp till 6 månader på sig att svara. Många bestridanden nekas initialt, men en betydande andel lyckas vid överklagan. För närvarande tas 50 % av de länkar som först fått avslag bort.",
+      "excerpt": "Den genomsnittliga behandlingstiden är 13 dagar, men i vissa fall kan det gå så snabbt som 4 dagar. Vissa länkar kräver att vi juridiskt bevisar för…",
+      "category": "Avindexering",
+      "categorySlug": "avindexering",
+      "tags": [
+        "Support",
+        "Avindexering"
+      ],
+      "sortOrder": 5
+    },
+    {
+      "slug": "kan-ni-avindexera-bilder",
+      "title": "Kan ni avindexera bilder?",
+      "content": "Ja, vi kan avindexera bilder från Google. Om du vill avindexera en bild kan du skicka in länken till bilden under fliken \"Avindexering\" genom ditt inlogg.",
+      "excerpt": "Ja, vi kan avindexera bilder från Google. Om du vill avindexera en bild kan du skicka in länken till bilden under fliken \"Avindexering\" genom ditt inlogg.",
+      "category": "Avindexering",
+      "categorySlug": "avindexering",
+      "tags": [
+        "Support",
+        "Avindexering"
+      ],
+      "sortOrder": 6
+    },
+    {
+      "slug": "meddelar-ni-mig-om-en-upplysnings-sajt-aterpublicerar-mina-uppgifter",
+      "title": "Meddelar ni mig om en upplysnings-sajt återpublicerar mina uppgifter?",
+      "content": "Ja, om dina uppgifter blir synliga igen får du ett mail från oss, så att du själv slipper att hålla koll på din status.",
+      "excerpt": "Ja, om dina uppgifter blir synliga igen får du ett mail från oss, så att du själv slipper att hålla koll på din status.",
+      "category": "Upplysningar",
+      "categorySlug": "upplysningar",
+      "tags": [
+        "Support",
+        "Upplysningar"
+      ],
+      "sortOrder": 7
+    },
+    {
+      "slug": "hur-hjalper-ni-mig-om-nagon-skriver-in-sig-pa-min-adress",
+      "title": "Hur hjälper ni mig om någon skriver in sig på min adress?",
+      "content": "Vi varnar dig direkt och ger dig instruktioner på hur du ska gå tillväga för att åtgärda problemet med Skatteverket.",
+      "excerpt": "Vi varnar dig direkt och ger dig instruktioner på hur du ska gå tillväga för att åtgärda problemet med Skatteverket.",
+      "category": "Adresslarm",
+      "categorySlug": "adresslarm",
+      "tags": [
+        "Support",
+        "Adresslarm"
+      ],
+      "sortOrder": 8
+    }
+  ]
+}

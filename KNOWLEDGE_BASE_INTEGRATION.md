@@ -143,3 +143,24 @@ säkert att köra om). Det
 
 Efter körning syns allt under `/help` och via det publika API:t – färdigt att
 använda av både hjälpcentret och AI-chatboten.
+
+## Seed: support-sidan på doldadress.se
+
+Den uppdaterade support-sidan (`https://www.doldadress.se/support`) har sin egen
+seed i `scripts/doldadress-support.json` (9 frågor och svar). Den återanvänder
+befintliga kategorier (`jag-vill-bli-kund`, `ny-kund`, `avindexering`,
+`upplysningar`, `adresslarm`) – inga nya kategorier skapas – och taggar varje
+artikel med `Support` så att de går att spåra till support-sidan. Importera den
+med samma idempotenta skript som FAQ:n, fast med en annan datafil:
+
+```bash
+DATABASE_URL="<doldadress-db>" node scripts/import-doldadress-faq.js doldadress ./scripts/doldadress-support.json
+```
+
+Behöver du köra direkt mot databasen finns en likvärdig variant i
+`scripts/doldadress-support.sql` (samma slugs, samma `ON CONFLICT`-uppdatering).
+
+Artiklarna matchas på `slug`, så det är säkert att köra om efter att support-sidan
+uppdaterats igen. Endast frågor med faktiska svar tas med – support-sidans
+ämneskort (\"Hur kan vi hjälpa dig?\") är rena länkar utan svarstext och ingår
+därför inte.
