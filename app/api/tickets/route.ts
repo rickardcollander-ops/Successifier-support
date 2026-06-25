@@ -16,16 +16,15 @@ const ZENDESK_IMPORT_MARKER = '[Zendesk Import Source:';
 // is idempotent, so re-sending a few rows is harmless.
 const DELTA_OVERLAP_MS = 30_000;
 
-// The tickets page polls this endpoint every 3 seconds. `contextData` is a
-// JSONB blob that can be megabytes per row (it holds attachment data URLs as
-// well as Stripe/Billecta/Clerk integration data), so reading it from Postgres
-// for every changed row on every poll — across several concurrent agents — is
-// the dominant cost behind the inbox lag. The list/detail panes don't need it
-// from the poll: TicketList renders none of it, and TicketDetail lazy-loads
-// the full ticket (contextData included) from /api/tickets/[id] when a ticket
-// is selected. So we select every scalar column EXCEPT contextData for the
-// list queries. (Prisma 5's `omit` is still behind a preview flag here, so we
-// use an explicit select instead.)
+// The tickets page polls this endpoint every 3 seconds. Two columns dominate
+// the payload: `contextData` (a JSONB blob — attachment data URLs plus
+// Stripe/Billecta/Clerk data, megabytes per row) and `finalResponse` (the full
+// sent reply; ~4.7 MB across the open inbox here). Neither is needed in the
+// list — TicketList renders neither, and TicketDetail lazy-loads the full
+// ticket (contextData + finalResponse) from /api/tickets/[id] when a ticket is
+// selected. So we select every scalar column EXCEPT those two for the list
+// queries. (Prisma 5's `omit` is still behind a preview flag here, so we use an
+// explicit select instead.)
 const LIST_SELECT = {
   id: true,
   tenantId: true,
@@ -37,7 +36,6 @@ const LIST_SELECT = {
   originalMessage: true,
   aiResponse: true,
   aiConfidence: true,
-  finalResponse: true,
   assignedTo: true,
   sentBy: true,
   sentAt: true,

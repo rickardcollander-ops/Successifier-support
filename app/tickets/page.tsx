@@ -306,28 +306,30 @@ export default function TicketsPage() {
   // null-check skips them and avoids a redundant request.
   useEffect(() => {
     const id = selectedTicket?.id;
-    if (!id || selectedTicket?.contextData != null) return;
+    // The list/poll payload omits the heavy columns (finalResponse +
+    // contextData) to stay light. `finalResponse === undefined` means we still
+    // hold a slim list row, so fetch the full ticket once on open and merge the
+    // heavy fields in. Once merged finalResponse becomes a value (string|null)
+    // and we don't refetch on re-select.
+    if (!id || selectedTicket?.finalResponse !== undefined) return;
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch(`/api/tickets/${id}`);
         if (!res.ok || cancelled) return;
         const full = await res.json();
-        if (cancelled || !full?.id || full.contextData == null) return;
-        setSelectedTicket((curr) =>
-          curr && curr.id === id && curr.contextData == null
-            ? { ...curr, contextData: full.contextData }
-            : curr,
-        );
-        setTickets((prev) =>
-          prev.map((t) =>
-            t.id === id && t.contextData == null
-              ? { ...t, contextData: full.contextData }
-              : t,
-          ),
-        );
+        if (cancelled || !full?.id) return;
+        const merge = (t: Ticket): Ticket => ({
+          ...t,
+          finalResponse: full.finalResponse ?? null,
+          // Don't clobber contextData the open-time refresh already set fresh —
+          // only fill it in when we still have nothing.
+          contextData: t.contextData ?? full.contextData ?? null,
+        });
+        setSelectedTicket((curr) => (curr && curr.id === id ? merge(curr) : curr));
+        setTickets((prev) => prev.map((t) => (t.id === id ? merge(t) : t)));
       } catch {
-        // Leave the ticket without contextData; cards just won't show.
+        // Leave the slim row; the detail just shows a bit less until reopened.
       }
     })();
     return () => {
