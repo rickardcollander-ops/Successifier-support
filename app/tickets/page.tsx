@@ -24,7 +24,7 @@ interface EmailSyncStatus {
   error: string | null;
 }
 
-type PresenceViewer = { name: string; email: string; initials: string; typing?: boolean };
+type PresenceViewer = { name: string; email: string; initials: string; typing?: boolean; draft?: string };
 type PresenceMap = Record<string, PresenceViewer[]>;
 
 // Demo ticket shown only as a last resort when the API can't be reached and
@@ -230,13 +230,14 @@ export default function TicketsPage() {
   };
 
   // Report presence and fetch other viewers. `typing` powers the
-  // "skrivläge" indicator so colleagues see when someone is composing.
+  // "skrivläge" indicator so colleagues see when someone is composing, and
+  // while typing the beat carries the reply draft so they can read along.
   const reportPresence = async (ticketId: string | null, typing = false) => {
     try {
       await fetch('/api/tickets/presence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticketId, typing }),
+        body: JSON.stringify({ ticketId, typing, draft: typing ? composingDraftRef.current : '' }),
       });
     } catch {}
   };
@@ -247,6 +248,22 @@ export default function TicketsPage() {
     composingRef.current = composing;
     const id = selectedTicketIdRef.current;
     if (id) reportPresence(id, composing);
+  };
+
+  // Current reply draft, mirrored up from TicketDetail so presence beats can
+  // include it. Draft changes also push an extra throttled beat (~2s) so the
+  // live preview colleagues see keeps up between the 5s heartbeats without
+  // firing a request per keystroke.
+  const composingDraftRef = useRef('');
+  const draftBeatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleDraftChange = (draft: string) => {
+    composingDraftRef.current = draft;
+    if (draftBeatTimerRef.current) return;
+    draftBeatTimerRef.current = setTimeout(() => {
+      draftBeatTimerRef.current = null;
+      const id = selectedTicketIdRef.current;
+      if (id && composingRef.current) reportPresence(id, true);
+    }, 2000);
   };
 
   const fetchPresence = async () => {
@@ -295,6 +312,7 @@ export default function TicketsPage() {
   useEffect(() => {
     selectedTicketIdRef.current = selectedTicket?.id || null;
     composingRef.current = false;
+    composingDraftRef.current = '';
     reportPresence(selectedTicket?.id || null, false);
   }, [selectedTicket?.id]);
 
@@ -990,6 +1008,7 @@ export default function TicketsPage() {
                     onSelectTicket={setSelectedTicket}
                     viewers={ticketPresence[selectedTicket.id] || []}
                     onComposingChange={handleComposingChange}
+                    onDraftChange={handleDraftChange}
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
@@ -1024,6 +1043,7 @@ export default function TicketsPage() {
                 onSelectTicket={setSelectedTicket}
                 viewers={ticketPresence[selectedTicket.id] || []}
                 onComposingChange={handleComposingChange}
+                onDraftChange={handleDraftChange}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">

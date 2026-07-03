@@ -3,7 +3,11 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db/client';
 
 // In-memory presence store (cleared on server restart, which is fine for presence)
-const activeViewers = new Map<string, { userId: string; userName: string; userEmail: string; ticketId: string; lastSeen: number; typing: boolean }>();
+const activeViewers = new Map<string, { userId: string; userName: string; userEmail: string; ticketId: string; lastSeen: number; typing: boolean; draft: string }>();
+
+// The live draft preview is capped so a pasted novel doesn't bloat every
+// heartbeat and presence poll for the whole team.
+const MAX_DRAFT_LENGTH = 4000;
 
 // Heartbeats arrive every ~5s. If two consecutive beats from the same user on
 // the same ticket fall within this window we credit the elapsed gap as active
@@ -30,7 +34,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { ticketId, typing } = await request.json();
+    const { ticketId, typing, draft } = await request.json();
 
     if (ticketId) {
       const now = Date.now();
@@ -58,6 +62,9 @@ export async function POST(request: NextRequest) {
         ticketId,
         lastSeen: now,
         typing: Boolean(typing),
+        // Only carry the draft while actively composing — once typing stops
+        // the preview disappears for colleagues rather than lingering.
+        draft: typing && typeof draft === 'string' ? draft.slice(0, MAX_DRAFT_LENGTH) : '',
       });
     } else {
       // User deselected ticket
@@ -83,7 +90,7 @@ export async function GET(request: NextRequest) {
 
     cleanupStale();
 
-    const viewers: Record<string, Array<{ name: string; email: string; initials: string; typing: boolean }>> = {};
+    const viewers: Record<string, Array<{ name: string; email: string; initials: string; typing: boolean; draft: string }>> = {};
 
     for (const [email, entry] of activeViewers.entries()) {
       if (email === session.user.email) continue; // exclude self
@@ -102,6 +109,7 @@ export async function GET(request: NextRequest) {
         email: entry.userEmail,
         initials,
         typing: Boolean(entry.typing),
+        draft: entry.typing ? entry.draft || '' : '',
       });
     }
 

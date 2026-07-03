@@ -23,7 +23,7 @@ function priorityToLight(priority: string): 'urgent' | 'normal' | 'low' {
   return 'normal';
 }
 
-type DetailViewer = { name: string; email: string; initials: string; typing?: boolean };
+type DetailViewer = { name: string; email: string; initials: string; typing?: boolean; draft?: string };
 
 interface ReplyFromAccount {
   id: string;
@@ -91,6 +91,9 @@ interface TicketDetailProps {
   // Report whether the current agent is actively composing a reply so other
   // agents see the "skriver…" state.
   onComposingChange?: (composing: boolean) => void;
+  // Mirror the reply draft up to the parent so presence beats can include it
+  // and colleagues get a live preview of what's being written.
+  onDraftChange?: (draft: string) => void;
 }
 
 interface ParsedEmailMessage {
@@ -190,7 +193,7 @@ function sortInvoicesDesc(invoices: any[]): any[] {
   });
 }
 
-export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onContextRefreshed, onSend, onDelete, onSpam, onSelectTicket, viewers = [], onComposingChange }: TicketDetailProps) {
+export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onContextRefreshed, onSend, onDelete, onSpam, onSelectTicket, viewers = [], onComposingChange, onDraftChange }: TicketDetailProps) {
   const [response, setResponse] = useState(ticket.finalResponse || ticket.aiResponse || '');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -801,10 +804,23 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onContext
           const firstNames = (list: DetailViewer[]) =>
             list.map((v) => v.name?.split(' ')[0] || v.email).join(', ');
           if (typing.length > 0) {
+            const withDraft = typing.filter((v) => (v.draft || '').trim().length > 0);
             return (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 text-sm">
-                <Pencil className="w-4 h-4 animate-pulse flex-shrink-0" />
-                <span><strong>{firstNames(typing)}</strong> {t('skriver just nu ett svar till kunden…')}</span>
+              <div className="px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 text-sm space-y-2">
+                <div className="flex items-center gap-2">
+                  <Pencil className="w-4 h-4 animate-pulse flex-shrink-0" />
+                  <span><strong>{firstNames(typing)}</strong> {t('skriver just nu ett svar till kunden…')}</span>
+                </div>
+                {withDraft.map((v) => (
+                  <div key={v.email} className="rounded-md border border-amber-200 dark:border-amber-700 bg-white/70 dark:bg-slate-800/60 p-2">
+                    {withDraft.length > 1 && (
+                      <div className="text-xs font-semibold mb-1">{v.name?.split(' ')[0] || v.email}</div>
+                    )}
+                    <div className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words max-h-40 overflow-auto text-xs">
+                      {v.draft}
+                    </div>
+                  </div>
+                ))}
               </div>
             );
           }
@@ -1272,8 +1288,8 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onContext
           </div>
           <textarea
             value={response}
-            onChange={(e) => { setResponse(e.target.value); noteTyping(); }}
-            onFocus={noteTyping}
+            onChange={(e) => { setResponse(e.target.value); onDraftChange?.(e.target.value); noteTyping(); }}
+            onFocus={() => { onDraftChange?.(response); noteTyping(); }}
             onBlur={stopComposing}
             className="w-full h-64 p-4 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#7C5CFF]"
             placeholder={t('Skriv ditt svar eller generera ett med AI…')}
