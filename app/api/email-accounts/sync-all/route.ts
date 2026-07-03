@@ -290,7 +290,7 @@ async function syncSingleAccount(account: {
       const internalMs = msg.data.internalDate ? Number(msg.data.internalDate) : NaN;
       const receivedAt = Number.isFinite(internalMs) ? new Date(internalMs) : null;
 
-      const { ticket, created } = await upsertTicket({
+      const { ticket, created, merged } = await upsertTicket({
         tenantId: tenant.id,
         customerEmail,
         customerName,
@@ -346,6 +346,31 @@ async function syncSingleAccount(account: {
         });
       } else {
         console.log(`[Email Sync] Merged message ${message.id} into ticket ${ticket.id}`);
+        if (merged) {
+          // A customer follow-up landed in an existing ticket. Regenerate
+          // the draft from the FULL merged thread (ticket.originalMessage)
+          // so the AI answers the latest message with the whole timeline
+          // in view — previously the stale draft only covered the message
+          // that originally created the ticket.
+          after(async () => {
+            try {
+              const { response: aiResponse, confidence } = await generateAIResponse(
+                ticket.subject, ticket.originalMessage, contextData, tenant.id, ticket.id, customerEmail, customerName || undefined
+              );
+              // Raw SQL so we don't bump updatedAt — AI generation is not
+              // customer activity and should not reorder the ticket list.
+              await prisma.$executeRaw`
+                UPDATE "Ticket"
+                SET "aiResponse" = ${aiResponse},
+                    "aiConfidence" = ${confidence},
+                    "contentRefreshedAt" = NOW()
+                WHERE id = ${ticket.id}
+              `;
+            } catch (error) {
+              console.error(error);
+            }
+          });
+        }
       }
 
       await gmail.users.messages.modify({

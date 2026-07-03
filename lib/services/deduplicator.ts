@@ -50,6 +50,10 @@ export interface UpsertTicketInput {
 export interface UpsertTicketResult {
   ticket: any;
   created: boolean;
+  // True when a new inbound message was appended to an existing ticket
+  // (as opposed to a duplicate we skipped without changing anything).
+  // Callers use this to regenerate the AI draft from the full thread.
+  merged: boolean;
 }
 
 // Atomically create a ticket or merge into an existing one. A Postgres
@@ -82,7 +86,7 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
         parent.originalMessage.includes(`[Gmail ID: ${input.gmailMessageId}]`)
       ) {
         const refreshed = await tx.ticket.findUnique({ where: { id: parent.id } });
-        return { ticket: refreshed, created: false };
+        return { ticket: refreshed, created: false, merged: false };
       }
       const separator = `\n\n---\n[Följdmail ${(input.receivedAt ?? new Date()).toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' })}]\n`;
       // input.originalMessage from the sync route already starts with
@@ -131,7 +135,7 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
           ...contextDataUpdate,
         },
       });
-      return { ticket: updated, created: false };
+      return { ticket: updated, created: false, merged: true };
     };
 
     // Caller already identified the parent thread (typically a customer
@@ -214,6 +218,6 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
       },
     });
 
-    return { ticket: created, created: true };
+    return { ticket: created, created: true, merged: false };
   });
 }

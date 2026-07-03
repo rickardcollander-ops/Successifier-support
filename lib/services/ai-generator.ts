@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { prisma } from '@/lib/db/client';
 import type { KnowledgeBase } from '@/lib/types';
 import { product } from '@/lib/products';
+import { parseTicketThread, type ThreadEntry } from '@/lib/services/ticket-thread';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -436,6 +437,9 @@ function formatContextForPrompt(contextData: any): string {
       if (paid.length > 3) formatted += ` + ${paid.length - 3} till`;
       formatted += '\n';
     }
+    if (unpaid.length > 0) {
+      formatted += 'OBS: Fakturorna ovan märkta obetalda är INTE betalda av kunden. Ska en sådan faktura tas bort (t.ex. vid uppsägning eller felaktig fakturering) KREDITERAS den — säg "fakturan krediteras", inte "återbetalning". Återbetalning är bara aktuell för belopp kunden redan har betalat.\n';
+    }
   }
 
   if (contextData.gmail) {
@@ -539,6 +543,7 @@ VIKTIGA REGLER:
 3. KUNDDATA: Om faktura- eller prenumerationsdata finns:
    - Referera till specifika fakturanummer, belopp och datum.
    - Nämn ALDRIG systemnamn (Stripe, Billecta, Resend, OpenAI, Anthropic, Claude) — säg "vårt system" eller "våra register".
+   - Skilj på KREDITERING och ÅTERBETALNING: en OBETALD faktura som inte ska betalas KREDITERAS (makuleras med kreditfaktura) — säg då att fakturan krediteras och kan bortses från, ALDRIG "återbetalning". Återbetalning gäller endast pengar kunden redan har betalat.
 
 4. OSÄKERHET: Om du saknar information för att svara korrekt:
    - Skriv "Jag ska undersöka detta och återkommer till dig" — GISSA INTE.
@@ -549,12 +554,14 @@ VIKTIGA REGLER:
    - Börja svaret med den hälsningsfras som anges under "HÄLSNING" i användarmeddelandet nedan.
    - Ge svaret tidigt — ingen lång inledning. Hoppa över tomma empatifraser som "Jag förstår att…" om de inte tillför något konkret.
    - Skriv REN TEXT — ingen markdown. Använd ALDRIG **fetstil**, *kursiv*, #-rubriker, backticks eller [text](länk). Skriv länkar som råa URL:er (t.ex. https://www.doldadress.se/support). Mejlet skickas som vanlig text, så markdown-tecken som ** visas bokstavligen för kunden.
-   - Fatta dig kort. Skriv bara det som behövs för att lösa frågan; undvik upprepningar och självklara mellansteg. För instruktioner: lista bara de nödvändiga stegen, en rad per steg (t.ex. "1. …"), inte varje klick.
+   - Var koncis men FULLSTÄNDIG: svara på allt kunden tar upp och förklara det kunden behöver veta — hellre ett komplett och vänligt svar än ett avhugget. Undvik upprepningar och självklara mellansteg. För instruktioner: lista de nödvändiga stegen, en rad per steg (t.ex. "1. …").
    - Avsluta kort och vänligt och variera avslutet. Undvik den slitna standardfrasen "Hör av dig om du har fler frågor".
    - Skriv INGEN signatur eller avslutningshälsning (t.ex. "Vänliga hälsningar", "Med vänlig hälsning", namn eller företagsnamn). Signaturen läggs till automatiskt vid utskick.
    - Längd: kort för enkla frågor, utförligare för komplexa.
 
 6. TIDIGARE ÄRENDEN: Referera till tidigare kontakt om relevant. Upprepa inte redan given information.
+
+7. PÅGÅENDE KONVERSATION: När användarmeddelandet innehåller "KONVERSATIONEN HITTILLS": läs HELA tidslinjen i kronologisk ordning så att du förstår vad kunden och support redan har sagt. Svara på kundens SENASTE meddelande i ljuset av historiken — upprepa inte det support redan har svarat, och backa inte på besked som redan getts utan ny information. Innehåll märkt "INTERN ANTECKNING" får ALDRIG citeras eller avslöjas för kunden.
 
 SVARSLEVERANS: Leverera ALLTID ditt svar genom att anropa verktyget submit_customer_response. Hela e-posttexten (inklusive hälsning men UTAN signatur) ska ligga i fältet "response".`;
 
@@ -589,6 +596,7 @@ ${LANGUAGE_RULE_EN}
 3. CUSTOMER DATA: If invoice or subscription data is available:
    - Reference specific invoice numbers, amounts and dates.
    - NEVER mention system names (Stripe, Clerk, OpenAI, Anthropic, Claude) — say "our system" or "our records".
+   - Distinguish CREDIT NOTES from REFUNDS: an UNPAID invoice that should not be paid is CREDITED (cancelled with a credit note) — say the invoice will be credited, NEVER "refund". A refund only applies to money the customer has already paid.
 
 4. UNCERTAINTY: If you lack the information to answer correctly:
    - Write "I'll look into this and get back to you" — DO NOT GUESS.
@@ -599,12 +607,14 @@ ${LANGUAGE_RULE_EN}
    - Begin the reply with the greeting given under "GREETING" in the user message below.
    - Give the answer early — no long introduction. Skip empty empathy fillers like "I understand that…" unless they add something concrete.
    - Write PLAIN TEXT — no markdown. NEVER use **bold**, *italics*, # headings, backticks or [text](link). Write links as raw URLs. The email is sent as plain text, so markdown characters like ** appear literally to the customer.
-   - Be concise. Write only what is needed to resolve the question; avoid repetition and obvious intermediate steps. For instructions, list only the necessary steps, one per line (e.g. "1. …"), not every click.
+   - Be concise but COMPLETE: address everything the customer brings up and explain what they need to know — a complete, friendly answer beats a clipped one. Avoid repetition and obvious intermediate steps. For instructions, list the necessary steps, one per line (e.g. "1. …").
    - End briefly and warmly, and vary the closing. Avoid the worn-out stock phrase "Let me know if you have any further questions".
    - Do NOT write any signature or sign-off (e.g. "Best regards", "Kind regards", a name or a company name). The signature is added automatically when the reply is sent.
    - Length: short for simple questions, more detailed for complex ones.
 
 6. PREVIOUS TICKETS: Reference previous contact when relevant. Do not repeat information already given.
+
+7. ONGOING CONVERSATION: When the user message contains "THE CONVERSATION SO FAR": read the WHOLE timeline in chronological order so you understand what the customer and support have already said. Answer the customer's LATEST message in light of that history — do not repeat what support has already answered, and do not contradict commitments already given unless there is new information. Content marked "INTERNAL NOTE" must NEVER be quoted or revealed to the customer.
 
 RESPONSE DELIVERY: ALWAYS deliver your answer by calling the submit_customer_response tool. The full email text (including the greeting but WITHOUT a signature) must be in the "response" field.`;
 
@@ -623,9 +633,26 @@ export async function generateAIResponse(
     const contextPrompt = formatContextForPrompt(contextData);
     const hasContext = contextPrompt.length > 0;
 
+    // Open tickets accumulate the whole conversation in originalMessage
+    // (follow-ups, support replies, internal comments). Parse it so the
+    // model gets an explicit timeline and knows which customer message
+    // is the one to answer — instead of one undifferentiated blob.
+    const thread = parseTicketThread(originalMessage);
+    const customerEntries = thread.filter((e: ThreadEntry) => e.role === 'customer');
+    const latestCustomer = customerEntries[customerEntries.length - 1];
+    const hasThread = thread.length > 1 && !!latestCustomer;
+
+    // KB retrieval and learning examples should match what the customer is
+    // asking about NOW: latest customer message first (the rerank prompt
+    // only sees the first 800 chars), earlier customer messages after,
+    // and no support replies/internal notes polluting the keyword scoring.
+    const retrievalText = hasThread
+      ? [latestCustomer.body, ...customerEntries.slice(0, -1).map((e: ThreadEntry) => e.body)].join('\n\n')
+      : (thread[0]?.body ?? originalMessage);
+
     const [knowledgeResult, learningPrompt, previousTicketsPrompt] = await Promise.all([
-      tenantId ? findRelevantKnowledge(tenantId, subject, originalMessage) : Promise.resolve({ formatted: '', citedIds: [] }),
-      tenantId ? findLearningExamples(tenantId, subject, originalMessage) : Promise.resolve(''),
+      tenantId ? findRelevantKnowledge(tenantId, subject, retrievalText) : Promise.resolve({ formatted: '', citedIds: [] }),
+      tenantId ? findLearningExamples(tenantId, subject, retrievalText) : Promise.resolve(''),
       (tenantId && customerEmail) ? findPreviousTicketContext(tenantId, customerEmail, ticketId) : Promise.resolve(''),
     ]);
 
@@ -653,7 +680,21 @@ export async function generateAIResponse(
       : (customerFirstName ? `Hej ${customerFirstName},` : 'Hej,');
     const greetingLabel = product.language === 'en' ? 'GREETING' : 'HÄLSNING';
 
-    const userContent = `${greetingLabel}: ${greeting}\n\nÄmne: ${subject}\n\nKundens meddelande:\n${originalMessage}${contextPrompt}${previousTicketsPrompt}${knowledgeResult.formatted}${learningPrompt}`;
+    const en = product.language === 'en';
+    const roleLabel = (e: ThreadEntry) =>
+      e.role === 'customer'
+        ? (en ? 'CUSTOMER' : 'KUNDEN')
+        : e.role === 'support'
+          ? (en ? 'SUPPORT (our reply)' : 'SUPPORT (vårt svar)')
+          : (en ? 'INTERNAL NOTE (never shown to the customer)' : 'INTERN ANTECKNING (visas aldrig för kunden)');
+
+    const messageSection = hasThread
+      ? `=== ${en ? 'THE CONVERSATION SO FAR' : 'KONVERSATIONEN HITTILLS'} (${en ? 'oldest first' : 'äldst först'}) ===\n${thread
+          .map((e: ThreadEntry) => `\n--- ${roleLabel(e)}${e.date ? ` · ${e.date}` : ''} ---\n${e.body}`)
+          .join('\n')}\n\n=== ${en ? "CUSTOMER'S LATEST MESSAGE (this is what you reply to)" : 'KUNDENS SENASTE MEDDELANDE (det är detta du ska svara på)'} ===\n${latestCustomer!.body}`
+      : `Kundens meddelande:\n${thread[0]?.body ?? originalMessage}`;
+
+    const userContent = `${greetingLabel}: ${greeting}\n\nÄmne: ${subject}\n\n${messageSection}${contextPrompt}${previousTicketsPrompt}${knowledgeResult.formatted}${learningPrompt}`;
 
     const completion = await anthropic.messages.create({
       model: MAIN_MODEL,
