@@ -28,6 +28,42 @@ const DAY_MS = 24 * HOUR_MS;
 const dayKey = (d: Date) =>
   d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
 
+// The offset (ms) between Stockholm wall-clock time and UTC at a given instant.
+// Used to turn a Stockholm calendar date into the real UTC instant of its
+// midnight, correctly across DST.
+function stockholmOffsetMs(utcMillis: number): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Stockholm', hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(utcMillis));
+  const m: Record<string, number> = {};
+  for (const p of parts) if (p.type !== 'literal') m[p.type] = Number(p.value);
+  // 24:00 can appear for midnight in some engines; normalise to 0.
+  const hour = m.hour === 24 ? 0 : m.hour;
+  return Date.UTC(m.year, m.month - 1, m.day, hour, m.minute, m.second) - utcMillis;
+}
+
+// Real UTC instant of 00:00 Stockholm time on the given YYYY-MM-DD.
+function stockholmMidnight(key: string): Date {
+  const [y, mo, d] = key.split('-').map(Number);
+  const guess = Date.UTC(y, mo - 1, d);
+  return new Date(guess - stockholmOffsetMs(guess));
+}
+
+// Shift a YYYY-MM-DD calendar key by whole days. Pure UTC calendar math (no
+// DST), so it always lands on the intended date.
+function shiftDayKey(key: string, deltaDays: number): string {
+  const [y, mo, d] = key.split('-').map(Number);
+  return new Date(Date.UTC(y, mo - 1, d) + deltaDays * DAY_MS).toISOString().slice(0, 10);
+}
+
+// Monday = 0 … Sunday = 6, in Stockholm — for anchoring "this/last week".
+function stockholmWeekday(d: Date): number {
+  const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Stockholm', weekday: 'short' }).format(d);
+  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(wd);
+}
+
 // Build counts into a stable, ordered object: known keys first in their
 // canonical order, anything unexpected appended so it still shows up.
 function orderedCounts(values: string[], order: string[]): Record<string, number> {
@@ -80,11 +116,54 @@ export async function GET(request: NextRequest) {
 
     const now = new Date();
     const isHourly = range === '1d';
-    const daysAgo =
-      range === '7d' ? 7 :
-      range === '30d' ? 30 :
-      range === '90d' ? 90 :
-      30;
+
+    // Resolve the report window [windowStart, windowEnd). Named calendar ranges
+    // (this/last week & month) are anchored to Stockholm calendar boundaries;
+    // "custom" reads explicit from/to dates; the rolling "senaste N" ranges end
+    // at `now`. Everything downstream (buckets, filtering, trend) derives from
+    // this window, so all panels describe exactly the same set of tickets.
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
+    const isDateKey = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+    const nowKey = dayKey(now);
+    const [nowY, nowM] = nowKey.split('-').map(Number);
+    const pad = (n: number) => String(n).padStart(2, '0');
+
+    let windowStart: Date;
+    let windowEnd: Date;
+    if (isHourly) {
+      windowStart = new Date(now.getTime() - DAY_MS);
+      windowEnd = now;
+    } else if (range === 'thisWeek') {
+      windowStart = stockholmMidnight(shiftDayKey(nowKey, -stockholmWeekday(now)));
+      windowEnd = now;
+    } else if (range === 'lastWeek') {
+      const thisMonday = shiftDayKey(nowKey, -stockholmWeekday(now));
+      windowStart = stockholmMidnight(shiftDayKey(thisMonday, -7));
+      windowEnd = stockholmMidnight(thisMonday);
+    } else if (range === 'thisMonth') {
+      windowStart = stockholmMidnight(`${nowY}-${pad(nowM)}-01`);
+      windowEnd = now;
+    } else if (range === 'lastMonth') {
+      const prevY = nowM === 1 ? nowY - 1 : nowY;
+      const prevM = nowM === 1 ? 12 : nowM - 1;
+      windowStart = stockholmMidnight(`${prevY}-${pad(prevM)}-01`);
+      windowEnd = stockholmMidnight(`${nowY}-${pad(nowM)}-01`);
+    } else if (range === 'custom' && isDateKey(fromParam) && isDateKey(toParam) && fromParam <= toParam) {
+      // Inclusive day range: end is midnight AFTER the `to` day. Cap the span
+      // (to ~1 year) so a hand-typed URL can't request thousands of buckets,
+      // and never let the end run past `now`.
+      const minFrom = shiftDayKey(toParam, -365);
+      windowStart = stockholmMidnight(fromParam < minFrom ? minFrom : fromParam);
+      windowEnd = stockholmMidnight(shiftDayKey(toParam, 1));
+      if (windowEnd.getTime() > now.getTime()) windowEnd = now;
+    } else {
+      // Rolling "senaste N dagar": today plus the previous N-1 calendar days.
+      const daysAgo = range === '7d' ? 7 : range === '90d' ? 90 : 30;
+      windowStart = stockholmMidnight(shiftDayKey(nowKey, -(daysAgo - 1)));
+      windowEnd = now;
+    }
 
     // The activity buckets define the report window: a ticket belongs to the
     // report iff its bucket key exists in this map. That guarantees
@@ -93,7 +172,7 @@ export async function GET(request: NextRequest) {
     //
     // "1d" uses 24 hourly buckets ending with the current (partial) hour —
     // a single daily bar tells you nothing. Other ranges use one bucket per
-    // Stockholm calendar day.
+    // Stockholm calendar day the window covers.
     const bucketKeys: string[] = [];
     if (isHourly) {
       const currentHourStart = Math.floor(now.getTime() / HOUR_MS) * HOUR_MS;
@@ -101,11 +180,15 @@ export async function GET(request: NextRequest) {
         bucketKeys.push(new Date(currentHourStart - i * HOUR_MS).toISOString());
       }
     } else {
-      for (let i = daysAgo - 1; i >= 0; i--) {
-        const key = dayKey(new Date(now.getTime() - i * DAY_MS));
-        // Stepping 24h across a DST switch can land on the same Stockholm
-        // date twice — skip the duplicate instead of drawing two bars.
-        if (bucketKeys[bucketKeys.length - 1] !== key) bucketKeys.push(key);
+      // windowEnd is exclusive (midnight) for the past calendar ranges and
+      // `now` for the current/rolling ones — either way, the last included day
+      // is the one covering the instant just before windowEnd.
+      const lastDay = dayKey(new Date(windowEnd.getTime() - 1));
+      let key = dayKey(windowStart);
+      for (let guard = 0; guard < 400; guard++) {
+        bucketKeys.push(key);
+        if (key === lastDay) break;
+        key = shiftDayKey(key, 1);
       }
     }
     const bucketCounts = new Map<string, number>(bucketKeys.map((k) => [k, 0]));
@@ -114,17 +197,16 @@ export async function GET(request: NextRequest) {
         ? new Date(Math.floor(d.getTime() / HOUR_MS) * HOUR_MS).toISOString()
         : dayKey(d);
 
-    // Query with a one-day margin and let bucket membership do the precise
-    // (timezone-aware) cut. Zendesk imports are excluded in the query, the
-    // folder filters below need subject/sender so they run in JS.
-    const queryStart = isHourly
-      ? new Date(now.getTime() - DAY_MS)
-      : new Date(now.getTime() - (daysAgo + 1) * DAY_MS);
+    // Query with a one-day margin on each side and let bucket membership do the
+    // precise (timezone-aware) cut. Zendesk imports are excluded in the query;
+    // the folder filters below need subject/sender so they run in JS.
+    const queryStart = new Date(windowStart.getTime() - DAY_MS);
+    const queryEnd = new Date(windowEnd.getTime() + DAY_MS);
 
     const rows = await prisma.ticket.findMany({
       where: {
         tenantId: tenant.id,
-        createdAt: { gte: queryStart },
+        createdAt: { gte: queryStart, lte: queryEnd },
         NOT: {
           originalMessage: { contains: ZENDESK_IMPORT_MARKER },
         },
@@ -174,7 +256,7 @@ export async function GET(request: NextRequest) {
     const sentRows = await prisma.ticket.findMany({
       where: {
         tenantId: tenant.id,
-        sentAt: { gte: queryStart },
+        sentAt: { gte: queryStart, lte: queryEnd },
         NOT: {
           originalMessage: { contains: ZENDESK_IMPORT_MARKER },
         },
@@ -257,16 +339,18 @@ export async function GET(request: NextRequest) {
     // AI mature? Weekly buckets for 30/90d, daily for 7d. A single day (1d)
     // can't show a trend, so we skip it. The downward slope IS the argument.
     const trend: Array<{ label: string; responseMedian: number; handlingMedian: number; count: number }> = [];
-    if (range !== '1d') {
-      const stepDays = range === '7d' ? 1 : 7;
-      const totalDays = daysAgo;
+    const spanDays = Math.max(1, Math.round((windowEnd.getTime() - windowStart.getTime()) / DAY_MS));
+    if (!isHourly && spanDays > 1) {
+      // Daily steps for short windows (≤ 2 weeks), weekly for longer ones, so
+      // the chart never turns into a wall of thin bars.
+      const stepDays = spanDays <= 14 ? 1 : 7;
       const stepMs = stepDays * DAY_MS;
-      const buckets = Math.ceil(totalDays / stepDays);
+      const buckets = Math.ceil(spanDays / stepDays);
       const fmt = (d: Date) =>
         d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' });
-      for (let i = buckets - 1; i >= 0; i--) {
-        const end = now.getTime() - i * stepMs;
-        const start = end - stepMs;
+      for (let i = 0; i < buckets; i++) {
+        const start = windowStart.getTime() + i * stepMs;
+        const end = Math.min(start + stepMs, windowEnd.getTime());
         const inBucket = sentInRange.filter((t) => {
           const s = t.sentAt!.getTime();
           return s >= start && s < end;
@@ -289,7 +373,7 @@ export async function GET(request: NextRequest) {
     // from the ticket itself (no aiResponse = no AI; finalResponse equal to
     // aiResponse = sent as-is; otherwise rewritten).
     const feedbackRows = await prisma.aIResponseFeedback.findMany({
-      where: { tenantId: tenant.id, createdAt: { gte: queryStart } },
+      where: { tenantId: tenant.id, createdAt: { gte: queryStart, lte: queryEnd } },
       select: { ticketId: true, wasEdited: true },
       orderBy: { createdAt: 'asc' },
     });
