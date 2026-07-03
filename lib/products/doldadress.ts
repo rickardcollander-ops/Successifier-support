@@ -24,9 +24,9 @@ export const doldadress: ProductConfig = {
   adminEmails: ['ida@doldadress.se'],
   agents: ['Ida Rosell', 'Malin Sundberg', 'Filippa Kramp'],
   agentSignatures: {
-    'Ida Rosell': 'Vänliga hälsningar,\nIda\nSupportteamet Doldadress.se',
-    'Malin Sundberg': 'Vänliga hälsningar,\nMalin\nSupportteamet Doldadress.se',
-    'Filippa Kramp': 'Vänliga hälsningar,\nFilippa\nSupportteamet Doldadress.se',
+    'Ida Rosell': 'Bästa hälsningar,\nIda\nDoldAdress.se c/o Alpha Securities AB',
+    'Malin Sundberg': 'Bästa hälsningar,\nMalin\nDoldAdress.se c/o Alpha Securities AB',
+    'Filippa Kramp': 'Bästa hälsningar,\nFilippa\nDoldAdress.se c/o Alpha Securities AB',
   },
   agentColors: {
     'Ida Rosell': { bg: '#DC2626', border: '#B91C1C', text: '#FFFFFF' },
