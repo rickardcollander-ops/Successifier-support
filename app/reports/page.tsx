@@ -78,10 +78,27 @@ interface RoiSettings {
   baselineResponseHours: number | null;
 }
 
+type TimeRange = '1d' | '7d' | '30d' | '90d' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'custom';
+
+// Local YYYY-MM-DD for <input type="date"> defaults — must be the browser's
+// local calendar date, not the UTC slice of toISOString().
+const todayInput = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 export default function ReportsPage() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState<'1d' | '7d' | '30d' | '90d'>('30d');
+  const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+  // Custom date range (only used when timeRange === 'custom'). Default to the
+  // last 7 days so the picker opens on something sensible.
+  const [customFrom, setCustomFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  const [customTo, setCustomTo] = useState(todayInput);
 
   // ROI inputs (team-specific, not invented): time per ticket before the tool
   // and the fully-loaded hourly cost of an agent. Without them we don't show a
@@ -91,9 +108,14 @@ export default function ReportsPage() {
   const [roiDraft, setRoiDraft] = useState({ baselineHandlingMinutes: '', agentHourlyCost: '' });
   const [savingRoi, setSavingRoi] = useState(false);
 
+  // A custom range with from after to is invalid — don't fetch (and don't
+  // blank the current data) until it's sane.
+  const customInvalid = timeRange === 'custom' && customFrom > customTo;
+
   useEffect(() => {
+    if (customInvalid) return;
     fetchReportData();
-  }, [timeRange]);
+  }, [timeRange, customFrom, customTo]);
 
   useEffect(() => {
     fetchRoiSettings();
@@ -101,7 +123,12 @@ export default function ReportsPage() {
 
   const fetchReportData = async () => {
     try {
-      const response = await fetch(`/api/reports?range=${timeRange}`);
+      const params = new URLSearchParams({ range: timeRange });
+      if (timeRange === 'custom') {
+        params.set('from', customFrom);
+        params.set('to', customTo);
+      }
+      const response = await fetch(`/api/reports?${params.toString()}`);
       if (response.ok) setData(await response.json());
     } catch (error) {
       console.error('Error fetching report data:', error);
@@ -193,17 +220,49 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{t('Rapporter')}</h1>
           <p className="text-slate-600 dark:text-slate-400 mt-1">{t('Statistik och analys')}</p>
         </div>
-        <select
-          value={timeRange}
-          onChange={(e) => setTimeRange(e.target.value as any)}
-          className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
-        >
-          <option value="1d">{t('Senaste dygnet')}</option>
-          <option value="7d">{t('Senaste 7 dagarna')}</option>
-          <option value="30d">{t('Senaste 30 dagarna')}</option>
-          <option value="90d">{t('Senaste 90 dagarna')}</option>
-        </select>
+        <div className="flex flex-wrap items-center gap-2 justify-end">
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+            className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+          >
+            <option value="1d">{t('Senaste dygnet')}</option>
+            <option value="7d">{t('Senaste 7 dagarna')}</option>
+            <option value="30d">{t('Senaste 30 dagarna')}</option>
+            <option value="90d">{t('Senaste 90 dagarna')}</option>
+            <option value="thisWeek">{t('Denna vecka')}</option>
+            <option value="lastWeek">{t('Förra veckan')}</option>
+            <option value="thisMonth">{t('Denna månad')}</option>
+            <option value="lastMonth">{t('Förra månaden')}</option>
+            <option value="custom">{t('Anpassad period')}</option>
+          </select>
+          {timeRange === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={customFrom}
+                max={customTo}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                aria-label={t('Från datum')}
+                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+              />
+              <span className="text-slate-400 text-sm">–</span>
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom}
+                max={todayInput()}
+                onChange={(e) => setCustomTo(e.target.value)}
+                aria-label={t('Till datum')}
+                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+              />
+            </div>
+          )}
+        </div>
       </div>
+      {customInvalid && (
+        <p className="text-sm text-red-500">{t('Från-datumet måste vara före till-datumet.')}</p>
+      )}
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
