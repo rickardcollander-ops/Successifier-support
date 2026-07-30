@@ -19,6 +19,14 @@ interface AgentRow {
   color: string;
 }
 
+interface BillingForm {
+  plan: string;
+  billingStatus: string;
+  trialEndsAt: string; // yyyy-mm-dd or ''
+  stripeCustomerId: string;
+  stripeSubscriptionId: string;
+}
+
 interface FormState {
   displayName: string;
   brandName: string;
@@ -133,6 +141,7 @@ export default function TenantSettingsEditor({
   onSaved?: () => void;
 }) {
   const [form, setForm] = useState<FormState | null>(null);
+  const [billing, setBilling] = useState<BillingForm | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -145,7 +154,16 @@ export default function TenantSettingsEditor({
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `Kunde inte hämta tenant (${res.status})`);
-        if (!cancelled) setForm(toForm(data.effectiveConfig as ProductConfig));
+        if (cancelled) return;
+        setForm(toForm(data.effectiveConfig as ProductConfig));
+        const b = data.billing ?? {};
+        setBilling({
+          plan: b.plan ?? 'trial',
+          billingStatus: b.billingStatus ?? 'trialing',
+          trialEndsAt: b.trialEndsAt ? String(b.trialEndsAt).slice(0, 10) : '',
+          stripeCustomerId: b.stripeCustomerId ?? '',
+          stripeSubscriptionId: b.stripeSubscriptionId ?? '',
+        });
       })
       .catch((e) => {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Något gick fel');
@@ -166,7 +184,21 @@ export default function TenantSettingsEditor({
       const res = await fetch(`/api/admin/tenants/${tenantId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: form.displayName, settings: toSettings(form) }),
+        body: JSON.stringify({
+          name: form.displayName,
+          settings: toSettings(form),
+          ...(billing
+            ? {
+                billing: {
+                  plan: billing.plan,
+                  billingStatus: billing.billingStatus,
+                  trialEndsAt: billing.trialEndsAt || null,
+                  stripeCustomerId: billing.stripeCustomerId || null,
+                  stripeSubscriptionId: billing.stripeSubscriptionId || null,
+                },
+              }
+            : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Kunde inte spara (${res.status})`);
@@ -360,6 +392,60 @@ export default function TenantSettingsEditor({
           </>
         )}
       </Section>
+
+      {/* Fakturering (plattformens abonnemang för kunden) */}
+      {billing && (
+        <Section title="Fakturering (Successifier-abonnemang)">
+          <Field label="Plan">
+            <select
+              value={billing.plan}
+              onChange={(e) => setBilling({ ...billing, plan: e.target.value })}
+              className="rounded-lg border border-white/10 bg-[#0B0F1A] px-3 py-2 text-sm focus:border-[#7C5CFF] focus:outline-none"
+            >
+              <option value="trial">Trial</option>
+              <option value="starter">Starter</option>
+              <option value="pro">Pro</option>
+              <option value="custom">Custom</option>
+            </select>
+          </Field>
+          <Field label="Status">
+            <select
+              value={billing.billingStatus}
+              onChange={(e) => setBilling({ ...billing, billingStatus: e.target.value })}
+              className="rounded-lg border border-white/10 bg-[#0B0F1A] px-3 py-2 text-sm focus:border-[#7C5CFF] focus:outline-none"
+            >
+              <option value="trialing">Provperiod</option>
+              <option value="active">Aktiv</option>
+              <option value="past_due">Förfallen betalning</option>
+              <option value="canceled">Avslutad</option>
+              <option value="suspended">Avstängd</option>
+            </select>
+          </Field>
+          <Field label="Provperiod slutar">
+            <input
+              type="date"
+              value={billing.trialEndsAt}
+              onChange={(e) => setBilling({ ...billing, trialEndsAt: e.target.value })}
+              className="rounded-lg border border-white/10 bg-[#0B0F1A] px-3 py-2 text-sm focus:border-[#7C5CFF] focus:outline-none"
+            />
+          </Field>
+          <div />
+          <Field label="Stripe customer-ID">
+            <Input
+              value={billing.stripeCustomerId}
+              onChange={(v) => setBilling({ ...billing, stripeCustomerId: v })}
+              placeholder="cus_…"
+            />
+          </Field>
+          <Field label="Stripe subscription-ID">
+            <Input
+              value={billing.stripeSubscriptionId}
+              onChange={(v) => setBilling({ ...billing, stripeSubscriptionId: v })}
+              placeholder="sub_…"
+            />
+          </Field>
+        </Section>
+      )}
 
       {/* API */}
       <Section title="API">

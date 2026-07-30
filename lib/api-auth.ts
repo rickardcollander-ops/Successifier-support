@@ -3,11 +3,13 @@ import { prisma } from '@/lib/db/client';
 import { auth } from '@/lib/auth';
 import { hashApiKey, maskApiKey } from '@/lib/api-keys';
 import {
+  currentTenantContext,
   hostToSubdomain,
   resolveTenantBySubdomain,
   resolveTenantForRequest,
   resolveTenantFromHeaders,
 } from '@/lib/products/tenant';
+import { billingState } from '@/lib/billing';
 
 export { generateApiKey, hashApiKey, maskApiKey } from '@/lib/api-keys';
 
@@ -106,6 +108,31 @@ function unauthorized(message = 'Unauthorized'): AuthFailure {
 }
 
 /**
+ * Platform billing gate. After the request's tenant has been resolved,
+ * blocks tenants whose subscription is inactive (expired trial, canceled,
+ * suspended — see lib/billing.ts). Superadmins bypass so we can always
+ * administrate. Returns null when the request may proceed.
+ */
+function billingBlock(role?: string): AuthFailure | null {
+  if (role === 'superadmin') return null;
+  const ctx = currentTenantContext();
+  if (!ctx) return null;
+  const state = billingState(ctx.tenant);
+  if (state.active) return null;
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: 'Subscription inactive',
+        code: 'subscription_inactive',
+        reason: state.blockedReason,
+      },
+      { status: 402 },
+    ),
+  };
+}
+
+/**
  * Require a signed-in session OR a valid API key. Use in every API route
  * that serves both the web UI and programmatic clients. The middleware
  * intentionally lets API requests through so this check is THE auth gate.
@@ -114,12 +141,16 @@ export async function requireApiAuth(request: NextRequest): Promise<ApiAuthResul
   const session = await auth();
   if (session?.user?.email) {
     await enterSessionTenant(session.user.tenantId);
+    const blocked = billingBlock(session.user.role);
+    if (blocked) return blocked;
     return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role || 'agent' };
   }
 
   if (extractApiKey(request)) {
     const result = await validateApiKey(request);
     if (result.valid && result.tenantId) {
+      const blocked = billingBlock();
+      if (blocked) return blocked;
       return { ok: true, via: 'api-key', tenantId: result.tenantId };
     }
     return unauthorized(result.error || 'Invalid API key');
@@ -136,6 +167,8 @@ export async function requireSession(): Promise<SessionAuth | AuthFailure> {
   const session = await auth();
   if (session?.user?.email) {
     await enterSessionTenant(session.user.tenantId);
+    const blocked = billingBlock(session.user.role);
+    if (blocked) return blocked;
     return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role || 'agent' };
   }
   return unauthorized();
@@ -168,5 +201,7 @@ export async function requireSettingsAdmin(): Promise<SessionAuth | AuthFailure>
     return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
   await enterSessionTenant(session.user.tenantId);
+  const blocked = billingBlock(session.user.role);
+  if (blocked) return blocked;
   return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role || 'agent' };
 }

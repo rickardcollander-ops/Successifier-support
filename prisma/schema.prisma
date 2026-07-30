@@ -17,6 +17,21 @@ model Tenant {
   // and, for the legacy launch customers, their code preset. Editable at
   // runtime via the superadmin tenant API, no redeploy needed.
   settings  Json?
+
+  // --- Platform billing (OUR revenue, distinct from the tenant's own
+  // Stripe integration used to look up THEIR customers). Managed by the
+  // superadmin UI and the platform Stripe webhook. ---
+  // 'trial' | 'starter' | 'pro' | 'custom'
+  plan          String    @default("trial")
+  // 'trialing' | 'active' | 'past_due' | 'canceled' | 'suspended'
+  billingStatus String    @default("trialing")
+  // When the free trial ends. A trialing tenant past this date is blocked
+  // (lib/billing.ts) until a subscription is activated.
+  trialEndsAt   DateTime?
+  // References into OUR platform Stripe account.
+  stripeCustomerId     String? @unique
+  stripeSubscriptionId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

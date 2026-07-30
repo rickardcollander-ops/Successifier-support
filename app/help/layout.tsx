@@ -42,15 +42,25 @@ export default async function HelpLayout({ children }: { children: React.ReactNo
       <main className="mx-auto max-w-4xl px-4 py-8">{children}</main>
       <footer className="mx-auto max-w-4xl px-4 py-8 text-sm text-[color:var(--kb-muted)] flex flex-wrap items-center justify-between gap-3">
         <span>{config.footerText || `© ${new Date().getFullYear()} ${product.brandName}`}</span>
-        {config.supportUrl && (
+        <span className="flex items-center gap-4">
+          {config.supportUrl && (
+            <a
+              href={config.supportUrl}
+              className="hover:underline"
+              style={{ color: 'var(--kb-accent)' }}
+            >
+              {config.supportLabel || 'Kontakta supporten'}
+            </a>
+          )}
           <a
-            href={config.supportUrl}
-            className="hover:underline"
-            style={{ color: 'var(--kb-accent)' }}
+            href="https://successifier.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs opacity-70 hover:opacity-100 hover:underline"
           >
-            {config.supportLabel || 'Kontakta supporten'}
+            Powered by Successifier
           </a>
-        )}
+        </span>
       </footer>
       {config.chatEnabled && (
         <HelpChat

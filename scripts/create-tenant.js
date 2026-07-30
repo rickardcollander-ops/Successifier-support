@@ -73,8 +73,10 @@ async function main() {
     process.exit(1);
   }
 
+  // New customers start on a 14-day free trial (platform billing).
+  const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
   const tenant = await prisma.tenant.create({
-    data: { subdomain, name, settings },
+    data: { subdomain, name, settings, trialEndsAt },
   });
   console.log(`Tenant created: id=${tenant.id} subdomain=${tenant.subdomain} name="${tenant.name}"`);
 

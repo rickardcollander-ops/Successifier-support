@@ -79,7 +79,7 @@ export default function Sidebar() {
                 {product.displayName}
               </span>
               <span className="text-[10px] text-slate-400">
-                Ticket System
+                Powered by Successifier
               </span>
             </div>
           )}

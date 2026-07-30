@@ -9,6 +9,9 @@ interface Tenant {
   subdomain: string;
   name: string;
   createdAt: string;
+  plan: string;
+  billingStatus: string;
+  trialEndsAt: string | null;
   _count: {
     users: number;
     tickets: number;
@@ -16,6 +19,14 @@ interface Tenant {
     agents: number;
   };
 }
+
+const BILLING_BADGE: Record<string, { label: string; className: string }> = {
+  trialing: { label: 'Provperiod', className: 'border-sky-400/40 bg-sky-400/10 text-sky-300' },
+  active: { label: 'Aktiv', className: 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300' },
+  past_due: { label: 'Förfallen', className: 'border-amber-400/40 bg-amber-400/10 text-amber-300' },
+  canceled: { label: 'Avslutad', className: 'border-red-400/40 bg-red-400/10 text-red-300' },
+  suspended: { label: 'Avstängd', className: 'border-red-400/40 bg-red-400/10 text-red-300' },
+};
 
 export default function AdminPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -174,7 +185,23 @@ export default function AdminPage() {
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="font-medium">{tn.name}</div>
+                    <div className="flex items-center gap-2 font-medium">
+                      {tn.name}
+                      {(() => {
+                        const badge = BILLING_BADGE[tn.billingStatus];
+                        return badge ? (
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${badge.className}`}>
+                            {badge.label}
+                            {tn.billingStatus === 'trialing' && tn.trialEndsAt
+                              ? ` → ${new Date(tn.trialEndsAt).toLocaleDateString('sv-SE')}`
+                              : ''}
+                          </span>
+                        ) : null;
+                      })()}
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-400">
+                        {tn.plan}
+                      </span>
+                    </div>
                     <div className="text-xs text-slate-400">
                       {tn.subdomain} · skapad {new Date(tn.createdAt).toLocaleDateString('sv-SE')}
                     </div>

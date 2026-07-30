@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { requireSuperadmin } from '@/lib/api-auth';
+import { defaultTrialEnd } from '@/lib/billing';
 
 // Cross-tenant administration. The superadmin role is granted globally
 // (see SUPERADMIN_EMAILS in lib/auth.ts), so these endpoints intentionally
@@ -21,6 +22,9 @@ export async function GET() {
       subdomain: true,
       name: true,
       createdAt: true,
+      plan: true,
+      billingStatus: true,
+      trialEndsAt: true,
       _count: {
         select: {
           users: true,
@@ -85,7 +89,9 @@ export async function POST(request: NextRequest) {
   if (adminEmail) settings.adminEmails = [adminEmail];
 
   const tenant = await prisma.tenant.create({
-    data: { subdomain, name, settings },
+    // New customers start on a free trial; the platform webhook or the
+    // billing section in the tenant editor moves them to a paid plan.
+    data: { subdomain, name, settings, trialEndsAt: defaultTrialEnd() },
     select: { id: true, subdomain: true, name: true, createdAt: true },
   });
 

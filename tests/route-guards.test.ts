@@ -30,6 +30,10 @@ const ALLOWLIST: Record<string, string> = {
   // (and was previously compiled into the bundle at build time), so this
   // endpoint exposes nothing that isn't already client-visible. Read-only.
   'app/api/tenant/config/route.ts': 'Tenant branding config — same object the client already receives via SSR injection; read-only, needed on the sign-in page before any session exists',
+  // Platform billing webhook: authenticated by Stripe signature verification
+  // (stripe.webhooks.constructEvent with PLATFORM_STRIPE_WEBHOOK_SECRET);
+  // rejects unsigned/miss-signed payloads with 400 before touching any data.
+  'app/api/platform/stripe-webhook/route.ts': 'Stripe webhook — authenticated via signature verification, not session/API key',
   // Logged-in customer chatbot: authenticated by a signed identity token
   // (verifyIdentityToken from lib/identity-token.ts), not a session/API key.
   // Rejects with 401 on a missing/invalid/expired token before any data is

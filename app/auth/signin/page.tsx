@@ -61,6 +61,13 @@ function SignInContent() {
         <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-6">
           Genom att logga in godkänner du åtkomst till din Gmail för att hantera kundsupport
         </p>
+
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center mt-6">
+          Powered by{' '}
+          <span className="font-semibold bg-gradient-to-r from-[#7C5CFF] to-[#9F7BFF] bg-clip-text text-transparent">
+            Successifier
+          </span>
+        </p>
       </div>
     </div>
   );

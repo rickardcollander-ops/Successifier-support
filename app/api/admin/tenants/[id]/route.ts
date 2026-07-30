@@ -58,6 +58,13 @@ export async function GET(
       createdAt: tenant.createdAt,
       settings: tenant.settings ?? {},
     },
+    billing: {
+      plan: tenant.plan,
+      billingStatus: tenant.billingStatus,
+      trialEndsAt: tenant.trialEndsAt,
+      stripeCustomerId: tenant.stripeCustomerId,
+      stripeSubscriptionId: tenant.stripeSubscriptionId,
+    },
     // The merged config actually served to this tenant (defaults + preset +
     // settings) — what the operator sees in the UI after their edits.
     effectiveConfig: buildTenantConfig(tenant),
@@ -78,14 +85,22 @@ export async function PATCH(
     return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
   }
 
-  let body: { name?: unknown; settings?: unknown };
+  let body: { name?: unknown; settings?: unknown; billing?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const data: { name?: string; settings?: object } = {};
+  const data: {
+    name?: string;
+    settings?: object;
+    plan?: string;
+    billingStatus?: string;
+    trialEndsAt?: Date | null;
+    stripeCustomerId?: string | null;
+    stripeSubscriptionId?: string | null;
+  } = {};
 
   if (body.name !== undefined) {
     const name = String(body.name).trim();
@@ -108,6 +123,46 @@ export async function PATCH(
     // set, so the editor sends the full object and removal of a key restores
     // the default.
     data.settings = body.settings;
+  }
+
+  if (body.billing !== undefined) {
+    if (body.billing === null || typeof body.billing !== 'object' || Array.isArray(body.billing)) {
+      return NextResponse.json({ error: 'billing måste vara ett JSON-objekt' }, { status: 400 });
+    }
+    const billing = body.billing as Record<string, unknown>;
+    if (billing.plan !== undefined) {
+      const plan = String(billing.plan);
+      if (!['trial', 'starter', 'pro', 'custom'].includes(plan)) {
+        return NextResponse.json({ error: `Ogiltig plan: ${plan}` }, { status: 400 });
+      }
+      data.plan = plan;
+    }
+    if (billing.billingStatus !== undefined) {
+      const status = String(billing.billingStatus);
+      if (!['trialing', 'active', 'past_due', 'canceled', 'suspended'].includes(status)) {
+        return NextResponse.json({ error: `Ogiltig billingStatus: ${status}` }, { status: 400 });
+      }
+      data.billingStatus = status;
+    }
+    if (billing.trialEndsAt !== undefined) {
+      if (billing.trialEndsAt === null || billing.trialEndsAt === '') {
+        data.trialEndsAt = null;
+      } else {
+        const date = new Date(String(billing.trialEndsAt));
+        if (Number.isNaN(date.getTime())) {
+          return NextResponse.json({ error: 'Ogiltigt trialEndsAt-datum' }, { status: 400 });
+        }
+        data.trialEndsAt = date;
+      }
+    }
+    if (billing.stripeCustomerId !== undefined) {
+      data.stripeCustomerId = billing.stripeCustomerId ? String(billing.stripeCustomerId) : null;
+    }
+    if (billing.stripeSubscriptionId !== undefined) {
+      data.stripeSubscriptionId = billing.stripeSubscriptionId
+        ? String(billing.stripeSubscriptionId)
+        : null;
+    }
   }
 
   if (!Object.keys(data).length) {

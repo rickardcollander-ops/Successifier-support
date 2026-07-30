@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getActiveTenantConfig } from '@/lib/products';
 import { resolveTenantForRequest, resolveTenantFromHeaders } from '@/lib/products/tenant';
+import { billingState } from '@/lib/billing';
 
 // The active tenant's effective configuration for this request (session
 // tenant → host subdomain → env pin). Fetched by the client provider so
@@ -14,10 +15,13 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const session = await auth().catch(() => null);
   const tenantId = session?.user?.tenantId ?? null;
-  if (tenantId) {
-    await resolveTenantForRequest({ tenantId });
-  } else {
-    await resolveTenantFromHeaders();
-  }
-  return NextResponse.json({ config: getActiveTenantConfig() });
+  const ctx = tenantId
+    ? await resolveTenantForRequest({ tenantId })
+    : await resolveTenantFromHeaders();
+  return NextResponse.json({
+    config: getActiveTenantConfig(),
+    // Billing state drives the app chrome (trial/payment banners, lockout
+    // screen). Plan/status only — no Stripe references leave the server.
+    billing: ctx ? billingState(ctx.tenant) : null,
+  });
 }
