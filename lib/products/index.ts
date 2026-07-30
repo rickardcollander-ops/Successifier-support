@@ -57,6 +57,11 @@ const ENV_FALLBACK_CONFIG: ProductConfig = mergeTenantConfig(
 
 let clientActiveConfig: ProductConfig | null = null;
 let serverConfigSource: (() => ProductConfig | null) | null = null;
+// DB-backed config for the env-pinned tenant this process serves. Set by
+// lib/products/tenant.ts as soon as that tenant is first loaded, so deep
+// `product.*` reads on a single-tenant deployment reflect the tenant's
+// database settings even outside a resolved request context.
+let processDefaultConfig: ProductConfig | null = null;
 
 /** Install the active config on the client (called by TenantConfigProvider). */
 export function setActiveTenantConfig(config: ProductConfig | null): void {
@@ -68,9 +73,14 @@ export function __registerServerConfigSource(source: () => ProductConfig | null)
   serverConfigSource = source;
 }
 
+/** @internal Set by lib/products/tenant.ts when the env-pinned tenant loads. */
+export function __setProcessDefaultConfig(config: ProductConfig): void {
+  processDefaultConfig = config;
+}
+
 /** The currently active tenant configuration. */
 export function getActiveTenantConfig(): ProductConfig {
-  return serverConfigSource?.() ?? clientActiveConfig ?? ENV_FALLBACK_CONFIG;
+  return serverConfigSource?.() ?? clientActiveConfig ?? processDefaultConfig ?? ENV_FALLBACK_CONFIG;
 }
 
 /**

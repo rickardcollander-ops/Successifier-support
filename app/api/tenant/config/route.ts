@@ -19,7 +19,10 @@ export async function GET() {
     ? await resolveTenantForRequest({ tenantId })
     : await resolveTenantFromHeaders();
   return NextResponse.json({
-    config: getActiveTenantConfig(),
+    // Use the resolved context directly — AsyncLocalStorage propagation
+    // across Next's request plumbing is not reliable enough to read the
+    // ambient config here.
+    config: ctx?.config ?? getActiveTenantConfig(),
     // Billing state drives the app chrome (trial/payment banners, lockout
     // screen). Plan/status only — no Stripe references leave the server.
     billing: ctx ? billingState(ctx.tenant) : null,

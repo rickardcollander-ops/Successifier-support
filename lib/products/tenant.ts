@@ -7,6 +7,7 @@ import {
   DEFAULT_TENANT_CONFIG,
   mergeTenantConfig,
   __registerServerConfigSource,
+  __setProcessDefaultConfig,
   type ProductConfig,
 } from './index';
 
@@ -98,6 +99,12 @@ async function loadTenant(where: { id: string } | { subdomain: string }): Promis
   if (ctx) {
     cacheSet(`id:${ctx.tenant.id}`, ctx);
     cacheSet(`sub:${ctx.tenant.subdomain}`, ctx);
+    // On an env-pinned (single-tenant) deployment this tenant is what every
+    // `product.*` read should reflect, including reads outside a resolved
+    // request context — keep the process-level fallback in sync with the DB.
+    if (ctx.tenant.subdomain === PRODUCT_KEY) {
+      __setProcessDefaultConfig(ctx.config);
+    }
   }
   return ctx;
 }

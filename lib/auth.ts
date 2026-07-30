@@ -123,11 +123,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
       // Make the user's tenant the active request context so the settings-
-      // admin check below reads THAT tenant's admin allowlist.
-      if (token.tenantId) {
-        await resolveTenantForRequest({ tenantId: token.tenantId as string });
-      } else {
-        await resolveTenantFromHeaders();
+      // admin check below reads THAT tenant's admin allowlist. Skipped on
+      // the edge runtime (middleware runs auth() there and Prisma cannot
+      // execute on edge) — the token already carries the computed flags.
+      if (process.env.NEXT_RUNTIME !== 'edge') {
+        if (token.tenantId) {
+          await resolveTenantForRequest({ tenantId: token.tenantId as string });
+        } else {
+          await resolveTenantFromHeaders();
+        }
       }
       // Allowlisted superadmins get admin access on every deployment,
       // regardless of the per-product User.role in that product's database.
