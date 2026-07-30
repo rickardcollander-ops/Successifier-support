@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   const authResult = await requireSuperadmin();
   if (!authResult.ok) return authResult.response;
 
-  let body: { subdomain?: unknown; name?: unknown };
+  let body: { subdomain?: unknown; name?: unknown; adminEmail?: unknown; domain?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -49,6 +49,8 @@ export async function POST(request: NextRequest) {
 
   const subdomain = String(body.subdomain ?? '').trim().toLowerCase();
   const name = String(body.name ?? '').trim();
+  const adminEmail = String(body.adminEmail ?? '').trim().toLowerCase();
+  const domain = String(body.domain ?? '').trim().toLowerCase().replace(/^@/, '');
 
   if (!name) {
     return NextResponse.json({ error: 'Namn krävs' }, { status: 400 });
@@ -71,10 +73,32 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Branding defaults derived from the display name plus the optional
+  // sign-in allowlists — everything editable later in the tenant editor.
+  const settings: Record<string, string | string[]> = {
+    displayName: name,
+    brandName: name,
+    supportName: `${name} Support`,
+    fromName: `${name} Support`,
+  };
+  if (domain) settings.allowedDomains = [domain];
+  if (adminEmail) settings.adminEmails = [adminEmail];
+
   const tenant = await prisma.tenant.create({
-    data: { subdomain, name },
+    data: { subdomain, name, settings },
     select: { id: true, subdomain: true, name: true, createdAt: true },
   });
+
+  // Provision the customer's first admin so they can sign in with Google
+  // right away (the sign-in callback admits users that already belong to a
+  // tenant even without a domain allowlist match).
+  if (adminEmail) {
+    await prisma.user.upsert({
+      where: { email: adminEmail },
+      update: { tenantId: tenant.id, role: 'admin' },
+      create: { email: adminEmail, role: 'admin', tenantId: tenant.id },
+    });
+  }
 
   return NextResponse.json({ tenant }, { status: 201 });
 }
