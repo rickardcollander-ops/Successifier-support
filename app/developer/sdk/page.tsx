@@ -1,6 +1,8 @@
 import { product } from '@/lib/products';
+import { resolveTenantFromHeaders } from '@/lib/products/tenant';
 
-export default function SdkPage() {
+export default async function SdkPage() {
+  await resolveTenantFromHeaders();
   const pascal = product.displayName.replace(/[^A-Za-z0-9]/g, '');
   const pkg = `@${product.key}/sdk`;
   const clientClass = `${pascal}Client`;

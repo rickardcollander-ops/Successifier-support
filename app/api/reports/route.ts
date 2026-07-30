@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
-import { AGENTS, stripAgentSignature } from '@/lib/constants';
+import { getAgents, stripAgentSignature } from '@/lib/constants';
 import { isVendorTicket, isBounceTicket } from '@/lib/ticket-filters';
 import { requireApiAuth } from '@/lib/api-auth';
 import { keptFromDraftRatio } from '@/lib/text-diff';
@@ -534,7 +534,7 @@ export async function GET(request: NextRequest) {
     // unknown names seen in the data get their own row so nothing is hidden.
     type AgentStats = { name: string; assigned: number; sent: number };
     const perUserMap = new Map<string, AgentStats>();
-    for (const agent of AGENTS) {
+    for (const agent of getAgents()) {
       perUserMap.set(agent, { name: agent, assigned: 0, sent: 0 });
     }
     // sentBy is stored as session.user.name OR session.user.email, so
@@ -547,7 +547,7 @@ export async function GET(request: NextRequest) {
       if (perUserMap.has(raw)) return raw;
       const lower = raw.toLowerCase();
       const tokens = lower.split(/[^a-zåäöé]+/).filter(Boolean);
-      for (const agent of AGENTS) {
+      for (const agent of getAgents()) {
         if (agent.toLowerCase() === lower) return agent;
         const first = agent.split(' ')[0].toLowerCase();
         if (tokens.includes(first)) return agent;

@@ -11,6 +11,12 @@ model Tenant {
   id        String   @id @default(cuid())
   subdomain String   @unique
   name      String
+  // Per-tenant configuration (branding, language, agents, signatures,
+  // integrations, sign-in allowlists…). Partial TenantConfig JSON — anything
+  // missing falls back to the platform defaults (lib/products/defaults.ts)
+  // and, for the legacy launch customers, their code preset. Editable at
+  // runtime via the superadmin tenant API, no redeploy needed.
+  settings  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

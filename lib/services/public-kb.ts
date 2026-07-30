@@ -240,14 +240,14 @@ export async function incrementViewCount(articleId: string): Promise<void> {
 // reflect the request origin when it belongs to an allowed product domain,
 // and otherwise fall back to '*' (the content is public and read-only).
 
-const ALLOWED_HOST_SUFFIXES = [product.apiBaseDomain, ...product.allowedDomains];
+const allowedHostSuffixes = () => [product.apiBaseDomain, ...product.allowedDomains];
 
 export function corsHeaders(origin: string | null): Record<string, string> {
   let allowOrigin = '*';
   if (origin) {
     try {
       const host = new URL(origin).hostname;
-      if (ALLOWED_HOST_SUFFIXES.some((d) => host === d || host.endsWith(`.${d}`))) {
+      if (allowedHostSuffixes().some((d) => host === d || host.endsWith(`.${d}`))) {
         allowOrigin = origin;
       }
     } catch {

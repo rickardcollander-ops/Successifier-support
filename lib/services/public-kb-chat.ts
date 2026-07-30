@@ -40,7 +40,7 @@ export interface ChatSource {
   title: string;
 }
 
-const SYSTEM_SV = `Du är en smart, hjälpsam supportassistent för ${product.brandName}s hjälpcenter.
+const systemSv = (brandName: string) => `Du är en smart, hjälpsam supportassistent för ${brandName}s hjälpcenter.
 
 ABSOLUTA REGLER:
 1. Svara ENBART utifrån de hjälpartiklar som finns i användarmeddelandet under "KÄLLOR".
@@ -51,7 +51,7 @@ ABSOLUTA REGLER:
 
 KÄLLHÄNVISNING (obligatoriskt): Avsluta ALLTID ditt svar med en sista rad på exakt formen [[SOURCES: slug1, slug2]] med slug för de artiklar du faktiskt använde. Om du inte kunde besvara frågan från källorna, skriv [[SOURCES:]]. Skriv ingen text efter den raden.`;
 
-const SYSTEM_EN = `You are a smart, helpful support assistant for the ${product.brandName} help center.
+const systemEn = (brandName: string) => `You are a smart, helpful support assistant for the ${brandName} help center.
 
 ABSOLUTE RULES:
 1. Answer ONLY from the help articles provided in the user message under "SOURCES".
@@ -62,14 +62,17 @@ ABSOLUTE RULES:
 
 CITATION (required): ALWAYS end your answer with a final line in the exact form [[SOURCES: slug1, slug2]] listing the slugs of the articles you actually used. If you could not answer from the sources, write [[SOURCES:]]. Write no text after that line.`;
 
-const SYSTEM_PROMPT = product.language === 'en' ? SYSTEM_EN : SYSTEM_SV;
+// Built at call time from the ACTIVE tenant config (byte-stable per tenant
+// so the prompt cache still hits).
+const systemPrompt = () =>
+  product.language === 'en' ? systemEn(product.brandName) : systemSv(product.brandName);
 
 // System prompt for the LOGGED-IN customer assistant (/api/me/chat). On top of
 // the public KB it is given a block of data about the SPECIFIC, already
 // authenticated customer (their subscriptions, invoices, etc.). The email
 // behind that data was verified from a signed token upstream — the model must
 // treat it as trustworthy facts about "the person I'm talking to".
-const AUTHED_SYSTEM_SV = `Du är en smart, hjälpsam assistent för ${product.brandName}, och pratar med en INLOGGAD kund.
+const authedSystemSv = (brandName: string) => `Du är en smart, hjälpsam assistent för ${brandName}, och pratar med en INLOGGAD kund.
 
 ABSOLUTA REGLER:
 1. Allmänna frågor (hur saker fungerar, villkor, priser, instruktioner) besvarar du ENBART utifrån hjälpartiklarna under "KÄLLOR".
@@ -81,7 +84,7 @@ ABSOLUTA REGLER:
 
 KÄLLHÄNVISNING (obligatoriskt): Avsluta ALLTID ditt svar med en sista rad på exakt formen [[SOURCES: slug1, slug2]] med slug för de hjälpartiklar du faktiskt använde (lämna tom — [[SOURCES:]] — om du bara använde kontodata eller inte kunde svara). Skriv ingen text efter den raden.`;
 
-const AUTHED_SYSTEM_EN = `You are a smart, helpful assistant for ${product.brandName}, talking to a LOGGED-IN customer.
+const authedSystemEn = (brandName: string) => `You are a smart, helpful assistant for ${brandName}, talking to a LOGGED-IN customer.
 
 ABSOLUTE RULES:
 1. General questions (how things work, terms, prices, instructions) are answered ONLY from the help articles under "SOURCES".
@@ -93,9 +96,10 @@ ABSOLUTE RULES:
 
 CITATION (required): ALWAYS end your answer with a final line in the exact form [[SOURCES: slug1, slug2]] listing the slugs of the help articles you actually used (leave empty — [[SOURCES:]] — if you only used account data or could not answer). Write no text after that line.`;
 
-const AUTHED_SYSTEM_PROMPT = product.language === 'en' ? AUTHED_SYSTEM_EN : AUTHED_SYSTEM_SV;
+const authedSystemPrompt = () =>
+  product.language === 'en' ? authedSystemEn(product.brandName) : authedSystemSv(product.brandName);
 
-const NO_MATCH_FALLBACK =
+const noMatchFallback = () =>
   product.language === 'en'
     ? "I couldn't find an answer to that in our help center. Try rephrasing, or contact our support team and we'll help you out."
     : 'Jag hittar tyvärr inget svar på det i vårt hjälpcenter. Prova att formulera om frågan, eller kontakta vår support så hjälper vi dig.';
@@ -147,10 +151,10 @@ export async function streamChatResponse(
   // persona/tone instructions. The instructions REFINE tone/scope only — the
   // absolute grounding rules in the base prompt always win (see systemText).
   const config = await getHelpCenterConfig(tenantId);
-  const fallback = config.chatFallback || NO_MATCH_FALLBACK;
+  const fallback = config.chatFallback || noMatchFallback();
   const systemText = config.chatInstructions
-    ? `${SYSTEM_PROMPT}\n\n=== ${product.language === 'en' ? 'OPERATOR INSTRUCTIONS (tone & scope only — the ABSOLUTE RULES above always take precedence)' : 'INSTRUKTIONER FRÅN VERKSAMHETEN (endast ton & omfattning — de ABSOLUTA REGLERNA ovan gäller alltid före)'} ===\n${config.chatInstructions}`
-    : SYSTEM_PROMPT;
+    ? `${systemPrompt()}\n\n=== ${product.language === 'en' ? 'OPERATOR INSTRUCTIONS (tone & scope only — the ABSOLUTE RULES above always take precedence)' : 'INSTRUKTIONER FRÅN VERKSAMHETEN (endast ton & omfattning — de ABSOLUTA REGLERNA ovan gäller alltid före)'} ===\n${config.chatInstructions}`
+    : systemPrompt();
 
   if (trimmed.length < 2) return staticStream(fallback);
 
@@ -286,10 +290,10 @@ export async function streamAuthedChatResponse(
   const trimmed = question.trim();
 
   const config = await getHelpCenterConfig(tenantId);
-  const fallback = config.chatFallback || NO_MATCH_FALLBACK;
+  const fallback = config.chatFallback || noMatchFallback();
   const systemText = config.chatInstructions
-    ? `${AUTHED_SYSTEM_PROMPT}\n\n=== ${product.language === 'en' ? 'OPERATOR INSTRUCTIONS (tone & scope only — the ABSOLUTE RULES above always take precedence)' : 'INSTRUKTIONER FRÅN VERKSAMHETEN (endast ton & omfattning — de ABSOLUTA REGLERNA ovan gäller alltid före)'} ===\n${config.chatInstructions}`
-    : AUTHED_SYSTEM_PROMPT;
+    ? `${authedSystemPrompt()}\n\n=== ${product.language === 'en' ? 'OPERATOR INSTRUCTIONS (tone & scope only — the ABSOLUTE RULES above always take precedence)' : 'INSTRUKTIONER FRÅN VERKSAMHETEN (endast ton & omfattning — de ABSOLUTA REGLERNA ovan gäller alltid före)'} ===\n${config.chatInstructions}`
+    : authedSystemPrompt();
 
   if (trimmed.length < 2) return staticStream(fallback);
 

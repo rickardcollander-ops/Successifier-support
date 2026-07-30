@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { product } from '@/lib/products';
-import { getTenantId } from '@/lib/products/tenant';
+import { resolveTenantFromHeaders } from '@/lib/products/tenant';
 import { getPublicArticles, getPublicCategories } from '@/lib/services/public-kb';
 
 // Served at /help/sitemap.xml. Lists the public help center URLs so the
@@ -12,10 +12,11 @@ function baseUrl(): string {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const ctx = await resolveTenantFromHeaders();
   const base = baseUrl();
   const entries: MetadataRoute.Sitemap = [{ url: `${base}/help`, changeFrequency: 'weekly', priority: 0.8 }];
 
-  const tenantId = await getTenantId();
+  const tenantId = ctx?.tenant.id ?? null;
   if (!tenantId) return entries;
 
   const [categories, { articles }] = await Promise.all([

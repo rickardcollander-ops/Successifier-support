@@ -525,8 +525,10 @@ export async function translateToProductLanguage(text: string): Promise<string> 
 // --- Main Generation Function ---
 
 // Static system prompt — cacheable across requests (all dynamic content lives
-// in the user message). Keeping this byte-stable preserves the prompt cache.
-const SYSTEM_PROMPT_SV = `Du är en professionell, empatisk och hjälpsam kundtjänstmedarbetare för ${product.brandName}.
+// in the user message). Built per tenant from the ACTIVE config at call time
+// (never captured at module scope), but byte-stable for a given tenant so
+// the prompt cache still hits.
+const systemPromptSv = (brandName: string) => `Du är en professionell, empatisk och hjälpsam kundtjänstmedarbetare för ${brandName}.
 
 DITT UPPDRAG: Ge ett korrekt, tydligt och personligt svar som löser kundens problem.
 
@@ -553,7 +555,7 @@ VIKTIGA REGLER:
 5. FORMAT:
    - Börja svaret med den hälsningsfras som anges under "HÄLSNING" i användarmeddelandet nedan.
    - Ge svaret tidigt — ingen lång inledning. Hoppa över tomma empatifraser som "Jag förstår att…" om de inte tillför något konkret.
-   - Skriv REN TEXT — ingen markdown. Använd ALDRIG **fetstil**, *kursiv*, #-rubriker, backticks eller [text](länk). Skriv länkar som råa URL:er (t.ex. https://www.doldadress.se/support). Mejlet skickas som vanlig text, så markdown-tecken som ** visas bokstavligen för kunden.
+   - Skriv REN TEXT — ingen markdown. Använd ALDRIG **fetstil**, *kursiv*, #-rubriker, backticks eller [text](länk). Skriv länkar som råa URL:er (t.ex. https://www.example.com/support). Mejlet skickas som vanlig text, så markdown-tecken som ** visas bokstavligen för kunden.
    - Var koncis men FULLSTÄNDIG: svara på allt kunden tar upp och förklara det kunden behöver veta — hellre ett komplett och vänligt svar än ett avhugget. Undvik upprepningar och självklara mellansteg. För instruktioner: lista de nödvändiga stegen, en rad per steg (t.ex. "1. …").
    - Avsluta kort och vänligt och variera avslutet. Undvik den slitna standardfrasen "Hör av dig om du har fler frågor".
    - Skriv INGEN signatur eller avslutningshälsning (t.ex. "Vänliga hälsningar", "Med vänlig hälsning", namn eller företagsnamn). Signaturen läggs till automatiskt vid utskick.
@@ -577,15 +579,13 @@ const SERUS_LANGUAGE_RULE = `1. LANGUAGE (IMPORTANT — Serus always replies in 
 
 const ENGLISH_LANGUAGE_RULE = `1. LANGUAGE: Reply in the SAME LANGUAGE the customer writes in.`;
 
-const LANGUAGE_RULE_EN = product.key === 'serus' ? SERUS_LANGUAGE_RULE : ENGLISH_LANGUAGE_RULE;
-
-const SYSTEM_PROMPT_EN = `You are a professional, empathetic and helpful customer service agent for ${product.brandName}.
+const systemPromptEn = (brandName: string, productKey: string) => `You are a professional, empathetic and helpful customer service agent for ${brandName}.
 
 YOUR MISSION: Give a correct, clear and personal answer that solves the customer's problem.
 
 IMPORTANT RULES:
 
-${LANGUAGE_RULE_EN}
+${productKey === 'serus' ? SERUS_LANGUAGE_RULE : ENGLISH_LANGUAGE_RULE}
 
 2. KNOWLEDGE BASE = TRUTH:
    - ALWAYS base the answer on the knowledge base articles when they are relevant.
@@ -618,7 +618,12 @@ ${LANGUAGE_RULE_EN}
 
 RESPONSE DELIVERY: ALWAYS deliver your answer by calling the submit_customer_response tool. The full email text (including the greeting but WITHOUT a signature) must be in the "response" field.`;
 
-const STATIC_SYSTEM_PROMPT = product.language === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_SV;
+/** The active tenant's system prompt (stable per tenant → prompt-cacheable). */
+function staticSystemPrompt(): string {
+  return product.language === 'en'
+    ? systemPromptEn(product.brandName, product.key)
+    : systemPromptSv(product.brandName);
+}
 
 export async function generateAIResponse(
   subject: string,
@@ -703,7 +708,7 @@ export async function generateAIResponse(
       system: [
         {
           type: 'text',
-          text: STATIC_SYSTEM_PROMPT,
+          text: staticSystemPrompt(),
           cache_control: { type: 'ephemeral' },
         },
       ],

@@ -3,7 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "../styles/globals.css";
 import { Providers } from "./providers";
 import AppShell from "@/components/AppShell";
-import { product } from "@/lib/products";
+import { getActiveTenantConfig } from "@/lib/products";
+import { resolveTenantFromHeaders } from "@/lib/products/tenant";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,20 +16,29 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: `${product.displayName} - Ticket Management`,
-  description: "AI-powered customer support",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const ctx = await resolveTenantFromHeaders();
+  const config = ctx?.config ?? getActiveTenantConfig();
+  return {
+    title: `${config.displayName} - Ticket Management`,
+    description: "AI-powered customer support",
+  };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Resolve the request's tenant server-side (host subdomain or env pin) and
+  // hand the config to the client provider so client components render with
+  // the right tenant's branding from the first paint.
+  const ctx = await resolveTenantFromHeaders();
+  const tenantConfig = ctx?.config ?? getActiveTenantConfig();
   return (
     <html lang="en" className="dark">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <Providers>
+        <Providers tenantConfig={tenantConfig}>
           <AppShell>{children}</AppShell>
         </Providers>
       </body>

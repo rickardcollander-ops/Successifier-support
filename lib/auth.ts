@@ -2,8 +2,7 @@ import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db/client";
-import { product } from "@/lib/products";
-import { getTenant } from "@/lib/products/tenant";
+import { getTenant, resolveTenantForRequest, resolveTenantFromHeaders } from "@/lib/products/tenant";
 import { isSettingsAdmin } from "@/lib/access";
 
 declare module "next-auth" {
@@ -17,6 +16,10 @@ declare module "next-auth" {
       // Whether this user may access the Settings/admin area on this
       // deployment (superadmin, or the product's admin allowlist e.g. Ida).
       isSettingsAdmin: boolean;
+      // The tenant the user belongs to. Drives per-request tenant
+      // resolution (lib/api-auth.ts) so one deployment can serve many
+      // tenants.
+      tenantId?: string | null;
     };
   }
 }
@@ -26,7 +29,6 @@ const authSecret =
   process.env.NEXTAUTH_SECRET ||
   (process.env.NODE_ENV === "development" ? "local-dev-auth-secret-change-me" : undefined);
 
-const ALLOWED_DOMAINS = product.allowedDomains;
 // Emails that may sign in regardless of allowedDomains AND are granted admin
 // (superadmin) access on every deployment — see the jwt callback, which forces
 // role = 'superadmin' for these regardless of the per-product User.role.
@@ -67,8 +69,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async createUser(message) {
       console.log('[NextAuth] createUser:', message.user?.email);
-      // Auto-assign the deployment's tenant for new users
-      const tenant = await getTenant();
+      // Auto-assign the request's tenant (host subdomain or env pin) to
+      // new users.
+      const ctx = await resolveTenantFromHeaders();
+      const tenant = ctx?.tenant ?? (await getTenant());
       if (tenant && message.user?.id) {
         await prisma.user.update({
           where: { id: message.user.id },
@@ -94,7 +98,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const email = user.email?.toLowerCase() || '';
       const domain = email.split('@')[1] || '';
       if (SUPERADMIN_EMAILS.includes(email)) return true;
-      if (ALLOWED_DOMAINS.includes(domain)) return true;
+      // The sign-in domain allowlist is per tenant, resolved from the
+      // request host (or the deployment's env pin) and stored in the DB —
+      // editable at runtime without a redeploy.
+      const ctx = await resolveTenantFromHeaders();
+      const allowedDomains = ctx?.config.allowedDomains ?? [];
+      if (allowedDomains.includes(domain)) return true;
+      // Users already provisioned for a tenant (invited via the user admin)
+      // may sign in even when their domain isn't allowlisted.
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing?.tenantId) return true;
       return '/auth/signin?error=AccessDenied';
     },
     async jwt({ token, user }) {
@@ -102,11 +115,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         try {
-          const rows = await prisma.$queryRaw<Array<{ role: string }>>`SELECT role FROM "User" WHERE id = ${user.id} LIMIT 1`;
+          const rows = await prisma.$queryRaw<Array<{ role: string; tenantId: string | null }>>`SELECT role, "tenantId" FROM "User" WHERE id = ${user.id} LIMIT 1`;
           token.role = rows[0]?.role || 'agent';
+          token.tenantId = rows[0]?.tenantId || null;
         } catch {
           token.role = 'agent';
         }
+      }
+      // Make the user's tenant the active request context so the settings-
+      // admin check below reads THAT tenant's admin allowlist.
+      if (token.tenantId) {
+        await resolveTenantForRequest({ tenantId: token.tenantId as string });
+      } else {
+        await resolveTenantFromHeaders();
       }
       // Allowlisted superadmins get admin access on every deployment,
       // regardless of the per-product User.role in that product's database.
@@ -125,6 +146,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.role = (token.role as string) || 'agent';
         session.user.isSettingsAdmin = Boolean(token.isSettingsAdmin);
+        session.user.tenantId = (token.tenantId as string | null) ?? null;
       }
       return session;
     },

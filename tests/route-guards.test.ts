@@ -25,6 +25,11 @@ const ALLOWLIST: Record<string, string> = {
   'app/api/public/kb/search/route.ts': 'Public help center — read-only search, published content only',
   'app/api/public/kb/chat/route.ts': 'Public help center — AI chatbot grounded only in published, public articles via lib/services/public-kb.ts; rate-limited',
   'app/api/public/kb/config/route.ts': 'Public help center — read-only appearance/chat UI config (safe subset, no operator prompt) for the embeddable widget',
+  // Tenant branding/config for the request's host (or session tenant). The
+  // exact same object is SSR-injected into the client bundle by app/layout.tsx
+  // (and was previously compiled into the bundle at build time), so this
+  // endpoint exposes nothing that isn't already client-visible. Read-only.
+  'app/api/tenant/config/route.ts': 'Tenant branding config — same object the client already receives via SSR injection; read-only, needed on the sign-in page before any session exists',
   // Logged-in customer chatbot: authenticated by a signed identity token
   // (verifyIdentityToken from lib/identity-token.ts), not a session/API key.
   // Rejects with 401 on a missing/invalid/expired token before any data is

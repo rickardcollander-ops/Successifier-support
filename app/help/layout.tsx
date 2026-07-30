@@ -1,17 +1,21 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { product } from '@/lib/products';
-import { getTenantId } from '@/lib/products/tenant';
+import { resolveTenantFromHeaders } from '@/lib/products/tenant';
 import { getHelpCenterConfig, DEFAULT_HELP_CENTER } from '@/lib/services/help-center';
 import HelpChat from '@/components/help/HelpChat';
 
-export const metadata: Metadata = {
-  title: `Hjälpcenter – ${product.displayName}`,
-  description: `Vanliga frågor, guider och svar för ${product.brandName}.`,
-};
+export async function generateMetadata(): Promise<Metadata> {
+  await resolveTenantFromHeaders();
+  return {
+    title: `Hjälpcenter – ${product.displayName}`,
+    description: `Vanliga frågor, guider och svar för ${product.brandName}.`,
+  };
+}
 
 export default async function HelpLayout({ children }: { children: React.ReactNode }) {
-  const tenantId = await getTenantId();
+  const ctx = await resolveTenantFromHeaders();
+  const tenantId = ctx?.tenant.id ?? null;
   const config = tenantId ? await getHelpCenterConfig(tenantId) : DEFAULT_HELP_CENTER;
 
   return (

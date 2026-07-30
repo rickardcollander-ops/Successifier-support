@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Mail, ChevronDown, Search, X, Loader2, Trash2, AlertOctagon, UserCircle2, CheckCircle2, Download, FileText, Pencil } from 'lucide-react';
 import type { Ticket } from '@/lib/types';
 import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
-import { AGENTS, statusLabelSv, agentColor } from '@/lib/constants';
+import { getAgents, statusLabelSv, agentColor } from '@/lib/constants';
 import { t } from '@/lib/i18n';
 import { product } from '@/lib/products';
 
@@ -748,7 +748,7 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onContext
                     title={t('Tilldela ärende')}
                   >
                     <option value="">{t('Tilldela…')}</option>
-                    {AGENTS.map((agent) => (
+                    {getAgents().map((agent) => (
                       <option key={agent} value={agent}>{agent}</option>
                     ))}
                   </select>

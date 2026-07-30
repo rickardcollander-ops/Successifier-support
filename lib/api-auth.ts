@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { auth } from '@/lib/auth';
 import { hashApiKey, maskApiKey } from '@/lib/api-keys';
-import { getTenantId } from '@/lib/products/tenant';
+import {
+  hostToSubdomain,
+  resolveTenantBySubdomain,
+  resolveTenantForRequest,
+  resolveTenantFromHeaders,
+} from '@/lib/products/tenant';
 
 export { generateApiKey, hashApiKey, maskApiKey } from '@/lib/api-keys';
 
@@ -51,17 +56,25 @@ export async function validateApiKey(request: NextRequest): Promise<{ valid: boo
       return { valid: false, error: 'API key is inactive' };
     }
 
-    // A key minted for another tenant must not work against this
-    // deployment, even when several tenants share a database.
-    const deploymentTenantId = await getTenantId();
-    if (deploymentTenantId && key.tenantId !== deploymentTenantId) {
-      return { valid: false, error: 'Invalid API key' };
+    // When the request targets a specific tenant's subdomain, a key minted
+    // for another tenant must not work there. On the shared/root domain the
+    // key itself identifies the tenant.
+    const hostSub = hostToSubdomain(request.headers.get('host'));
+    if (hostSub) {
+      const hostCtx = await resolveTenantBySubdomain(hostSub);
+      if (hostCtx && key.tenantId !== hostCtx.tenant.id) {
+        return { valid: false, error: 'Invalid API key' };
+      }
     }
 
     await prisma.apiKey.update({
       where: { id: key.id },
       data: { lastUsedAt: new Date() },
     });
+
+    // Install the key's tenant as the request context so all product.*
+    // reads downstream see the right tenant's configuration.
+    await resolveTenantForRequest({ tenantId: key.tenantId });
 
     return { valid: true, tenantId: key.tenantId };
   } catch (error) {
@@ -71,6 +84,18 @@ export async function validateApiKey(request: NextRequest): Promise<{ valid: boo
 }
 
 type SessionAuth = { ok: true; via: 'session'; userEmail: string; role: string };
+
+/**
+ * Install the signed-in user's tenant as the request context: the tenant on
+ * the session token first, then host subdomain / env pin as fallback.
+ */
+async function enterSessionTenant(tenantId?: string | null): Promise<void> {
+  if (tenantId) {
+    await resolveTenantForRequest({ tenantId });
+  } else {
+    await resolveTenantFromHeaders();
+  }
+}
 type ApiKeyAuth = { ok: true; via: 'api-key'; tenantId: string };
 type AuthFailure = { ok: false; response: NextResponse };
 
@@ -88,6 +113,7 @@ function unauthorized(message = 'Unauthorized'): AuthFailure {
 export async function requireApiAuth(request: NextRequest): Promise<ApiAuthResult> {
   const session = await auth();
   if (session?.user?.email) {
+    await enterSessionTenant(session.user.tenantId);
     return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role || 'agent' };
   }
 
@@ -109,6 +135,7 @@ export async function requireApiAuth(request: NextRequest): Promise<ApiAuthResul
 export async function requireSession(): Promise<SessionAuth | AuthFailure> {
   const session = await auth();
   if (session?.user?.email) {
+    await enterSessionTenant(session.user.tenantId);
     return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role || 'agent' };
   }
   return unauthorized();
@@ -123,6 +150,7 @@ export async function requireSuperadmin(): Promise<SessionAuth | AuthFailure> {
   if (session.user.role !== 'superadmin') {
     return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
+  await enterSessionTenant(session.user.tenantId);
   return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role };
 }
 
@@ -139,5 +167,6 @@ export async function requireSettingsAdmin(): Promise<SessionAuth | AuthFailure>
   if (!session.user.isSettingsAdmin) {
     return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
+  await enterSessionTenant(session.user.tenantId);
   return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role || 'agent' };
 }

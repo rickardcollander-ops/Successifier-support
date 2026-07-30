@@ -1,21 +1,25 @@
 import type { ProductConfig } from './types';
 import { doldadress } from './doldadress';
 import { serus } from './serus';
+import { DEFAULT_TENANT_CONFIG, mergeTenantConfig } from './defaults';
 
 export type { ProductConfig, AgentColor } from './types';
+export { DEFAULT_TENANT_CONFIG, mergeTenantConfig } from './defaults';
 
-// Registry of every product that shares this codebase. Add new products
-// here (and create their config file alongside this one).
-const PRODUCTS: Record<string, ProductConfig> = {
+// Code presets for the launch customers. New tenants do NOT get a preset —
+// their entire configuration lives in Tenant.settings (overlaid on
+// DEFAULT_TENANT_CONFIG). The presets remain as the base config for the
+// original customers and as the env-pinned fallback for single-tenant
+// deployments that predate runtime tenant resolution.
+export const PRODUCT_PRESETS: Record<string, ProductConfig> = {
   doldadress,
   serus,
 };
 
-// Which product this deployment serves. Pin it per deploy via the env var
-// (each product gets its own Vercel project + database). We read both the
-// public and the server-only name so the same value resolves whether this
-// module is bundled for the client or the server; NEXT_PUBLIC_PRODUCT is
-// inlined at build time and is what reaches client components.
+// Legacy env pin. On a single-tenant deployment this selects which tenant
+// the process serves when a request carries no other tenant signal (no
+// session tenant, no API key, no matching host). Optional in the
+// multi-tenant setup.
 export const PRODUCT_KEY = (
   process.env.NEXT_PUBLIC_PRODUCT ||
   process.env.PRODUCT ||
@@ -24,11 +28,69 @@ export const PRODUCT_KEY = (
   .trim()
   .toLowerCase();
 
-if (!PRODUCTS[PRODUCT_KEY]) {
-  console.warn(
-    `[product] Unknown product "${PRODUCT_KEY}" (set PRODUCT / NEXT_PUBLIC_PRODUCT). Falling back to "doldadress".`,
-  );
+const ENV_FALLBACK_CONFIG: ProductConfig = mergeTenantConfig(
+  DEFAULT_TENANT_CONFIG,
+  PRODUCT_PRESETS[PRODUCT_KEY],
+);
+
+// ---------------------------------------------------------------------------
+// Active-config plumbing.
+//
+// `product` used to be a build-time constant, which forced one deployment
+// (and one env var) per customer. It is now a live view of the ACTIVE
+// tenant's configuration:
+//
+//   - On the server, lib/products/tenant.ts registers a per-request source
+//     backed by AsyncLocalStorage; every request resolves its tenant
+//     (session → API key → host subdomain → env fallback) and all
+//     `product.*` reads inside that request see that tenant's config.
+//   - On the client, TenantConfigProvider (app/providers.tsx) receives the
+//     resolved config from the server layout and installs it before any
+//     child renders.
+//   - With neither installed (scripts, early module init) reads fall back
+//     to the env-pinned preset, preserving the old behavior.
+//
+// IMPORTANT: never capture `product.x` in a module-level constant — that
+// freezes one tenant's value into shared module state. Read it lazily
+// inside functions/components instead.
+// ---------------------------------------------------------------------------
+
+let clientActiveConfig: ProductConfig | null = null;
+let serverConfigSource: (() => ProductConfig | null) | null = null;
+
+/** Install the active config on the client (called by TenantConfigProvider). */
+export function setActiveTenantConfig(config: ProductConfig | null): void {
+  clientActiveConfig = config;
 }
 
-/** The active product configuration for this deployment. */
-export const product: ProductConfig = PRODUCTS[PRODUCT_KEY] ?? doldadress;
+/** @internal Registered by lib/products/tenant.ts (server only). */
+export function __registerServerConfigSource(source: () => ProductConfig | null): void {
+  serverConfigSource = source;
+}
+
+/** The currently active tenant configuration. */
+export function getActiveTenantConfig(): ProductConfig {
+  return serverConfigSource?.() ?? clientActiveConfig ?? ENV_FALLBACK_CONFIG;
+}
+
+/**
+ * Live view of the active tenant's configuration. Kept under the historic
+ * `product` name so the ~100 existing read sites keep working unchanged —
+ * but every property access now resolves against the active tenant at call
+ * time instead of a build-time constant.
+ */
+export const product: ProductConfig = new Proxy({} as ProductConfig, {
+  get(_target, prop) {
+    return getActiveTenantConfig()[prop as keyof ProductConfig];
+  },
+  has(_target, prop) {
+    return prop in getActiveTenantConfig();
+  },
+  ownKeys() {
+    return Reflect.ownKeys(getActiveTenantConfig());
+  },
+  getOwnPropertyDescriptor(_target, prop) {
+    const desc = Object.getOwnPropertyDescriptor(getActiveTenantConfig(), prop);
+    return desc ? { ...desc, configurable: true } : undefined;
+  },
+});

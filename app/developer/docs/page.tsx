@@ -1,7 +1,9 @@
 import { headers } from 'next/headers';
 import { product } from '@/lib/products';
+import { resolveTenantFromHeaders } from '@/lib/products/tenant';
 
 export default async function ApiDocsPage() {
+  await resolveTenantFromHeaders();
   // Derive the real deployment origin from the request so every example URL
   // (API base, help center, widget) matches the domain the admin is actually
   // on — e.g. https://doldadress.successifier.com — instead of a guessed
