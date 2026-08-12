@@ -77,7 +77,7 @@ interface CustomerHistoryResponse {
 interface TicketDetailProps {
   ticket: Ticket;
   onUpdate: (ticketId: string, updates: Partial<Ticket>) => void;
-  onGenerateAI: (ticketId: string) => Promise<string | null>;
+  onGenerateAI: (ticketId: string) => Promise<{ response: string | null; error?: string }>;
   // Deliver freshly re-fetched customer data (from the open-time context
   // refresh) straight into the parent's state so the cards update without a
   // manual regenerate. Local state only — does not bump updatedAt.
@@ -462,10 +462,16 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onContext
 
   const handleGenerateAI = async () => {
     setIsGenerating(true);
-    const aiResponse = await onGenerateAI(ticket.id);
-    if (aiResponse) {
-      setAiSuggestion(aiResponse);
-      setResponse(aiResponse);
+    const result = await onGenerateAI(ticket.id);
+    if (result.response) {
+      setAiSuggestion(result.response);
+      setResponse(result.response);
+    } else if (result.error) {
+      setSendConfirmation({
+        type: 'error',
+        message: `${t('Kunde inte generera AI-svar:')} ${result.error}`,
+      });
+      setTimeout(() => setSendConfirmation(null), 20000);
     }
     setIsGenerating(false);
   };
