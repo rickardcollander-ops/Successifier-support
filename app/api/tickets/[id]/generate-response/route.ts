@@ -51,14 +51,19 @@ export async function POST(
     );
 
     step = 'check-api-key';
-    if (!process.env.OPENAI_API_KEY) {
+    // The generator runs on Anthropic (see lib/services/ai-generator.ts).
+    // This used to gate on OPENAI_API_KEY — a leftover from the OpenAI era
+    // that made every manual "Generera AI" fail on deployments without a
+    // legacy OpenAI key (e.g. Serus), while the background sync drafts
+    // (which never had the check) kept working.
+    if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json(
-        { error: 'OpenAI API key not configured' },
+        { error: 'AI generation is not configured (ANTHROPIC_API_KEY missing)' },
         { status: 500 }
       );
     }
 
-    step = 'openai-generate';
+    step = 'ai-generate';
     // Use the unified AI generator which includes KB, learning examples, and previous tickets
     const { response: aiResponse, confidence, knowledgeUsed } = await generateAIResponse(
       ticket.subject,

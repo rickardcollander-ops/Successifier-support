@@ -29,10 +29,12 @@ NEXTAUTH_SECRET=[generera med: openssl rand -base64 32]
 AUTH_SECRET=[samma som NEXTAUTH_SECRET]
 ```
 
-### 4. OpenAI
+### 4. AI (Anthropic)
 ```
-OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
+AI-svarsgenereringen körs på Anthropic. (`OPENAI_API_KEY` behövs bara för
+engångsscripts för KB-import, inte av appen.)
 
 ### 5. Google OAuth
 ```

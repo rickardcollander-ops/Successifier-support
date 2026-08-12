@@ -162,6 +162,7 @@ const EN: Record<string, string> = {
   'Visa original': 'Show original',
   'Visa översättning': 'Show translation',
   'Kunde inte översätta:': 'Could not translate:',
+  'Kunde inte generera AI-svar:': 'Could not generate AI reply:',
   'Till:': 'To:',
   'Kopia:': 'Cc:',
   'Hemlig kopia:': 'Bcc:',

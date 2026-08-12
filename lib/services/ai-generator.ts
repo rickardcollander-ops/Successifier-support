@@ -762,7 +762,11 @@ export async function generateAIResponse(
     if (aiResponse.length < 50) confidence -= 0.15;
     else if (aiResponse.length < 100) confidence -= 0.08;
 
-    if (aiResponse.includes('undersöka detta') || aiResponse.includes('återkommer')) {
+    // "I need to check" phrasings — both the Swedish ones and the English
+    // ones the EN prompt mandates (Serus) — mean the model is deferring,
+    // so cap confidence regardless of its self-report.
+    const deferralPhrases = ['undersöka detta', 'återkommer', "I'll look into", 'look into this', 'get back to you'];
+    if (deferralPhrases.some((p) => aiResponse.includes(p))) {
       confidence = Math.min(confidence, 0.45);
     }
 

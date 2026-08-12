@@ -598,7 +598,7 @@ export default function TicketsPage() {
     }
   };
 
-  const handleGenerateAIResponse = async (ticketId: string): Promise<string | null> => {
+  const handleGenerateAIResponse = async (ticketId: string): Promise<{ response: string | null; error?: string }> => {
     try {
       const response = await fetch(`/api/tickets/${ticketId}/generate-response`, {
         method: 'POST',
@@ -610,12 +610,15 @@ export default function TicketsPage() {
         if (selectedTicket?.id === ticketId) {
           setSelectedTicket(updatedTicket);
         }
-        return updatedTicket.aiResponse || null;
+        return { response: updatedTicket.aiResponse || null };
       }
-      return null;
+      // Surface the server's reason so support sees WHY generation failed
+      // (config errors used to fail silently — the button just "did nothing").
+      const data = await response.json().catch(() => null);
+      return { response: null, error: data?.error || `HTTP ${response.status}` };
     } catch (error) {
       console.error('Error generating AI response:', error);
-      return null;
+      return { response: null, error: error instanceof Error ? error.message : 'Network error' };
     }
   };
 
