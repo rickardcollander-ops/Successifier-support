@@ -7,6 +7,7 @@ import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 import { AGENTS, statusLabelSv, agentColor } from '@/lib/constants';
 import { t } from '@/lib/i18n';
 import { product } from '@/lib/products';
+import TicketTimeline from '@/components/TicketTimeline';
 
 // Three-level "traffic light" priority used to rank customers at a glance.
 // We keep the existing four DB values working but expose only the three
@@ -1069,6 +1070,9 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onContext
             </div>
           )}
         </div>
+
+        {/* Activity timeline from the ticket event log — collapsible, lazy. */}
+        <TicketTimeline ticketId={ticket.id} />
 
         {(ticket.contextData || hasBillectaIntegration) && (
           <div>

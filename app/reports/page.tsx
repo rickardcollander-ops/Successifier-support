@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, PencilLine, MousePointerClick, Wallet, Settings, CalendarDays, Layers, MessageSquare, Target } from 'lucide-react';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, PencilLine, MousePointerClick, Wallet, Settings, CalendarDays, Layers, MessageSquare, Target, Download, RefreshCcw, ChevronDown, ChevronRight } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { AGENTS, statusLabelSv, priorityLabelSv } from '@/lib/constants';
 
@@ -87,6 +88,38 @@ interface ReportData {
     openOverdue: { count: number; tickets: Array<{ id: string; subject: string; ageHours: number }> };
   };
   backlog?: Array<{ date: string; open: number; approximate: boolean }>;
+  followUp?: {
+    covered: boolean;
+    closedCount: number;
+    reopenedCount: number;
+    reopenRatePct: number | null;
+    oneTouch: { resolved: number; oneReply: number; pct: number | null };
+  };
+  // Same KPI definitions over the period immediately before the window —
+  // the source for the "vs föregående period" delta badges.
+  comparison?: {
+    from: string;
+    to: string;
+    totalTickets: number;
+    totalSent: number;
+    medianResponseHours: number;
+    firstResponse: { count: number; medianHours: number; p90Hours: number };
+    activeWork: { count: number; medianMinutes: number };
+    editStats: { count: number; medianKeptPct: number };
+    sla: { targetHours: number; answered: number; met: number; attainmentPct: number | null } | null;
+  };
+}
+
+// One agent's drill-down row from /api/reports/agents.
+interface AgentDetail {
+  name: string;
+  replies: number;
+  responseCount: number;
+  responseMedianHours: number;
+  activeWorkCount: number;
+  activeWorkMedianMinutes: number;
+  keptCount: number;
+  keptMedianPct: number;
 }
 
 interface RoiSettings {
@@ -118,18 +151,49 @@ const todayInput = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+const VALID_RANGES: readonly TimeRange[] = ['1d', '7d', '30d', '90d', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth', 'custom'];
+const isDateKey = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+// useSearchParams needs a Suspense boundary during prerender — the actual
+// page lives in ReportsContent below.
 export default function ReportsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-96">
+          <div className="text-slate-600 dark:text-slate-400">{t('Laddar rapporter…')}</div>
+        </div>
+      }
+    >
+      <ReportsContent />
+    </Suspense>
+  );
+}
+
+function ReportsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+  // The view state initialises from the URL so a report view can be linked,
+  // bookmarked and reloaded; the write-back effect below keeps them in sync.
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
+    const r = searchParams.get('range');
+    return r && (VALID_RANGES as readonly string[]).includes(r) ? (r as TimeRange) : '30d';
+  });
   // Custom date range (only used when timeRange === 'custom'). Default to the
   // last 7 days so the picker opens on something sensible.
   const [customFrom, setCustomFrom] = useState(() => {
+    const fromUrl = searchParams.get('from');
+    if (isDateKey(fromUrl)) return fromUrl;
     const d = new Date();
     d.setDate(d.getDate() - 6);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
-  const [customTo, setCustomTo] = useState(todayInput);
+  const [customTo, setCustomTo] = useState(() => {
+    const toUrl = searchParams.get('to');
+    return isDateKey(toUrl) ? toUrl : todayInput();
+  });
 
   // ROI inputs (team-specific, not invented): time per ticket before the tool
   // and the fully-loaded hourly cost of an agent. Without them we don't show a
@@ -141,10 +205,15 @@ export default function ReportsPage() {
 
   // Filters: '' = no filter. Applied server-side; the API echoes what it
   // actually applied in filtersApplied.
-  const [filterAgent, setFilterAgent] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterPriority, setFilterPriority] = useState('');
+  const [filterAgent, setFilterAgent] = useState(() => searchParams.get('agent') ?? '');
+  const [filterStatus, setFilterStatus] = useState(() => searchParams.get('status') ?? '');
+  const [filterPriority, setFilterPriority] = useState(() => searchParams.get('priority') ?? '');
   const filtersActive = Boolean(filterAgent || filterStatus || filterPriority);
+
+  // Per-agent drill-down (lazy: fetched the first time a row is expanded).
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+  const [agentDetails, setAgentDetails] = useState<AgentDetail[] | null>(null);
+  const [loadingAgentDetails, setLoadingAgentDetails] = useState(false);
 
   // Rewritten-replies drill-down (lazy: only fetched when the list is opened).
   const [showRewritten, setShowRewritten] = useState(false);
@@ -159,10 +228,52 @@ export default function ReportsPage() {
   useEffect(() => {
     if (customInvalid) return;
     fetchReportData();
-    // The drill-down list belongs to the old window — drop it so an open list
-    // refetches for the new range instead of showing stale rows.
+    // The drill-down lists belong to the old window — drop them so an open
+    // list refetches for the new range instead of showing stale rows.
     setRewritten(null);
+    setAgentDetails(null);
   }, [timeRange, customFrom, customTo, filterAgent, filterStatus, filterPriority]);
+
+  // Mirror the current view into the URL (without adding history entries) so
+  // the report can be linked and reloaded. Defaults are omitted → clean URLs.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (timeRange !== '30d') params.set('range', timeRange);
+    if (timeRange === 'custom') {
+      params.set('from', customFrom);
+      params.set('to', customTo);
+    }
+    if (filterAgent) params.set('agent', filterAgent);
+    if (filterStatus) params.set('status', filterStatus);
+    if (filterPriority) params.set('priority', filterPriority);
+    const qs = params.toString();
+    router.replace(qs ? `/reports?${qs}` : '/reports', { scroll: false });
+  }, [timeRange, customFrom, customTo, filterAgent, filterStatus, filterPriority, router]);
+
+  // Fetch the per-agent drill-down once per window, when first expanded.
+  useEffect(() => {
+    if (!expandedAgent || agentDetails !== null || customInvalid) return;
+    const fetchAgentDetails = async () => {
+      setLoadingAgentDetails(true);
+      try {
+        const params = new URLSearchParams({ range: timeRange });
+        if (timeRange === 'custom') {
+          params.set('from', customFrom);
+          params.set('to', customTo);
+        }
+        const res = await fetch(`/api/reports/agents?${params.toString()}`);
+        if (res.ok) {
+          const payload = await res.json();
+          setAgentDetails(payload.agents || []);
+        }
+      } catch (error) {
+        console.error('Error fetching per-agent details:', error);
+      } finally {
+        setLoadingAgentDetails(false);
+      }
+    };
+    fetchAgentDetails();
+  }, [expandedAgent, agentDetails, timeRange, customFrom, customTo, customInvalid]);
 
   useEffect(() => {
     if (!showRewritten || rewritten !== null || customInvalid) return;
@@ -252,6 +363,55 @@ export default function ReportsPage() {
     }
   };
 
+  // Export the loaded report as CSV (same Blob pattern as the settings page's
+  // affected-tickets export). Exports what the page currently shows — the
+  // selected window and filters — so the file always matches the screen.
+  const exportCsv = () => {
+    if (!data) return;
+    const c = data.comparison;
+    const num = (v: number | null | undefined) => (v == null ? '' : String(v));
+    const rows: string[][] = [
+      [t('Nyckeltal'), t('Värde'), t('Föregående period')],
+      [t('Totalt antal ärenden'), String(data.totalTickets), num(c?.totalTickets)],
+      [t('Skickade svar'), String(data.totalSent), num(c?.totalSent)],
+      [`${t('Median svarstid')} (h)`, String(data.medianResponseTime), num(c?.medianResponseHours)],
+      [`${t('Första svarstid')} ${t('median')} (h)`, num(data.firstResponse?.medianHours), num(c?.firstResponse.medianHours)],
+      [`${t('Första svarstid')} p90 (h)`, num(data.firstResponse?.p90Hours), num(c?.firstResponse.p90Hours)],
+      [`${t('Aktiv arbetstid / ärende')} (min)`, num(data.activeWork?.medianMinutes), num(c?.activeWork.medianMinutes)],
+      [`${t('SLA-uppfyllnad')} (%)`, num(data.sla?.attainmentPct), num(c?.sla?.attainmentPct)],
+      [t('Lösta idag'), String(data.resolvedToday), ''],
+      [t('Väntande'), String(data.pendingTickets), ''],
+    ];
+    if (data.followUp) {
+      rows.push([t('Återöppnade ärenden'), String(data.followUp.reopenedCount), '']);
+      rows.push([t('Stängda ärenden i perioden'), String(data.followUp.closedCount), '']);
+      rows.push([`${t('Löst med 1 svar')} (%)`, num(data.followUp.oneTouch.pct), '']);
+    }
+    rows.push([]);
+    rows.push([t('Medarbetare'), t('Tilldelade'), t('Skickade')]);
+    for (const a of data.perUserStats || []) {
+      rows.push([a.name, String(a.assigned), String(a.sent)]);
+    }
+    if (trendForExport.length > 1) {
+      rows.push([]);
+      rows.push([t('Period'), `${t('Svarstid (timmar)')} ${t('median')}`, `${t('Aktiv arbetstid (min)')} ${t('median')}`, t('Ärenden')]);
+      for (const p of trendForExport) {
+        rows.push([p.label, String(p.responseMedian), String(p.handlingMedian), String(p.count)]);
+      }
+    }
+    const csv = rows
+      .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rapport-${timeRange}-${todayInput()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const trendForExport = data?.trend || [];
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -273,6 +433,51 @@ export default function ReportsPage() {
     if (!minutes || minutes <= 0) return '–';
     if (minutes < 60) return `${Math.round(minutes)} min`;
     return `${Math.round((minutes / 60) * 10) / 10} h`;
+  };
+
+  // "vs föregående period" badge for a KPI card. Never claims a percentage
+  // when either period's sample is below minN — a delta off a handful of
+  // tickets is noise, not a trend (same philosophy as MIN_GROUP).
+  const DeltaBadge = ({
+    current,
+    previous,
+    lowerIsBetter = false,
+    neutral = false,
+    currentN,
+    previousN,
+    minN = 0,
+  }: {
+    current: number;
+    previous: number;
+    lowerIsBetter?: boolean;
+    neutral?: boolean;
+    currentN?: number;
+    previousN?: number;
+    minN?: number;
+  }) => {
+    if (!data?.comparison) return null;
+    if (minN > 0 && ((currentN ?? 0) < minN || (previousN ?? 0) < minN)) {
+      return <p className="text-[10px] text-slate-400 mt-1">{t('för få ärenden för jämförelse')}</p>;
+    }
+    if (previous === 0 && current === 0) return null;
+    const pct = previous > 0 ? Math.round(((current - previous) / previous) * 100) : null;
+    if (pct === 0) {
+      return <p className="text-[10px] text-slate-400 mt-1">± 0% {t('vs föregående period')}</p>;
+    }
+    const better = lowerIsBetter ? current < previous : current > previous;
+    const color = neutral
+      ? 'text-slate-500 dark:text-slate-400'
+      : better
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : 'text-red-500';
+    const label = pct != null
+      ? `${pct > 0 ? '+' : ''}${pct}%`
+      : `${current - previous > 0 ? '+' : ''}${Math.round((current - previous) * 10) / 10}`;
+    return (
+      <p className={`text-[10px] font-medium mt-1 ${color}`}>
+        {label} {t('vs föregående period')}
+      </p>
+    );
   };
 
   const trend = data.trend || [];
@@ -297,6 +502,13 @@ export default function ReportsPage() {
           <p className="text-slate-600 dark:text-slate-400 mt-1">{t('Statistik och analys')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 justify-end">
+          <button
+            onClick={exportCsv}
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 hover:border-[#7C5CFF]/50"
+            title={t('Ladda ner rapporten som CSV')}
+          >
+            <Download className="w-4 h-4" /> {t('Exportera CSV')}
+          </button>
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value as TimeRange)}
@@ -396,6 +608,9 @@ export default function ReportsPage() {
             <div>
               <p className="text-sm text-slate-600 dark:text-slate-400">{t('Totalt antal ärenden')}</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.totalTickets}</p>
+              {data.comparison && (
+                <DeltaBadge current={data.totalTickets} previous={data.comparison.totalTickets} neutral />
+              )}
             </div>
             <div className="w-12 h-12 rounded-lg border border-blue-300 dark:border-blue-700 flex items-center justify-center">
               <BarChart3 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
@@ -435,6 +650,16 @@ export default function ReportsPage() {
               <p className="text-sm text-slate-600 dark:text-slate-400">{t('Median svarstid')}</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.medianResponseTime}h</p>
               <p className="text-[11px] text-slate-400 mt-1">{t('snitt')} {data.avgResponseTime}h</p>
+              {data.comparison && (
+                <DeltaBadge
+                  current={data.medianResponseTime}
+                  previous={data.comparison.medianResponseHours}
+                  lowerIsBetter
+                  currentN={data.totalSent}
+                  previousN={data.comparison.totalSent}
+                  minN={MIN_GROUP}
+                />
+              )}
             </div>
             <div className="w-12 h-12 rounded-lg border border-purple-300 dark:border-purple-700 flex items-center justify-center">
               <Clock className="w-6 h-6 text-purple-600 dark:text-purple-400" />
@@ -457,6 +682,16 @@ export default function ReportsPage() {
                   ? `${t('median')} · p90 ${data.firstResponse.p90Hours}h · ${data.firstResponse.count} ${t('ärenden')}`
                   : t('Första svaret per ärende')}
               </p>
+              {data.comparison && data.firstResponse && (
+                <DeltaBadge
+                  current={data.firstResponse.medianHours}
+                  previous={data.comparison.firstResponse.medianHours}
+                  lowerIsBetter
+                  currentN={data.firstResponse.count}
+                  previousN={data.comparison.firstResponse.count}
+                  minN={MIN_GROUP}
+                />
+              )}
             </div>
             <div className="w-12 h-12 rounded-lg border border-sky-300 dark:border-sky-700 flex items-center justify-center">
               <MessageSquare className="w-6 h-6 text-sky-600 dark:text-sky-400" />
@@ -478,6 +713,16 @@ export default function ReportsPage() {
                   ? `${t('median, baserat på')} ${activeWork.count} ${t('ärenden')}`
                   : t('Mäts från faktisk närvaro i ärendet')}
               </p>
+              {data.comparison && activeWork && (
+                <DeltaBadge
+                  current={activeWork.medianMinutes}
+                  previous={data.comparison.activeWork.medianMinutes}
+                  lowerIsBetter
+                  currentN={activeWork.count}
+                  previousN={data.comparison.activeWork.count}
+                  minN={MIN_GROUP}
+                />
+              )}
             </div>
             <div className="w-12 h-12 rounded-lg border border-[#7C5CFF]/40 flex items-center justify-center">
               <Timer className="w-6 h-6 text-[#7C5CFF]" />
@@ -916,15 +1161,26 @@ export default function ReportsPage() {
           <div className="space-y-4">
             {perUserStats.map((agent) => {
               const share = data.totalSent > 0 ? Math.round((agent.sent / data.totalSent) * 100) : 0;
+              const isExpanded = expandedAgent === agent.name;
+              const detail = agentDetails?.find((d) => d.name === agent.name);
               return (
                 <div key={agent.name}>
                   <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setExpandedAgent(isExpanded ? null : agent.name)}
+                      className="flex items-center gap-2 text-left"
+                      title={t('Visa detaljer per medarbetare')}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      )}
                       <div className="w-7 h-7 rounded-full bg-[#7C5CFF]/15 text-[#7C5CFF] dark:text-[#B8A6FF] flex items-center justify-center text-xs font-bold">
                         {agent.name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()}
                       </div>
                       <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{agent.name}</span>
-                    </div>
+                    </button>
                     <div className="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
                       <span className="flex items-center gap-1">
                         <Users className="w-3.5 h-3.5" />
@@ -951,6 +1207,57 @@ export default function ReportsPage() {
                     />
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1">{share}% {t('av skickade svar')}</p>
+
+                  {/* Drill-down: per-agent medians. Every figure ships with
+                      its sample size; below MIN_GROUP we mark it as thin
+                      instead of hiding it. */}
+                  {isExpanded && (
+                    <div className="mt-2 mb-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+                      {loadingAgentDetails && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t('Laddar…')}</p>
+                      )}
+                      {!loadingAgentDetails && !detail && agentDetails && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t('Inga skickade svar i perioden.')}</p>
+                      )}
+                      {!loadingAgentDetails && detail && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">{t('Svarstid per svar')}</p>
+                            <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                              {detail.responseCount > 0 ? `${detail.responseMedianHours} h` : '–'}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              {detail.responseCount > 0
+                                ? `${t('median')} · ${detail.responseCount} ${t('svar')}${detail.responseCount < MIN_GROUP ? ` · ${t('litet underlag')}` : ''}`
+                                : t('Ingen data i perioden')}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">{t('Aktiv arbetstid / ärende')}</p>
+                            <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                              {detail.activeWorkCount > 0 ? fmtMinutes(detail.activeWorkMedianMinutes) : '–'}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              {detail.activeWorkCount > 0
+                                ? `${t('median')} · ${detail.activeWorkCount} ${t('ärenden')}${detail.activeWorkCount < MIN_GROUP ? ` · ${t('litet underlag')}` : ''}`
+                                : t('Ingen data i perioden')}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">{t('Från AI-utkastet')}</p>
+                            <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                              {detail.keptCount > 0 ? `${detail.keptMedianPct}%` : '–'}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              {detail.keptCount > 0
+                                ? `${t('median')} · ${detail.keptCount} ${t('svar med AI-utkast.')}${detail.keptCount < MIN_GROUP ? ` · ${t('litet underlag')}` : ''}`
+                                : t('Ingen data i perioden')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1179,6 +1486,52 @@ export default function ReportsPage() {
             </div>
           ))}
           <p className="text-[11px] text-slate-400 mt-3">{t('Baserat på')} {data.repliesPerTicket.ticketCount} {t('ärenden med minst ett svar i perioden.')}</p>
+        </div>
+      )}
+
+      {/* Follow-up quality: does "closed" stick, and does the first reply
+          resolve the case? From the status-change event log. */}
+      {data.followUp && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <RefreshCcw className="w-5 h-5 text-[#7C5CFF]" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Uppföljningskvalitet')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Håller stängningarna? Återöppnade ärenden och andelen som löses med ett enda svar.')}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{t('Återöppnade ärenden')}</p>
+              <p className={`text-3xl font-bold ${
+                data.followUp.reopenRatePct == null ? 'text-slate-900 dark:text-slate-100'
+                : data.followUp.reopenRatePct <= 5 ? 'text-emerald-600 dark:text-emerald-400'
+                : data.followUp.reopenRatePct <= 15 ? 'text-amber-600 dark:text-amber-400'
+                : 'text-red-500'
+              }`}>
+                {data.followUp.reopenRatePct != null ? `${data.followUp.reopenRatePct}%` : data.followUp.reopenedCount}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {data.followUp.reopenedCount} {t('av')} {data.followUp.closedCount} {t('stängda ärenden öppnades igen i perioden.')}
+                {data.followUp.reopenRatePct == null && data.followUp.closedCount > 0 && ` ${t('(för få stängda för en andel)')}`}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{t('Löst med ett svar')}</p>
+              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100">
+                {data.followUp.oneTouch.pct != null ? `${data.followUp.oneTouch.pct}%` : data.followUp.oneTouch.oneReply}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {data.followUp.oneTouch.oneReply} {t('av')} {data.followUp.oneTouch.resolved} {t('lösta ärenden klarades med ett enda svar.')}
+                {data.followUp.oneTouch.pct == null && data.followUp.oneTouch.resolved > 0 && ` ${t('(för få lösta för en andel)')}`}
+              </p>
+            </div>
+          </div>
+          {!data.followUp.covered && (
+            <p className="text-[11px] text-slate-400 mt-3">
+              {t('Händelseloggen täcker inte hela perioden – siffrorna kan vara ofullständiga.')}
+            </p>
+          )}
         </div>
       )}
     </div>
