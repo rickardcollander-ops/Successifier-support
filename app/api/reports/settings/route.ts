@@ -16,6 +16,17 @@ function optionalPositive(value: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+// Staffing knobs are fractions of an hour: accept 0 < n < 1 ("0.8"), or a
+// percentage 1 < n < 100 ("80") normalised down — whichever the user typed.
+// Anything else clears the value so the app-side default applies.
+function optionalFraction(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : parseFloat(String(value));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (n < 1) return n;
+  if (n < 100) return n / 100;
+  return null;
+}
+
 // Read the ROI/report settings (agent hourly cost + baselines). Returns the
 // row or null defaults — the client decides what to prompt for.
 export async function GET(request: NextRequest) {
@@ -29,6 +40,9 @@ export async function GET(request: NextRequest) {
       agentHourlyCost: settings?.agentHourlyCost ?? null,
       baselineResponseHours: settings?.baselineResponseHours ?? null,
       baselineHandlingMinutes: settings?.baselineHandlingMinutes ?? null,
+      slaFirstResponseHours: settings?.slaFirstResponseHours ?? null,
+      staffingOccupancy: settings?.staffingOccupancy ?? null,
+      staffingShrinkage: settings?.staffingShrinkage ?? null,
     });
   } catch (error) {
     console.error('Error fetching report settings:', error);
@@ -45,11 +59,18 @@ export async function PUT(request: NextRequest) {
     const tenantId = await resolveTenantId();
     const body = await request.json();
 
-    const data = {
-      agentHourlyCost: optionalPositive(body.agentHourlyCost),
-      baselineResponseHours: optionalPositive(body.baselineResponseHours),
-      baselineHandlingMinutes: optionalPositive(body.baselineHandlingMinutes),
-    };
+    // Partial update: only fields present in the body are touched, so the
+    // reports settings form and the bemanning settings form can each save
+    // their own fields without clearing the other's. (Sending an empty
+    // value still clears that specific field — that's how the UI blanks
+    // one to "ej satt".)
+    const data: Record<string, number | null> = {};
+    if ('agentHourlyCost' in body) data.agentHourlyCost = optionalPositive(body.agentHourlyCost);
+    if ('baselineResponseHours' in body) data.baselineResponseHours = optionalPositive(body.baselineResponseHours);
+    if ('baselineHandlingMinutes' in body) data.baselineHandlingMinutes = optionalPositive(body.baselineHandlingMinutes);
+    if ('slaFirstResponseHours' in body) data.slaFirstResponseHours = optionalPositive(body.slaFirstResponseHours);
+    if ('staffingOccupancy' in body) data.staffingOccupancy = optionalFraction(body.staffingOccupancy);
+    if ('staffingShrinkage' in body) data.staffingShrinkage = optionalFraction(body.staffingShrinkage);
 
     const settings = await prisma.reportSettings.upsert({
       where: { tenantId },
@@ -61,6 +82,9 @@ export async function PUT(request: NextRequest) {
       agentHourlyCost: settings.agentHourlyCost,
       baselineResponseHours: settings.baselineResponseHours,
       baselineHandlingMinutes: settings.baselineHandlingMinutes,
+      slaFirstResponseHours: settings.slaFirstResponseHours,
+      staffingOccupancy: settings.staffingOccupancy,
+      staffingShrinkage: settings.staffingShrinkage,
     });
   } catch (error) {
     console.error('Error saving report settings:', error);

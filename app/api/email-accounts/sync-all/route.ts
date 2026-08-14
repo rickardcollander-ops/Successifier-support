@@ -7,6 +7,7 @@ import { google } from 'googleapis';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
+import { logTicketEvent, TICKET_EVENT, EVENT_ACTOR } from '@/lib/services/ticket-events';
 import { sanitizeInboundText } from '@/lib/services/sanitize';
 import { sendConfirmationEmail } from '@/lib/services/confirmation-email';
 import { getBlockedPatterns, isBlocked } from '@/lib/services/blocked-senders';
@@ -267,6 +268,14 @@ async function syncSingleAccount(account: {
           await prisma.ticket.update({
             where: { id: threadParentId },
             data: { status: 'in_progress' },
+          });
+          await logTicketEvent(prisma, {
+            tenantId: tenant.id,
+            ticketId: threadParentId,
+            type: TICKET_EVENT.statusChanged,
+            actor: EVENT_ACTOR.gmailSync,
+            fromValue: threadParentStatus,
+            toValue: 'in_progress',
           });
           console.log(`[Email Sync] New customer message in thread ${threadParentId}: ${threadParentStatus} → in_progress`);
         } else {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
 import { requireSuperadmin } from '@/lib/api-auth';
+import { logTicketEvents, TICKET_EVENT, EVENT_ACTOR } from '@/lib/services/ticket-events';
 
 // Dedup window for existing cleanup. Matches the window enforced for new
 // tickets in lib/services/deduplicator.ts so the retroactive cleanup uses
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
       id: true,
       customerEmail: true,
       subject: true,
+      status: true,
       createdAt: true,
     },
   });
@@ -50,7 +52,7 @@ export async function POST(request: NextRequest) {
     buckets.set(key, list);
   }
 
-  const toMark: Array<{ id: string; keptId: string }> = [];
+  const toMark: Array<{ id: string; keptId: string; fromStatus: string }> = [];
 
   for (const list of buckets.values()) {
     if (list.length < 2) continue;
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
       const candidate = list[i];
       const delta = candidate.createdAt.getTime() - anchor.createdAt.getTime();
       if (delta <= DUPLICATE_WINDOW_MS) {
-        toMark.push({ id: candidate.id, keptId: anchor.id });
+        toMark.push({ id: candidate.id, keptId: anchor.id, fromStatus: candidate.status });
       } else {
         // Outside the window — treat this candidate as a fresh anchor
         // for the remainder of the bucket.
@@ -81,6 +83,19 @@ export async function POST(request: NextRequest) {
     where: { id: { in: toMark.map((m) => m.id) } },
     data: { status: 'duplicate' },
   });
+
+  await logTicketEvents(
+    prisma,
+    toMark.map((m) => ({
+      tenantId: tenant.id,
+      ticketId: m.id,
+      type: TICKET_EVENT.statusChanged,
+      actor: EVENT_ACTOR.api,
+      fromValue: m.fromStatus,
+      toValue: 'duplicate',
+      meta: { bulk: 'dedupe-existing', keptId: m.keptId },
+    }))
+  );
 
   const uniqueKeptIds = new Set(toMark.map((m) => m.keptId));
 

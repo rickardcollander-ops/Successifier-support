@@ -4,6 +4,7 @@ import { getTenantId } from '@/lib/products/tenant';
 import { GmailService } from '@/lib/integrations/gmail';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
+import { logTicketEvent, TICKET_EVENT, EVENT_ACTOR } from '@/lib/services/ticket-events';
 import { sanitizeInboundText } from '@/lib/services/sanitize';
 import { parseFramerForm } from '@/lib/services/inbound-forms';
 import { requireApiAuth } from '@/lib/api-auth';
@@ -92,6 +93,14 @@ export async function POST(request: NextRequest) {
           await prisma.ticket.update({
             where: { id: priorTicket.id },
             data: { status: 'in_progress' },
+          });
+          await logTicketEvent(prisma, {
+            tenantId,
+            ticketId: priorTicket.id,
+            type: TICKET_EVENT.statusChanged,
+            actor: EVENT_ACTOR.gmailSync,
+            fromValue: priorTicket.status,
+            toValue: 'in_progress',
           });
         }
       }

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, PencilLine, MousePointerClick, Wallet, Settings } from 'lucide-react';
+import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, PencilLine, MousePointerClick, Wallet, Settings, CalendarDays, Layers, MessageSquare, Target } from 'lucide-react';
 import { t } from '@/lib/i18n';
+import { AGENTS, statusLabelSv, priorityLabelSv } from '@/lib/constants';
 
 // Below this many tickets in a group we don't make comparative claims — a
 // "23% faster" line off a handful of tickets is noise, not a result.
@@ -70,12 +71,29 @@ interface ReportData {
     medianMinutes: number;
     avgMinutes: number;
   };
+  filtersApplied?: { agent: string | null; status: string | null; priority: string | null };
+  heatmap?: number[][];
+  firstResponse?: { count: number; medianHours: number; p90Hours: number };
+  repliesPerTicket?: {
+    ticketCount: number;
+    avg: number;
+    distribution: { one: number; two: number; threePlus: number };
+  };
+  sla?: null | {
+    targetHours: number;
+    answered: number;
+    met: number;
+    attainmentPct: number | null;
+    openOverdue: { count: number; tickets: Array<{ id: string; subject: string; ageHours: number }> };
+  };
+  backlog?: Array<{ date: string; open: number; approximate: boolean }>;
 }
 
 interface RoiSettings {
   agentHourlyCost: number | null;
   baselineHandlingMinutes: number | null;
   baselineResponseHours: number | null;
+  slaFirstResponseHours: number | null;
 }
 
 // One rewritten reply from /api/reports/rewritten — draft vs what was sent.
@@ -118,8 +136,15 @@ export default function ReportsPage() {
   // money figure at all — we ask for them instead.
   const [roi, setRoi] = useState<RoiSettings | null>(null);
   const [editingRoi, setEditingRoi] = useState(false);
-  const [roiDraft, setRoiDraft] = useState({ baselineHandlingMinutes: '', agentHourlyCost: '' });
+  const [roiDraft, setRoiDraft] = useState({ baselineHandlingMinutes: '', agentHourlyCost: '', slaFirstResponseHours: '' });
   const [savingRoi, setSavingRoi] = useState(false);
+
+  // Filters: '' = no filter. Applied server-side; the API echoes what it
+  // actually applied in filtersApplied.
+  const [filterAgent, setFilterAgent] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
+  const filtersActive = Boolean(filterAgent || filterStatus || filterPriority);
 
   // Rewritten-replies drill-down (lazy: only fetched when the list is opened).
   const [showRewritten, setShowRewritten] = useState(false);
@@ -137,7 +162,7 @@ export default function ReportsPage() {
     // The drill-down list belongs to the old window — drop it so an open list
     // refetches for the new range instead of showing stale rows.
     setRewritten(null);
-  }, [timeRange, customFrom, customTo]);
+  }, [timeRange, customFrom, customTo, filterAgent, filterStatus, filterPriority]);
 
   useEffect(() => {
     if (!showRewritten || rewritten !== null || customInvalid) return;
@@ -174,6 +199,9 @@ export default function ReportsPage() {
         params.set('from', customFrom);
         params.set('to', customTo);
       }
+      if (filterAgent) params.set('agent', filterAgent);
+      if (filterStatus) params.set('status', filterStatus);
+      if (filterPriority) params.set('priority', filterPriority);
       const response = await fetch(`/api/reports?${params.toString()}`);
       if (response.ok) setData(await response.json());
     } catch (error) {
@@ -192,6 +220,7 @@ export default function ReportsPage() {
         setRoiDraft({
           baselineHandlingMinutes: s.baselineHandlingMinutes != null ? String(s.baselineHandlingMinutes) : '',
           agentHourlyCost: s.agentHourlyCost != null ? String(s.agentHourlyCost) : '',
+          slaFirstResponseHours: s.slaFirstResponseHours != null ? String(s.slaFirstResponseHours) : '',
         });
       }
     } catch (error) {
@@ -208,6 +237,7 @@ export default function ReportsPage() {
         body: JSON.stringify({
           baselineHandlingMinutes: roiDraft.baselineHandlingMinutes,
           agentHourlyCost: roiDraft.agentHourlyCost,
+          slaFirstResponseHours: roiDraft.slaFirstResponseHours,
         }),
       });
       if (res.ok) {
@@ -310,8 +340,57 @@ export default function ReportsPage() {
         <p className="text-sm text-red-500">{t('Från-datumet måste vara före till-datumet.')}</p>
       )}
 
+      {/* Filter row: narrow every panel that describes the created/sent
+          populations down to one agent / status / priority. Team-level
+          panels (ROI, SLA, backlogg, lösta idag) deliberately ignore the
+          filters and say so. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-slate-500 dark:text-slate-400">{t('Filtrera:')}</span>
+        <select
+          value={filterAgent}
+          onChange={(e) => setFilterAgent(e.target.value)}
+          aria-label={t('Medarbetare')}
+          className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+        >
+          <option value="">{t('Alla medarbetare')}</option>
+          {AGENTS.map((a) => (
+            <option key={a} value={a}>{a}</option>
+          ))}
+        </select>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          aria-label={t('Status')}
+          className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+        >
+          <option value="">{t('Alla statusar')}</option>
+          {['new', 'in_progress', 'waiting_ai', 'review', 'sent', 'closed'].map((s) => (
+            <option key={s} value={s}>{statusLabelSv(s)}</option>
+          ))}
+        </select>
+        <select
+          value={filterPriority}
+          onChange={(e) => setFilterPriority(e.target.value)}
+          aria-label={t('Prioritet')}
+          className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+        >
+          <option value="">{t('Alla prioriteter')}</option>
+          {['urgent', 'high', 'normal', 'low'].map((p) => (
+            <option key={p} value={p}>{priorityLabelSv(p)}</option>
+          ))}
+        </select>
+        {filtersActive && (
+          <button
+            onClick={() => { setFilterAgent(''); setFilterStatus(''); setFilterPriority(''); }}
+            className="text-xs text-[#7C5CFF] hover:underline"
+          >
+            {t('Rensa filter')}
+          </button>
+        )}
+      </div>
+
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -363,6 +442,28 @@ export default function ReportsPage() {
           </div>
         </div>
 
+        {/* First response time — from the event log, so it survives
+            follow-up replies overwriting sentAt. Fills from go-live +
+            backfill; '–' until there is data. */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{t('Första svarstid')}</p>
+              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
+                {data.firstResponse && data.firstResponse.count > 0 ? `${data.firstResponse.medianHours}h` : '–'}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {data.firstResponse && data.firstResponse.count > 0
+                  ? `${t('median')} · p90 ${data.firstResponse.p90Hours}h · ${data.firstResponse.count} ${t('ärenden')}`
+                  : t('Första svaret per ärende')}
+              </p>
+            </div>
+            <div className="w-12 h-12 rounded-lg border border-sky-300 dark:border-sky-700 flex items-center justify-center">
+              <MessageSquare className="w-6 h-6 text-sky-600 dark:text-sky-400" />
+            </div>
+          </div>
+        </div>
+
         {/* Active work time per ticket — real "time inside the ticket" from
             presence, NOT the queue-inclusive workStartedAt→sentAt span. */}
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
@@ -385,6 +486,80 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {/* ── SLA vs the configured first-response target ─────────────────── */}
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('SLA: första svar inom mål')}</h3>
+          </div>
+          {filtersActive && (
+            <span className="text-[11px] text-slate-400">{t('Filter påverkar inte denna panel')}</span>
+          )}
+        </div>
+        {data.sla ? (
+          <>
+            <div className="flex items-baseline gap-2 mt-2">
+              <span className={`text-4xl font-bold ${
+                data.sla.attainmentPct == null ? 'text-slate-400'
+                : data.sla.attainmentPct >= 90 ? 'text-emerald-600 dark:text-emerald-400'
+                : data.sla.attainmentPct >= 70 ? 'text-amber-600 dark:text-amber-400'
+                : 'text-red-500'
+              }`}>
+                {data.sla.attainmentPct != null ? `${data.sla.attainmentPct}%` : '–'}
+              </span>
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                {t('inom målet')} {data.sla.targetHours}h
+              </span>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+              {data.sla.met} {t('av')} {data.sla.answered} {t('besvarade ärenden i perioden fick första svar inom målet.')}
+            </p>
+            {data.sla.openOverdue.count > 0 ? (
+              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-2">
+                  {data.sla.openOverdue.count} {t('öppna ärenden har passerat målet utan svar:')}
+                </p>
+                <ul className="space-y-1">
+                  {data.sla.openOverdue.tickets.map((ov) => (
+                    <li key={ov.id} className="text-sm">
+                      <a
+                        href={`/tickets?ticket=${ov.id}`}
+                        className="text-[#7C5CFF] hover:underline"
+                      >
+                        {ov.subject || t('(utan ämne)')}
+                      </a>
+                      <span className="text-xs text-slate-400 ml-2">
+                        {ov.ageHours >= 48 ? `${Math.round(ov.ageHours / 24)} ${t('dygn')}` : `${ov.ageHours}h`} {t('gammalt')}
+                      </span>
+                    </li>
+                  ))}
+                  {data.sla.openOverdue.count > data.sla.openOverdue.tickets.length && (
+                    <li className="text-xs text-slate-400">
+                      +{data.sla.openOverdue.count - data.sla.openOverdue.tickets.length} {t('till')}
+                    </li>
+                  )}
+                </ul>
+              </div>
+            ) : (
+              <p className="text-sm text-emerald-700 dark:text-emerald-400 mt-3">
+                {t('Inga öppna ärenden har passerat målet utan svar.')}
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            <p>{t('Sätt ett SLA-mål (t.ex. svar inom 24 timmar) för att följa upp hur stor andel av ärendena som besvaras i tid.')}</p>
+            <button
+              onClick={() => setEditingRoi(true)}
+              className="mt-3 px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700"
+            >
+              {t('Sätt SLA-mål')}
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* ── Section 1: ROI / value ──────────────────────────────────────── */}
       {savings && (
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
@@ -393,12 +568,17 @@ export default function ReportsPage() {
               <Wallet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Värde: tid & pengar sparade')}</h3>
             </div>
-            <button
-              onClick={() => setEditingRoi((v) => !v)}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-            >
-              <Settings className="w-3.5 h-3.5" /> {t('Inställningar')}
-            </button>
+            <div className="flex items-center gap-3">
+              {(filterStatus || filterPriority) && (
+                <span className="text-[11px] text-slate-400">{t('Status-/prioritetsfilter påverkar inte denna panel')}</span>
+              )}
+              <button
+                onClick={() => setEditingRoi((v) => !v)}
+                className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              >
+                <Settings className="w-3.5 h-3.5" /> {t('Inställningar')}
+              </button>
+            </div>
           </div>
 
           {savings.moneySaved != null ? (
@@ -439,7 +619,7 @@ export default function ReportsPage() {
           )}
 
           {editingRoi && (
-            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
               <div>
                 <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Tid/ärende före verktyget (min)')}</label>
                 <input
@@ -457,6 +637,17 @@ export default function ReportsPage() {
                   value={roiDraft.agentHourlyCost}
                   onChange={(e) => setRoiDraft((d) => ({ ...d, agentHourlyCost: e.target.value }))}
                   placeholder={t('t.ex. 300')}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('SLA-mål: första svar inom (timmar)')}</label>
+                <input
+                  type="number" min="0" inputMode="decimal"
+                  value={roiDraft.slaFirstResponseHours}
+                  onChange={(e) => setRoiDraft((d) => ({ ...d, slaFirstResponseHours: e.target.value }))}
+                  placeholder={t('t.ex. 24')}
+                  title={t('Räknas i kalendertimmar, inte kontorstid')}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
                 />
               </div>
@@ -847,6 +1038,149 @@ export default function ReportsPage() {
           );
         })()}
       </div>
+
+      {/* Volume heatmap: weekday × hour. The pattern here is what the
+          bemanning page turns into a staffing recommendation. */}
+      {data.heatmap && data.heatmap.some((row) => row.some((c) => c > 0)) && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <CalendarDays className="w-5 h-5 text-[#7C5CFF]" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Volym per veckodag och timme')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Antal inkomna ärenden per timme (svensk tid) i vald period. Mörkare = fler ärenden.')}
+          </p>
+          {(() => {
+            const heatmap = data.heatmap!;
+            const weekdays = [t('Mån'), t('Tis'), t('Ons'), t('Tor'), t('Fre'), t('Lör'), t('Sön')];
+            const max = Math.max(1, ...heatmap.flat());
+            return (
+              <div className="overflow-x-auto">
+                <div className="min-w-[560px]">
+                  {heatmap.map((row, wd) => (
+                    <div key={wd} className="flex items-center gap-1 mb-1">
+                      <span className="w-10 shrink-0 text-[11px] text-slate-500 dark:text-slate-400">{weekdays[wd]}</span>
+                      {row.map((count, hour) => (
+                        <div
+                          key={hour}
+                          title={`${weekdays[wd]} ${String(hour).padStart(2, '0')}:00 – ${count} ${t('ärenden')}`}
+                          className={`h-5 flex-1 rounded-sm ${count === 0 ? 'bg-slate-100 dark:bg-slate-700/40' : ''}`}
+                          style={count > 0 ? { backgroundColor: `rgba(124, 92, 255, ${0.15 + 0.85 * (count / max)})` } : undefined}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="w-10 shrink-0" />
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <span key={hour} className="flex-1 text-center text-[9px] text-slate-400">
+                        {hour % 6 === 0 ? String(hour).padStart(2, '0') : ''}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Backlog: open tickets at the end of each day. */}
+      {data.backlog && data.backlog.length > 1 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Layers className="w-5 h-5 text-[#7C5CFF]" />
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Ärendebalans (backlogg)')}</h3>
+            </div>
+            {filtersActive && (
+              <span className="text-[11px] text-slate-400">{t('Filter påverkar inte denna panel')}</span>
+            )}
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Antal öppna ärenden vid varje dags slut. Stigande balans betyder att det kommer in mer än teamet hinner besvara.')}
+          </p>
+          {(() => {
+            const backlog = data.backlog!;
+            const maxOpen = Math.max(1, ...backlog.map((b) => b.open));
+            const labelEvery = backlog.length > 31 ? 7 : backlog.length > 14 ? 3 : 1;
+            return (
+              <div>
+                <div className="flex items-end justify-between gap-1 sm:gap-2 h-40 border-b border-slate-200 dark:border-slate-700">
+                  {backlog.map((point, index) => {
+                    const height = point.open === 0 ? 1.5 : Math.max((point.open / maxOpen) * 100, 4);
+                    return (
+                      <div
+                        key={index}
+                        className="flex-1 flex items-end h-full min-w-0"
+                        title={`${point.date} – ${point.open} ${t('öppna')}${point.approximate ? ` (${t('uppskattat')})` : ''}`}
+                      >
+                        <div
+                          className={`w-full rounded-t-md transition-all hover:brightness-110 ${
+                            point.open === 0
+                              ? 'bg-slate-200 dark:bg-slate-700'
+                              : point.approximate
+                                ? 'bg-gradient-to-t from-slate-400 to-slate-300 dark:from-slate-600 dark:to-slate-500'
+                                : 'bg-gradient-to-t from-amber-500 to-amber-400'
+                          }`}
+                          style={{ height: `${height}%` }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex justify-between gap-1 sm:gap-2 mt-2">
+                  {backlog.map((point, index) => (
+                    <span key={index} className="flex-1 text-[10px] text-slate-500 dark:text-slate-400 truncate text-center min-w-0">
+                      {index % labelEvery === 0 || index === backlog.length - 1
+                        ? new Date(point.date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })
+                        : ''}
+                    </span>
+                  ))}
+                </div>
+                {backlog.some((b) => b.approximate) && (
+                  <p className="text-[11px] text-slate-400 mt-2">
+                    {t('Grå staplar är uppskattade — de ligger före händelseloggens start och bygger på ungefärliga stängningstider.')}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Replies per ticket: how many rounds a case takes. */}
+      {data.repliesPerTicket && data.repliesPerTicket.ticketCount > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <MessageSquare className="w-5 h-5 text-[#7C5CFF]" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Svar per ärende')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Hur många svar en konversation kräver. Många fleromgångsärenden kan tyda på att första svaret inte löser frågan.')}
+          </p>
+          <div className="flex items-baseline gap-2 mb-4">
+            <span className="text-4xl font-bold text-[#7C5CFF]">{data.repliesPerTicket.avg}</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">{t('svar per ärende i snitt')}</span>
+          </div>
+          {([
+            { label: t('Löst med 1 svar'), value: data.repliesPerTicket.distribution.one, color: 'bg-emerald-500' },
+            { label: t('2 svar'), value: data.repliesPerTicket.distribution.two, color: 'bg-amber-500' },
+            { label: t('3 eller fler svar'), value: data.repliesPerTicket.distribution.threePlus, color: 'bg-slate-400' },
+          ] as const).map(({ label, value, color }) => (
+            <div key={label} className="mb-2.5">
+              <div className="flex items-center justify-between mb-1 text-xs text-slate-600 dark:text-slate-400">
+                <span>{label}</span>
+                <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                <div className={`${color} h-2 rounded-full transition-all`} style={{ width: `${(value / data.repliesPerTicket!.ticketCount) * 100}%` }} />
+              </div>
+            </div>
+          ))}
+          <p className="text-[11px] text-slate-400 mt-3">{t('Baserat på')} {data.repliesPerTicket.ticketCount} {t('ärenden med minst ett svar i perioden.')}</p>
+        </div>
+      )}
     </div>
   );
 }

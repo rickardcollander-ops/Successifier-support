@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/client';
 import type { Prisma } from '@prisma/client';
+import { logTicketEvent, TICKET_EVENT, EVENT_ACTOR } from '@/lib/services/ticket-events';
 
 // Window used to detect duplicates. Two messages from the same sender with
 // the same normalized subject within this span are treated as the same
@@ -135,6 +136,26 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
           ...contextDataUpdate,
         },
       });
+      // Event log: the customer's message, anchored to its real arrival
+      // time, plus the reopen when the ticket had been considered done.
+      // Written on the tx client so the log stays consistent with the merge.
+      await logTicketEvent(tx, {
+        tenantId: input.tenantId,
+        ticketId: parent.id,
+        type: TICKET_EVENT.inboundReceived,
+        actor: EVENT_ACTOR.system,
+        createdAt: input.receivedAt ?? undefined,
+      });
+      if (shouldReopen) {
+        await logTicketEvent(tx, {
+          tenantId: input.tenantId,
+          ticketId: parent.id,
+          type: TICKET_EVENT.statusChanged,
+          actor: EVENT_ACTOR.system,
+          fromValue: parent.status,
+          toValue: 'in_progress',
+        });
+      }
       return { ticket: updated, created: false, merged: true };
     };
 
@@ -216,6 +237,17 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
         contextData: (input.contextData ?? undefined) as Prisma.InputJsonValue | undefined,
         ...(input.receivedAt ? { createdAt: input.receivedAt } : {}),
       },
+    });
+
+    // Event log: every creation path (sync, webhook, manual POST) funnels
+    // through here, so this single hook covers them all. Anchored to the
+    // ticket's own createdAt (= the mail's arrival time when known).
+    await logTicketEvent(tx, {
+      tenantId: input.tenantId,
+      ticketId: created.id,
+      type: TICKET_EVENT.created,
+      actor: EVENT_ACTOR.system,
+      createdAt: created.createdAt,
     });
 
     return { ticket: created, created: true, merged: false };

@@ -2,49 +2,20 @@
 // route so drill-down endpoints (e.g. the rewritten-replies list) describe
 // exactly the same set of tickets as the aggregate panels — same range
 // parameters, same Stockholm calendar-day semantics.
+//
+// The underlying Stockholm calendar helpers live in lib/time/stockholm.ts
+// (shared with the ticket event log and the bemanning calculations); this
+// module re-exports the ones the report endpoints use.
 
-const HOUR_MS = 60 * 60 * 1000;
-export const DAY_MS = 24 * HOUR_MS;
+import {
+  DAY_MS,
+  dayKey,
+  stockholmMidnight,
+  shiftDayKey,
+  stockholmWeekday,
+} from '@/lib/time/stockholm';
 
-// All "per day" logic uses calendar days in Europe/Stockholm — the team's
-// timezone. sv-SE formatting yields "YYYY-MM-DD", which is used directly as
-// bucket key.
-export const dayKey = (d: Date) =>
-  d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
-
-// The offset (ms) between Stockholm wall-clock time and UTC at a given instant.
-function stockholmOffsetMs(utcMillis: number): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Europe/Stockholm', hour12: false,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(new Date(utcMillis));
-  const m: Record<string, number> = {};
-  for (const p of parts) if (p.type !== 'literal') m[p.type] = Number(p.value);
-  // 24:00 can appear for midnight in some engines; normalise to 0.
-  const hour = m.hour === 24 ? 0 : m.hour;
-  return Date.UTC(m.year, m.month - 1, m.day, hour, m.minute, m.second) - utcMillis;
-}
-
-// Real UTC instant of 00:00 Stockholm time on the given YYYY-MM-DD.
-export function stockholmMidnight(key: string): Date {
-  const [y, mo, d] = key.split('-').map(Number);
-  const guess = Date.UTC(y, mo - 1, d);
-  return new Date(guess - stockholmOffsetMs(guess));
-}
-
-// Shift a YYYY-MM-DD calendar key by whole days. Pure UTC calendar math (no
-// DST), so it always lands on the intended date.
-export function shiftDayKey(key: string, deltaDays: number): string {
-  const [y, mo, d] = key.split('-').map(Number);
-  return new Date(Date.UTC(y, mo - 1, d) + deltaDays * DAY_MS).toISOString().slice(0, 10);
-}
-
-// Monday = 0 … Sunday = 6, in Stockholm — for anchoring "this/last week".
-export function stockholmWeekday(d: Date): number {
-  const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Stockholm', weekday: 'short' }).format(d);
-  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(wd);
-}
+export { DAY_MS, dayKey, stockholmMidnight, shiftDayKey, stockholmWeekday };
 
 export interface ReportWindow {
   windowStart: Date;

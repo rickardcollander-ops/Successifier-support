@@ -2,10 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
 import { AGENTS, stripAgentSignature } from '@/lib/constants';
-import { isVendorTicket, isBounceTicket } from '@/lib/ticket-filters';
+import { isVendorTicket, isBounceTicket, isReportable } from '@/lib/ticket-filters';
+import { resolveAgentName } from '@/lib/agent-match';
 import { requireApiAuth } from '@/lib/api-auth';
 import { keptFromDraftRatio } from '@/lib/text-diff';
-import { DAY_MS, dayKey, resolveReportWindow, shiftDayKey } from '@/lib/report-window';
+import {
+  HOUR_MS,
+  DAY_MS,
+  dayKey,
+  stockholmMidnight,
+  shiftDayKey,
+  stockholmSlot,
+} from '@/lib/time/stockholm';
+import { resolveReportWindow } from '@/lib/report-window';
+import { TICKET_EVENT } from '@/lib/services/ticket-events';
 
 // Same marker /api/tickets uses to hide imported Zendesk history from the
 // inbox. The reports must exclude them too, or the historical import shows
@@ -18,11 +28,14 @@ const ZENDESK_IMPORT_MARKER = '[Zendesk Import Source:';
 const PRIORITY_ORDER = ['urgent', 'high', 'normal', 'low'];
 const STATUS_ORDER = ['new', 'in_progress', 'waiting_ai', 'review', 'sent', 'closed'];
 
-const HOUR_MS = 60 * 60 * 1000;
+// Statuses that count as "open" for backlog and SLA follow-up.
+const OPEN_STATUSES = ['new', 'in_progress', 'waiting_ai', 'review'];
+// Statuses that close a ticket for backlog purposes.
+const TERMINAL_STATUSES = ['sent', 'closed', 'archived', 'duplicate'];
 
-// Date helpers (dayKey, shiftDayKey, window resolution) live in
-// lib/report-window.ts, shared with the drill-down endpoints so every
-// report view slices time identically.
+// Window resolution lives in lib/report-window.ts (shared with the
+// drill-down endpoints so every report view slices time identically); the
+// underlying Stockholm calendar helpers in lib/time/stockholm.ts.
 
 // Build counts into a stable, ordered object: known keys first in their
 // canonical order, anything unexpected appended so it still shows up.
@@ -67,6 +80,16 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const range = searchParams.get('range') || '30d';
+
+    // Optional filters. Validated against the known value sets so a typo'd
+    // URL degrades to "no filter" instead of an empty report. The agent
+    // filter accepts anything resolveAgentName maps to a known agent.
+    const agentFilter = resolveAgentName(searchParams.get('agent'));
+    const rawStatus = searchParams.get('status');
+    const statusFilter = rawStatus && STATUS_ORDER.includes(rawStatus) ? rawStatus : null;
+    const rawPriority = searchParams.get('priority');
+    const priorityFilter =
+      rawPriority && PRIORITY_ORDER.includes(rawPriority) ? rawPriority : null;
 
     const tenant = await getTenant();
 
@@ -124,6 +147,26 @@ export async function GET(request: NextRequest) {
     const queryStart = new Date(windowStart.getTime() - DAY_MS);
     const queryEnd = new Date(windowEnd.getTime() + DAY_MS);
 
+    // Explicit select: originalMessage (whole email threads) and contextData
+    // are by far the heaviest columns and none of the report math needs them
+    // — the Zendesk exclusion already runs SQL-side. aiResponse/finalResponse
+    // stay: the AI-contribution diff reads them.
+    const reportSelect = {
+      id: true,
+      status: true,
+      priority: true,
+      customerEmail: true,
+      subject: true,
+      assignedTo: true,
+      sentBy: true,
+      sentAt: true,
+      createdAt: true,
+      workStartedAt: true,
+      activeWorkSeconds: true,
+      aiResponse: true,
+      finalResponse: true,
+    } as const;
+
     const rows = await prisma.ticket.findMany({
       where: {
         tenantId: tenant.id,
@@ -132,22 +175,25 @@ export async function GET(request: NextRequest) {
           originalMessage: { contains: ZENDESK_IMPORT_MARKER },
         },
       },
+      select: reportSelect,
       orderBy: { createdAt: 'asc' },
     });
 
-    // Count the same population the inbox tabs show: vendor mail (Billecta),
-    // bounces, dubletter and archived tickets live in separate folders and
-    // are excluded from the normal counters there — including them here is
-    // what made the priority/per-agent numbers look wrong (Billecta alone
-    // adds many "normal" tickets per day).
-    const isReportable = (t: { status: string; customerEmail: string; subject: string }) =>
-      t.status !== 'archived' &&
-      t.status !== 'duplicate' &&
-      !isVendorTicket(t) &&
-      !isBounceTicket(t);
-
-    const tickets = rows.filter(
+    // The same population the inbox tabs show (isReportable — vendor mail,
+    // bounces, dubletter and archived excluded), before user filters. SLA
+    // and backlog are computed from this team-level population so they stay
+    // the truth regardless of active filters.
+    const reportableTickets = rows.filter(
       (t) => isReportable(t) && bucketCounts.has(bucketKeyFor(t.createdAt))
+    );
+
+    // User filters applied on top (in JS, not SQL — SLA/backlog need the
+    // unfiltered population). The agent filter matches the assignee.
+    const tickets = reportableTickets.filter(
+      (t) =>
+        (!statusFilter || t.status === statusFilter) &&
+        (!priorityFilter || t.priority === priorityFilter) &&
+        (!agentFilter || resolveAgentName(t.assignedTo) === agentFilter)
     );
     for (const t of tickets) {
       const key = bucketKeyFor(t.createdAt);
@@ -182,13 +228,18 @@ export async function GET(request: NextRequest) {
           originalMessage: { contains: ZENDESK_IMPORT_MARKER },
         },
       },
+      select: reportSelect,
     });
     const sentInRange = sentRows.filter(
       (t) =>
         t.sentAt &&
         bucketCounts.has(bucketKeyFor(t.sentAt)) &&
         !isVendorTicket(t) &&
-        !isBounceTicket(t)
+        !isBounceTicket(t) &&
+        // The agent filter follows who SENT the reply here (assignee on the
+        // created population above) — that's the natural reading for
+        // response/handling metrics.
+        (!agentFilter || resolveAgentName(t.sentBy) === agentFilter)
     );
 
     // Average time from the customer's mail to the agent clicking Send,
@@ -458,25 +509,12 @@ export async function GET(request: NextRequest) {
     for (const agent of AGENTS) {
       perUserMap.set(agent, { name: agent, assigned: 0, sent: 0 });
     }
-    // sentBy is stored as session.user.name OR session.user.email, so
-    // Malin sometimes gets logged as "Malin Sundberg" and sometimes as
-    // "malin@doldadress.se". Resolve both forms back to the canonical
-    // agent name. Matching is on whole name/email tokens — a plain
-    // substring test wrongly credited e.g. "frida@…" to Ida.
-    const resolveAgent = (raw: string | null | undefined): string | null => {
-      if (!raw) return null;
-      if (perUserMap.has(raw)) return raw;
-      const lower = raw.toLowerCase();
-      const tokens = lower.split(/[^a-zåäöé]+/).filter(Boolean);
-      for (const agent of AGENTS) {
-        if (agent.toLowerCase() === lower) return agent;
-        const first = agent.split(' ')[0].toLowerCase();
-        if (tokens.includes(first)) return agent;
-      }
-      return raw;
-    };
+    // sentBy is stored as session.user.name OR session.user.email —
+    // resolveAgentName (lib/agent-match.ts) maps both forms back to the
+    // canonical agent name; unknown names keep their raw value so nothing
+    // is hidden.
     const bump = (raw: string, field: 'assigned' | 'sent') => {
-      const name = resolveAgent(raw) || raw;
+      const name = resolveAgentName(raw) ?? raw;
       const existing = perUserMap.get(name) || { name, assigned: 0, sent: 0 };
       existing[field] += 1;
       perUserMap.set(name, existing);
@@ -490,6 +528,260 @@ export async function GET(request: NextRequest) {
     const perUserStats = Array.from(perUserMap.values())
       // Sort by sent desc, then assigned desc, then name as tiebreak
       .sort((a, b) => b.sent - a.sent || b.assigned - a.assigned || a.name.localeCompare(b.name));
+
+    // ── Volume heatmap: arrivals per Stockholm weekday × hour ────────────
+    // Follows the active filters (it describes the same population as the
+    // activity chart). Monday = row 0.
+    const heatmap: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+    for (const t of tickets) {
+      const slot = stockholmSlot(t.createdAt);
+      if (slot.weekday >= 0) heatmap[slot.weekday][slot.hour] += 1;
+    }
+
+    // ── Reply events in window: first response + replies per ticket ─────
+    // The event log records EVERY reply (the Ticket's sentAt is overwritten
+    // by the next one), which is what makes these metrics possible at all.
+    // Population filtering joins the Ticket so vendor/bounce/archived rules
+    // match the rest of the report. Zendesk imports never get events.
+    const replyEvents = await prisma.ticketEvent.findMany({
+      where: {
+        tenantId: tenant.id,
+        type: TICKET_EVENT.replySent,
+        createdAt: { gte: windowStart, lte: windowEnd },
+      },
+      select: {
+        ticketId: true,
+        createdAt: true,
+        actor: true,
+        ticket: {
+          select: { createdAt: true, customerEmail: true, subject: true, status: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    const reportableReplies = replyEvents.filter(
+      (e) =>
+        isReportable(e.ticket) &&
+        (!agentFilter || e.actor === agentFilter)
+    );
+
+    // First reply per ticket within the window; tickets that already had a
+    // reply BEFORE the window are not "first responses" and are excluded.
+    const repliesByTicket = new Map<string, { first: Date; ticketCreatedAt: Date }>();
+    for (const e of reportableReplies) {
+      if (!repliesByTicket.has(e.ticketId)) {
+        repliesByTicket.set(e.ticketId, { first: e.createdAt, ticketCreatedAt: e.ticket.createdAt });
+      }
+    }
+    const replyTicketIds = Array.from(repliesByTicket.keys());
+    const earlierReplies = replyTicketIds.length > 0
+      ? await prisma.ticketEvent.findMany({
+          where: {
+            ticketId: { in: replyTicketIds },
+            type: TICKET_EVENT.replySent,
+            createdAt: { lt: windowStart },
+          },
+          select: { ticketId: true },
+          distinct: ['ticketId'],
+        })
+      : [];
+    const hadEarlierReply = new Set(earlierReplies.map((e) => e.ticketId));
+
+    const firstResponseHoursList = Array.from(repliesByTicket.entries())
+      .filter(([id]) => !hadEarlierReply.has(id))
+      .map(([, v]) => (v.first.getTime() - v.ticketCreatedAt.getTime()) / HOUR_MS)
+      .filter((h) => h >= 0);
+    const firstResponse = {
+      count: firstResponseHoursList.length,
+      medianHours: Math.round(median(firstResponseHoursList) * 10) / 10,
+      p90Hours: Math.round(percentile(firstResponseHoursList, 90) * 10) / 10,
+    };
+
+    // Replies per ticket: for tickets with at least one reply in the window,
+    // how many replies has the whole conversation taken? (Counts the
+    // ticket's replies across its lifetime, not just inside the window —
+    // "how many rounds does a case take" is a property of the case.)
+    const replyCounts = replyTicketIds.length > 0
+      ? await prisma.ticketEvent.groupBy({
+          by: ['ticketId'],
+          where: { ticketId: { in: replyTicketIds }, type: TICKET_EVENT.replySent },
+          _count: { _all: true },
+        })
+      : [];
+    const countsList = replyCounts.map((r) => r._count._all);
+    const repliesPerTicket = {
+      ticketCount: countsList.length,
+      avg:
+        countsList.length > 0
+          ? Math.round((countsList.reduce((a, b) => a + b, 0) / countsList.length) * 10) / 10
+          : 0,
+      distribution: {
+        one: countsList.filter((c) => c === 1).length,
+        two: countsList.filter((c) => c === 2).length,
+        threePlus: countsList.filter((c) => c >= 3).length,
+      },
+    };
+
+    // ── SLA vs the configured first-response target ──────────────────────
+    // Team-level truth: computed from the UNFILTERED reportable population.
+    // Null target → null payload; the page hides the panel and prompts for
+    // a target instead of assuming one (same philosophy as the ROI panel).
+    const slaTarget = reportSettings?.slaFirstResponseHours ?? null;
+    let sla: null | {
+      targetHours: number;
+      answered: number;
+      met: number;
+      attainmentPct: number | null;
+      openOverdue: { count: number; tickets: Array<{ id: string; subject: string; ageHours: number }> };
+    } = null;
+    if (slaTarget != null) {
+      const createdIds = reportableTickets.map((t) => t.id);
+      const firstReplies = createdIds.length > 0
+        ? await prisma.ticketEvent.groupBy({
+            by: ['ticketId'],
+            where: { ticketId: { in: createdIds }, type: TICKET_EVENT.replySent },
+            _min: { createdAt: true },
+          })
+        : [];
+      const firstReplyAt = new Map<string, Date>();
+      for (const r of firstReplies) {
+        if (r._min.createdAt) firstReplyAt.set(r.ticketId, r._min.createdAt);
+      }
+      let answered = 0;
+      let met = 0;
+      for (const t of reportableTickets) {
+        const fr = firstReplyAt.get(t.id);
+        if (!fr) continue;
+        answered += 1;
+        if ((fr.getTime() - t.createdAt.getTime()) / HOUR_MS <= slaTarget) met += 1;
+      }
+
+      // Follow-up list: open tickets already past the target with no reply
+      // at all — the ones an agent should grab next. Regardless of the
+      // selected range (an overdue ticket from before the window still needs
+      // answering).
+      const openRows = await prisma.ticket.findMany({
+        where: {
+          tenantId: tenant.id,
+          status: { in: OPEN_STATUSES },
+          createdAt: { lte: new Date(now.getTime() - slaTarget * HOUR_MS) },
+          NOT: { originalMessage: { contains: ZENDESK_IMPORT_MARKER } },
+        },
+        select: { id: true, subject: true, status: true, createdAt: true, customerEmail: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      const openReportable = openRows.filter((t) => !isVendorTicket(t) && !isBounceTicket(t));
+      const openIds = openReportable.map((t) => t.id);
+      const openWithReply = openIds.length > 0
+        ? await prisma.ticketEvent.findMany({
+            where: { ticketId: { in: openIds }, type: TICKET_EVENT.replySent },
+            select: { ticketId: true },
+            distinct: ['ticketId'],
+          })
+        : [];
+      const repliedSet = new Set(openWithReply.map((e) => e.ticketId));
+      const overdue = openReportable.filter((t) => !repliedSet.has(t.id));
+
+      sla = {
+        targetHours: slaTarget,
+        answered,
+        met,
+        attainmentPct: answered > 0 ? Math.round((met / answered) * 100) : null,
+        openOverdue: {
+          count: overdue.length,
+          tickets: overdue.slice(0, 20).map((t) => ({
+            id: t.id,
+            subject: t.subject,
+            ageHours: Math.round((now.getTime() - t.createdAt.getTime()) / HOUR_MS),
+          })),
+        },
+      };
+    }
+
+    // ── Backlog: open reportable tickets at the end of each day ──────────
+    // Closure moments come from the event log where it exists; tickets that
+    // reached a terminal status before event logging began fall back to
+    // sentAt ?? updatedAt, and day buckets that end before the first logged
+    // status change are flagged approximate (the page renders them muted).
+    // Team-level truth (ignores filters), skipped for the hourly 1d view.
+    let backlog: Array<{ date: string; open: number; approximate: boolean }> = [];
+    if (!isHourly) {
+      const backlogRows = await prisma.ticket.findMany({
+        where: {
+          tenantId: tenant.id,
+          createdAt: { lte: windowEnd },
+          // Closed-before-the-window tickets can't affect any bucket; only
+          // still-open tickets and those touched since the window began can.
+          OR: [
+            { status: { in: OPEN_STATUSES } },
+            { updatedAt: { gte: windowStart } },
+          ],
+          NOT: { originalMessage: { contains: ZENDESK_IMPORT_MARKER } },
+        },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          sentAt: true,
+          customerEmail: true,
+          subject: true,
+        },
+      });
+      const backlogTickets = backlogRows.filter(
+        (t) => t.status !== 'duplicate' && !isVendorTicket(t) && !isBounceTicket(t)
+      );
+
+      const terminalIds = backlogTickets
+        .filter((t) => TERMINAL_STATUSES.includes(t.status))
+        .map((t) => t.id);
+      const terminalEvents = terminalIds.length > 0
+        ? await prisma.ticketEvent.findMany({
+            where: {
+              ticketId: { in: terminalIds },
+              type: TICKET_EVENT.statusChanged,
+              toValue: { in: TERMINAL_STATUSES },
+            },
+            select: { ticketId: true, createdAt: true },
+            orderBy: { createdAt: 'asc' },
+          })
+        : [];
+      const lastTerminalAt = new Map<string, Date>();
+      for (const e of terminalEvents) lastTerminalAt.set(e.ticketId, e.createdAt); // asc → last wins
+
+      const closedAt = new Map<string, { at: number; exact: boolean }>();
+      for (const t of backlogTickets) {
+        if (!TERMINAL_STATUSES.includes(t.status)) continue;
+        const evt = lastTerminalAt.get(t.id);
+        closedAt.set(
+          t.id,
+          evt
+            ? { at: evt.getTime(), exact: true }
+            : { at: (t.sentAt ?? t.updatedAt).getTime(), exact: false }
+        );
+      }
+
+      const firstStatusEvent = await prisma.ticketEvent.findFirst({
+        where: { tenantId: tenant.id, type: TICKET_EVENT.statusChanged },
+        select: { createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      const eventLogStartMs = firstStatusEvent?.createdAt.getTime() ?? now.getTime();
+
+      backlog = bucketKeys.map((key) => {
+        const dayEndMs = Math.min(
+          stockholmMidnight(shiftDayKey(key, 1)).getTime(),
+          now.getTime()
+        );
+        let open = 0;
+        for (const t of backlogTickets) {
+          if (t.createdAt.getTime() > dayEndMs) continue;
+          const closed = closedAt.get(t.id);
+          if (!closed || closed.at > dayEndMs) open += 1;
+        }
+        return { date: key, open, approximate: dayEndMs <= eventLogStartMs };
+      });
+    }
 
     return NextResponse.json({
       totalTickets,
@@ -516,6 +808,18 @@ export async function GET(request: NextRequest) {
       savings,
       editStats,
       activeWork,
+      // New flexibility payloads: which filters were actually applied (after
+      // validation), plus the event-log-backed metrics.
+      filtersApplied: {
+        agent: agentFilter,
+        status: statusFilter,
+        priority: priorityFilter,
+      },
+      heatmap,
+      firstResponse,
+      repliesPerTicket,
+      sla,
+      backlog,
     });
   } catch (error) {
     console.error('Error fetching report data:', error);
