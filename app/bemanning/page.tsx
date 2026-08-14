@@ -15,10 +15,33 @@ interface StaffingData {
   actual: number[][];
   aht: { minutes: number; sampleCount: number; source: 'measured' | 'baseline' } | null;
   sessionsSince: string | null;
+  businessHours: Array<{ open: number; close: number } | null> | null;
   params: { weeks: number; occupancy: number; shrinkage: number; smoothingHours: number; slaHours: number | null };
   weekdaySummary: Array<{ weekday: number; peakAgents: number; agentHours: number }> | null;
   totalArrivals: number;
 }
+
+// Draft row for the öppettider editor. open < close is structurally
+// guaranteed by the select options; "closed" maps to null in the saved
+// config.
+interface HoursDraftRow {
+  closed: boolean;
+  open: number;
+  close: number;
+}
+
+const DEFAULT_HOURS_DRAFT: HoursDraftRow[] = Array.from({ length: 7 }, (_, wd) => ({
+  closed: wd >= 5,
+  open: 8,
+  close: 17,
+}));
+
+const fmtHour = (h: number) => `${String(h).padStart(2, '0')}:00`;
+
+// Diagonal stripes marking closed hours in the heatmaps — inline style so
+// it renders in both themes without extra CSS.
+const CLOSED_STRIPES =
+  'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(100,116,139,0.35) 3px, rgba(100,116,139,0.35) 6px)';
 
 const WEEKDAYS = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
 
@@ -36,6 +59,8 @@ export default function BemanningPage() {
 
   const [editingSettings, setEditingSettings] = useState(false);
   const [draft, setDraft] = useState({ staffingOccupancy: '', staffingShrinkage: '' });
+  const [useHours, setUseHours] = useState(false);
+  const [hoursDraft, setHoursDraft] = useState<HoursDraftRow[]>(DEFAULT_HOURS_DRAFT);
   const [saving, setSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -63,6 +88,14 @@ export default function BemanningPage() {
             staffingOccupancy: s.staffingOccupancy != null ? String(Math.round(s.staffingOccupancy * 100)) : '',
             staffingShrinkage: s.staffingShrinkage != null ? String(Math.round(s.staffingShrinkage * 100)) : '',
           });
+          if (Array.isArray(s.businessHours)) {
+            setUseHours(true);
+            setHoursDraft(
+              s.businessHours.map((d: { open: number; close: number } | null, wd: number) =>
+                d ? { closed: false, open: d.open, close: d.close } : { ...DEFAULT_HOURS_DRAFT[wd], closed: true }
+              )
+            );
+          }
         }
       } catch (error) {
         console.error('Error fetching staffing settings:', error);
@@ -79,6 +112,9 @@ export default function BemanningPage() {
         body: JSON.stringify({
           staffingOccupancy: draft.staffingOccupancy,
           staffingShrinkage: draft.staffingShrinkage,
+          businessHours: useHours
+            ? hoursDraft.map((r) => (r.closed ? null : { open: r.open, close: r.close }))
+            : null,
         }),
       });
       if (res.ok) {
@@ -108,13 +144,27 @@ export default function BemanningPage() {
     );
   }
 
+  // Display band: derived from the configured öppettider (one hour of
+  // margin on each side so the rollforward context is visible), falling
+  // back to the generic office band when hours aren't configured.
+  const openDays = (data.businessHours ?? []).filter((d): d is { open: number; close: number } => d != null);
+  const bandStart = openDays.length > 0 ? Math.max(0, Math.min(...openDays.map((d) => d.open)) - 1) : BAND_START;
+  const bandEnd = openDays.length > 0 ? Math.min(24, Math.max(...openDays.map((d) => d.close)) + 1) : BAND_END;
   const hours = allHours
     ? Array.from({ length: 24 }, (_, h) => h)
-    : Array.from({ length: BAND_END - BAND_START }, (_, i) => BAND_START + i);
+    : Array.from({ length: bandEnd - bandStart }, (_, i) => bandStart + i);
   // Anything outside the displayed band worth mentioning?
   const outsideBand = !allHours && data.profile.some((row) =>
-    row.some((c, h) => c > 0 && (h < BAND_START || h >= BAND_END))
+    row.some((c, h) => c > 0 && (h < bandStart || h >= bandEnd))
   );
+
+  // Is this weekday×hour outside öppettider? Only meaningful when hours
+  // are configured — without them nothing is "closed".
+  const closedSlot = (wd: number, h: number): boolean => {
+    if (!data.businessHours) return false;
+    const day = data.businessHours[wd];
+    return day == null || h < day.open || h >= day.close;
+  };
 
   const requiredGrid = data.required ? (showRaw ? data.required.raw : data.required.smoothed) : null;
   const maxProfile = Math.max(0.001, ...data.profile.flat());
@@ -160,31 +210,111 @@ export default function BemanningPage() {
       </div>
 
       {editingSettings && (
-        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-          <div>
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
-              {t('Beläggning (%) – andel av arbetad timme som går till ärenden')}
-            </label>
-            <input
-              type="number" min="1" max="99" inputMode="numeric"
-              value={draft.staffingOccupancy}
-              onChange={(e) => setDraft((d) => ({ ...d, staffingOccupancy: e.target.value }))}
-              placeholder={t('standard 80')}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
-            />
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
+                {t('Beläggning (%) – andel av arbetad timme som går till ärenden')}
+              </label>
+              <input
+                type="number" min="1" max="99" inputMode="numeric"
+                value={draft.staffingOccupancy}
+                onChange={(e) => setDraft((d) => ({ ...d, staffingOccupancy: e.target.value }))}
+                placeholder={t('standard 80')}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
+                {t('Frånvaro/övrigt (%) – raster, möten, sjukdom')}
+              </label>
+              <input
+                type="number" min="0" max="99" inputMode="numeric"
+                value={draft.staffingShrinkage}
+                onChange={(e) => setDraft((d) => ({ ...d, staffingShrinkage: e.target.value }))}
+                placeholder={t('standard 10')}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
-              {t('Frånvaro/övrigt (%) – raster, möten, sjukdom')}
+
+          {/* Öppettider: per weekday open/close, or closed. Off = 24/7. */}
+          <div className="border border-slate-200 dark:border-slate-700 rounded-md p-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-slate-100">
+              <input
+                type="checkbox"
+                checked={useHours}
+                onChange={(e) => setUseHours(e.target.checked)}
+                className="rounded border-slate-300 dark:border-slate-600"
+              />
+              {t('Använd öppettider')}
             </label>
-            <input
-              type="number" min="0" max="99" inputMode="numeric"
-              value={draft.staffingShrinkage}
-              onChange={(e) => setDraft((d) => ({ ...d, staffingShrinkage: e.target.value }))}
-              placeholder={t('standard 10')}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
-            />
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-3">
+              {t('Bemanningen planeras inom öppettiderna (volym utanför räknas in i första öppna timmen) och SLA/första svarstid räknas i öppettid. Avstängt = dygnet runt.')}
+            </p>
+            {useHours && (
+              <div className="space-y-1.5">
+                {hoursDraft.map((row, wd) => (
+                  <div key={wd} className="flex items-center gap-3 text-sm">
+                    <span className="w-10 text-slate-700 dark:text-slate-300">{t(WEEKDAYS[wd])}</span>
+                    <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                      <input
+                        type="checkbox"
+                        checked={row.closed}
+                        onChange={(e) =>
+                          setHoursDraft((d) => d.map((r, i) => (i === wd ? { ...r, closed: e.target.checked } : r)))
+                        }
+                        className="rounded border-slate-300 dark:border-slate-600"
+                      />
+                      {t('Stängt')}
+                    </label>
+                    {!row.closed && (
+                      <>
+                        <select
+                          value={row.open}
+                          onChange={(e) => {
+                            const open = Number(e.target.value);
+                            setHoursDraft((d) =>
+                              d.map((r, i) =>
+                                i === wd ? { ...r, open, close: Math.max(r.close, open + 1) } : r
+                              )
+                            );
+                          }}
+                          aria-label={`${t(WEEKDAYS[wd])} ${t('öppnar')}`}
+                          className="px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                        >
+                          {Array.from({ length: 24 }, (_, h) => (
+                            <option key={h} value={h}>{fmtHour(h)}</option>
+                          ))}
+                        </select>
+                        <span className="text-slate-400">–</span>
+                        <select
+                          value={row.close}
+                          onChange={(e) =>
+                            setHoursDraft((d) =>
+                              d.map((r, i) => (i === wd ? { ...r, close: Number(e.target.value) } : r))
+                            )
+                          }
+                          aria-label={`${t(WEEKDAYS[wd])} ${t('stänger')}`}
+                          className="px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                        >
+                          {Array.from({ length: 24 - row.open }, (_, i) => row.open + 1 + i).map((h) => (
+                            <option key={h} value={h}>{fmtHour(h)}</option>
+                          ))}
+                        </select>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {hoursDraft.every((r) => r.closed) && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                    {t('Alla dagar stängda = öppettider inaktiveras vid sparande.')}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
+
           <button
             onClick={saveSettings}
             disabled={saving}
@@ -219,12 +349,19 @@ export default function BemanningPage() {
                 <span className="w-10 shrink-0 text-[11px] text-slate-500 dark:text-slate-400">{t(WEEKDAYS[wd])}</span>
                 {hours.map((h) => {
                   const v = row[h];
+                  const closed = closedSlot(wd, h);
+                  // Closed slots keep their volume color (that volume is
+                  // exactly what rolls forward to opening) but get stripes
+                  // so it reads as "arrives while closed".
                   return (
                     <div
                       key={h}
-                      title={`${t(WEEKDAYS[wd])} ${String(h).padStart(2, '0')}:00 – ${Math.round(v * 10) / 10} ${t('ärenden/vecka')}`}
+                      title={`${t(WEEKDAYS[wd])} ${String(h).padStart(2, '0')}:00 – ${Math.round(v * 10) / 10} ${t('ärenden/vecka')}${closed ? ` (${t('stängt')})` : ''}`}
                       className={`h-6 flex-1 rounded-sm ${v === 0 ? 'bg-slate-100 dark:bg-slate-700/40' : ''}`}
-                      style={v > 0 ? { backgroundColor: `rgba(124, 92, 255, ${0.15 + 0.85 * (v / maxProfile)})` } : undefined}
+                      style={{
+                        ...(v > 0 ? { backgroundColor: `rgba(124, 92, 255, ${0.15 + 0.85 * (v / maxProfile)})` } : {}),
+                        ...(closed ? { backgroundImage: CLOSED_STRIPES } : {}),
+                      }}
                     />
                   );
                 })}
@@ -278,16 +415,24 @@ export default function BemanningPage() {
                     <span className="w-10 shrink-0 text-[11px] text-slate-500 dark:text-slate-400">{t(WEEKDAYS[wd])}</span>
                     {hours.map((h) => {
                       const v = row[h];
+                      const closed = closedSlot(wd, h);
                       return (
                         <div
                           key={h}
-                          title={`${t(WEEKDAYS[wd])} ${String(h).padStart(2, '0')}:00 – ${v} ${t('agenter')}`}
+                          title={
+                            closed
+                              ? `${t(WEEKDAYS[wd])} ${String(h).padStart(2, '0')}:00 – ${t('stängt')}`
+                              : `${t(WEEKDAYS[wd])} ${String(h).padStart(2, '0')}:00 – ${v} ${t('agenter')}`
+                          }
                           className={`h-6 flex-1 rounded-sm flex items-center justify-center text-[10px] font-semibold ${
                             v === 0
                               ? 'bg-slate-100 dark:bg-slate-700/40 text-transparent'
                               : 'text-white'
                           }`}
-                          style={v > 0 ? { backgroundColor: `rgba(16, 158, 106, ${0.35 + 0.65 * (v / maxRequired)})` } : undefined}
+                          style={{
+                            ...(v > 0 ? { backgroundColor: `rgba(16, 158, 106, ${0.35 + 0.65 * (v / maxRequired)})` } : {}),
+                            ...(closed ? { backgroundImage: CLOSED_STRIPES } : {}),
+                          }}
                         >
                           {v > 0 ? v : ''}
                         </div>
@@ -334,6 +479,7 @@ export default function BemanningPage() {
               {' '}{data.aht.source === 'measured'
                 ? `${t('Hanteringstid: median av')} ${data.aht.sampleCount} ${t('uppmätta ärenden.')}`
                 : t('Hanteringstid: angiven baslinje (för få uppmätta ärenden ännu).')}
+              {data.businessHours && ` ${t('Volym som kommer in utanför öppettid räknas in i första öppna timmen.')}`}
             </p>
           </>
         )}

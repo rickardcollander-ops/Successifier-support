@@ -28,6 +28,15 @@ export interface StaffingOptions {
   occupancy: number; // (0, 1)
   shrinkage: number; // [0, 1)
   smoothingHours: number; // >= 1; 1 = no smoothing
+  // 7×24 öppettider mask (Monday = 0), from openMask() in
+  // lib/business-hours.ts. Omitted = always open — the grid then computes
+  // exactly what it did before business hours existed. When given:
+  // workload arriving in closed slots rolls forward to the next open slot
+  // (that work doesn't disappear, it's waiting at opening), closed slots
+  // require 0 agents, and the smoothing window counts only open slots —
+  // the SLA clock pauses while closed, so Monday 09 legitimately absorbs
+  // Friday afternoon's tail across a closed weekend.
+  openMask?: boolean[][];
 }
 
 export interface Slot {
@@ -61,12 +70,41 @@ export function requiredAgentsGrid(
   const effective = Math.max(0.05, opts.occupancy * (1 - opts.shrinkage));
   const k = Math.max(1, Math.round(opts.smoothingHours));
 
-  // Workload as a flat 168-hour ring so the smoothing window flows across
-  // midnight and weekday boundaries (Monday 00 pulls from Sunday 23).
+  // Workload as a flat 168-hour ring so rollforward and smoothing flow
+  // across midnight and weekday boundaries (Sunday 23 wraps to Monday 00).
   const workload: number[] = [];
   for (let wd = 0; wd < 7; wd++) {
     for (let h = 0; h < 24; h++) {
       workload.push((profile[wd][h] * ahtMinutes) / 60);
+    }
+  }
+
+  const mask: boolean[] | null = opts.openMask
+    ? Array.from({ length: 168 }, (_, i) => Boolean(opts.openMask![Math.floor(i / 24)][i % 24]))
+    : null;
+
+  if (mask) {
+    // Defensive: parseBusinessHours already collapses an all-closed config
+    // to "not configured", but the mask argument is public API — never
+    // enter the rollforward scan with nothing open.
+    if (!mask.some(Boolean)) return { raw: emptyGrid(), smoothed: emptyGrid() };
+
+    // nextOpen[i] = first open index at or after i (ring-wrapped). One
+    // backward pass over two laps of the ring.
+    const nextOpen = new Array<number>(168);
+    let next = -1;
+    for (let i = 2 * 168 - 1; i >= 0; i--) {
+      const idx = i % 168;
+      if (mask[idx]) next = idx;
+      if (i < 168) nextOpen[idx] = next;
+    }
+    // Rollforward: closed-slot workload moves to the next open slot — a
+    // whole closed weekend deposits into Monday's first open hour.
+    for (let i = 0; i < 168; i++) {
+      if (!mask[i] && workload[i] > 0) {
+        workload[nextOpen[(i + 1) % 168]] += workload[i];
+        workload[i] = 0;
+      }
     }
   }
 
@@ -75,12 +113,25 @@ export function requiredAgentsGrid(
   for (let i = 0; i < 168; i++) {
     const wd = Math.floor(i / 24);
     const h = i % 24;
+    if (mask && !mask[i]) continue; // closed: both grids stay 0
+
     raw[wd][h] = workload[i] > 0 ? Math.ceil(workload[i] / effective) : 0;
 
     // Trailing window: the hours whose arrivals this hour's staffing can
-    // still absorb within the SLA.
+    // still absorb within the SLA. With a mask, only open slots count —
+    // closed hours don't consume SLA budget.
     let sum = 0;
-    for (let j = 0; j < k; j++) sum += workload[(i - j + 168) % 168];
+    if (mask) {
+      let collected = 0;
+      for (let j = 0; j < 168 && collected < k; j++) {
+        const idx = (i - j + 168) % 168;
+        if (!mask[idx]) continue;
+        sum += workload[idx];
+        collected += 1;
+      }
+    } else {
+      for (let j = 0; j < k; j++) sum += workload[(i - j + 168) % 168];
+    }
     const avg = sum / k;
     smoothed[wd][h] = avg > 0 ? Math.ceil(avg / effective) : 0;
   }

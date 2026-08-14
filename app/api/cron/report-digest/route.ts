@@ -6,6 +6,7 @@ import { requireCronSecret } from '@/lib/cron-auth';
 import { decryptCredentials } from '@/lib/integrations/credentials';
 import { ResendService } from '@/lib/integrations/resend';
 import { computeKpiSummary, previousReportWindow, findOverdueUnanswered } from '@/lib/reports/compute';
+import { parseBusinessHours } from '@/lib/business-hours';
 import { buildDigestEmail } from '@/lib/reports/digest-email';
 import { resolveReportWindow } from '@/lib/report-window';
 import { dayKey, stockholmWeekday } from '@/lib/time/stockholm';
@@ -56,13 +57,17 @@ export async function GET(request: NextRequest) {
     const win = resolveReportWindow(range, null, null, now);
     const prev = previousReportWindow(range, win, now);
     const slaTarget = settings?.slaFirstResponseHours ?? null;
+    // Öppettider: same basis for SLA/first-response as the reports page.
+    const businessHours = parseBusinessHours(settings?.businessHours ?? null);
 
     const [summary, previous] = await Promise.all([
-      computeKpiSummary(tenant.id, win.windowStart, win.windowEnd, undefined, slaTarget),
-      computeKpiSummary(tenant.id, prev.windowStart, prev.windowEnd, undefined, slaTarget),
+      computeKpiSummary(tenant.id, win.windowStart, win.windowEnd, undefined, slaTarget, businessHours),
+      computeKpiSummary(tenant.id, prev.windowStart, prev.windowEnd, undefined, slaTarget, businessHours),
     ]);
     const overdueCount =
-      slaTarget != null ? (await findOverdueUnanswered(tenant.id, slaTarget, now)).length : null;
+      slaTarget != null
+        ? (await findOverdueUnanswered(tenant.id, slaTarget, now, businessHours)).length
+        : null;
 
     // Period label: "11 aug – 17 aug 2026" (the window end is exclusive).
     const locale = product.language === 'sv' ? 'sv-SE' : 'en-GB';

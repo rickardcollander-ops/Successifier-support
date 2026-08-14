@@ -15,10 +15,13 @@ export const SLA_WARNING_SHARE = 0.8;
 
 export type SlaAlertLevel = 'warning' | 'breach';
 
+// ageHours is precomputed by the caller IN THE ACTIVE BASIS — elapsed open
+// hours when öppettider are configured, calendar hours otherwise — so the
+// levels here always agree with the SLA panel's overdue list.
 export interface SlaAlertCandidate {
   id: string;
   subject: string;
-  createdAt: Date;
+  ageHours: number;
 }
 
 export interface SlaAlert {
@@ -36,16 +39,14 @@ export function alertKey(ticketId: string, level: SlaAlertLevel): string {
 export function computeSlaAlerts(
   candidates: SlaAlertCandidate[],
   targetHours: number,
-  alreadyAlerted: Set<string>,
-  now: Date = new Date()
+  alreadyAlerted: Set<string>
 ): SlaAlert[] {
   if (!(targetHours > 0)) return [];
   const alerts: SlaAlert[] = [];
   for (const t of candidates) {
-    const ageHours = (now.getTime() - t.createdAt.getTime()) / 3600000;
     const level: SlaAlertLevel | null =
-      ageHours >= targetHours ? 'breach'
-      : ageHours >= targetHours * SLA_WARNING_SHARE ? 'warning'
+      t.ageHours >= targetHours ? 'breach'
+      : t.ageHours >= targetHours * SLA_WARNING_SHARE ? 'warning'
       : null;
     if (!level) continue;
     if (alreadyAlerted.has(alertKey(t.id, level))) continue;
@@ -53,7 +54,7 @@ export function computeSlaAlerts(
       ticketId: t.id,
       subject: t.subject,
       level,
-      ageHours: Math.round(ageHours * 10) / 10,
+      ageHours: Math.round(t.ageHours * 10) / 10,
       targetHours,
     });
   }

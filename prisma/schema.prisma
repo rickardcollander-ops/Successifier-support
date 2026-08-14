@@ -106,6 +106,12 @@ model ReportSettings {
   // Append the one-click 👍/👎 CSAT footer to outgoing replies (send route).
   // Requires CSAT_TOKEN_SECRET and APP_BASE_URL to be configured.
   csatEnabled      Boolean   @default(false)
+  // Öppettider per weekday: JSON array of 7 entries (Monday = 0), each
+  // { open, close } in whole hours (close exclusive) or null = closed day
+  // (see lib/business-hours.ts). Null column = not configured → staffing
+  // and SLA behave as 24/7 (calendar time), exactly as before this field
+  // existed.
+  businessHours Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

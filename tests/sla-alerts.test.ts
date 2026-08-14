@@ -6,13 +6,12 @@ import {
   SLA_WARNING_SHARE,
 } from '@/lib/reports/sla-alerts';
 
-const NOW = new Date('2026-08-14T10:00:00Z');
-const HOUR = 3600 * 1000;
-// A ticket created `age` hours before NOW.
+// Candidates carry ageHours precomputed by the caller in the active basis
+// (open hours when öppettider are configured, calendar otherwise).
 const ticket = (id: string, ageHours: number, subject = `Ärende ${id}`) => ({
   id,
   subject,
-  createdAt: new Date(NOW.getTime() - ageHours * HOUR),
+  ageHours,
 });
 
 describe('computeSlaAlerts', () => {
@@ -23,8 +22,7 @@ describe('computeSlaAlerts', () => {
     const alerts = computeSlaAlerts(
       [ticket('fresh', 15.5), ticket('warn', 16), ticket('breach', 20)],
       TARGET,
-      new Set(),
-      NOW
+      new Set()
     );
     // 15.5h < 16h (80% of 20) → no alert; exactly at thresholds → alert.
     expect(alerts.map((a) => `${a.ticketId}:${a.level}`)).toEqual([
@@ -39,29 +37,27 @@ describe('computeSlaAlerts', () => {
     const alerts = computeSlaAlerts(
       [ticket('warn', 17), ticket('gone', 30)],
       TARGET,
-      already,
-      NOW
+      already
     );
     expect(alerts).toEqual([]);
   });
 
   it('escalates a warned ticket to breach exactly once', () => {
     const already = new Set([alertKey('t1', 'warning')]);
-    const alerts = computeSlaAlerts([ticket('t1', 25)], TARGET, already, NOW);
+    const alerts = computeSlaAlerts([ticket('t1', 25)], TARGET, already);
     expect(alerts).toHaveLength(1);
     expect(alerts[0].level).toBe('breach');
   });
 
   it('returns nothing without a positive target', () => {
-    expect(computeSlaAlerts([ticket('t1', 100)], 0, new Set(), NOW)).toEqual([]);
+    expect(computeSlaAlerts([ticket('t1', 100)], 0, new Set())).toEqual([]);
   });
 
   it('sorts breaches before warnings, oldest first', () => {
     const alerts = computeSlaAlerts(
       [ticket('w', 17), ticket('b1', 25), ticket('b2', 40)],
       TARGET,
-      new Set(),
-      NOW
+      new Set()
     );
     expect(alerts.map((a) => a.ticketId)).toEqual(['b2', 'b1', 'w']);
   });
@@ -69,7 +65,7 @@ describe('computeSlaAlerts', () => {
 
 describe('buildSlaAlertEmail', () => {
   it('renders links when a base URL is configured, plain text otherwise', () => {
-    const alerts = computeSlaAlerts([ticket('t1', 30, 'Uppsägning')], 24, new Set(), NOW);
+    const alerts = computeSlaAlerts([ticket('t1', 30, 'Uppsägning')], 24, new Set());
     const withLink = buildSlaAlertEmail(alerts, {
       tenantName: 'Doldadress',
       language: 'sv',
@@ -91,8 +87,7 @@ describe('buildSlaAlertEmail', () => {
     const alerts = computeSlaAlerts(
       [ticket('t1', 30, '<script>alert(1)</script>')],
       24,
-      new Set(),
-      NOW
+      new Set()
     );
     const { html } = buildSlaAlertEmail(alerts, {
       tenantName: 'Doldadress',

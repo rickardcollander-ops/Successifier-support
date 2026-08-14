@@ -6,6 +6,7 @@ import { requireCronSecret } from '@/lib/cron-auth';
 import { decryptCredentials } from '@/lib/integrations/credentials';
 import { ResendService } from '@/lib/integrations/resend';
 import { findOverdueUnanswered } from '@/lib/reports/compute';
+import { parseBusinessHours, businessHoursBetween } from '@/lib/business-hours';
 import {
   computeSlaAlerts,
   buildSlaAlertEmail,
@@ -43,12 +44,27 @@ export async function GET(request: NextRequest) {
     }
 
     const now = new Date();
+    // Öppettider: ages and thresholds count elapsed OPEN hours when
+    // configured — same basis as the reports page's SLA panel.
+    const businessHours = parseBusinessHours(settings?.businessHours ?? null);
     // Fetch with the WARNING threshold so approaching tickets are included;
     // computeSlaAlerts assigns the level per ticket.
-    const candidates = await findOverdueUnanswered(tenant.id, target * SLA_WARNING_SHARE, now);
-    if (candidates.length === 0) {
+    const overdue = await findOverdueUnanswered(
+      tenant.id,
+      target * SLA_WARNING_SHARE,
+      now,
+      businessHours
+    );
+    if (overdue.length === 0) {
       return NextResponse.json({ alerts: 0 });
     }
+    const candidates = overdue.map((t) => ({
+      id: t.id,
+      subject: t.subject,
+      ageHours: businessHours
+        ? businessHoursBetween(businessHours, t.createdAt, now)
+        : (now.getTime() - t.createdAt.getTime()) / 3600000,
+    }));
 
     const priorAlerts = await prisma.ticketEvent.findMany({
       where: {
@@ -65,7 +81,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const alerts = computeSlaAlerts(candidates, target, alreadyAlerted, now);
+    const alerts = computeSlaAlerts(candidates, target, alreadyAlerted);
     if (alerts.length === 0) {
       return NextResponse.json({ alerts: 0 });
     }
