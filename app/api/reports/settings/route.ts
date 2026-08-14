@@ -29,6 +29,26 @@ function optionalFraction(value: unknown): number | null {
   return null;
 }
 
+// Digest frequency: only the two supported values; anything else = off.
+function optionalFrequency(value: unknown): string | null {
+  return value === 'weekly' || value === 'monthly' ? value : null;
+}
+
+// Recipient lists arrive as an array or a comma/space-separated string.
+// Kept deliberately small (max 10) and deduplicated; invalid addresses are
+// dropped rather than rejected so one typo doesn't block the save.
+function emailList(value: unknown): string[] {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/[,;\s]+/)
+      : [];
+  const valid = items
+    .map((s) => String(s).trim().toLowerCase())
+    .filter((s) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s));
+  return Array.from(new Set(valid)).slice(0, 10);
+}
+
 // Read the ROI/report settings (agent hourly cost + baselines). Returns the
 // row or null defaults — the client decides what to prompt for.
 export async function GET(request: NextRequest) {
@@ -45,6 +65,11 @@ export async function GET(request: NextRequest) {
       slaFirstResponseHours: settings?.slaFirstResponseHours ?? null,
       staffingOccupancy: settings?.staffingOccupancy ?? null,
       staffingShrinkage: settings?.staffingShrinkage ?? null,
+      digestFrequency: settings?.digestFrequency ?? null,
+      digestRecipients: settings?.digestRecipients ?? [],
+      slaAlertsEnabled: settings?.slaAlertsEnabled ?? false,
+      alertRecipients: settings?.alertRecipients ?? [],
+      csatEnabled: settings?.csatEnabled ?? false,
       // Defensive parse: a corrupted column can never reach the client.
       businessHours: parseBusinessHours(settings?.businessHours ?? null),
     });
@@ -68,13 +93,21 @@ export async function PUT(request: NextRequest) {
     // their own fields without clearing the other's. (Sending an empty
     // value still clears that specific field — that's how the UI blanks
     // one to "ej satt".)
-    const data: Record<string, number | null | Prisma.InputJsonValue | typeof Prisma.DbNull> = {};
+    const data: Record<
+      string,
+      number | string | boolean | string[] | null | Prisma.InputJsonValue | typeof Prisma.DbNull
+    > = {};
     if ('agentHourlyCost' in body) data.agentHourlyCost = optionalPositive(body.agentHourlyCost);
     if ('baselineResponseHours' in body) data.baselineResponseHours = optionalPositive(body.baselineResponseHours);
     if ('baselineHandlingMinutes' in body) data.baselineHandlingMinutes = optionalPositive(body.baselineHandlingMinutes);
     if ('slaFirstResponseHours' in body) data.slaFirstResponseHours = optionalPositive(body.slaFirstResponseHours);
     if ('staffingOccupancy' in body) data.staffingOccupancy = optionalFraction(body.staffingOccupancy);
     if ('staffingShrinkage' in body) data.staffingShrinkage = optionalFraction(body.staffingShrinkage);
+    if ('digestFrequency' in body) data.digestFrequency = optionalFrequency(body.digestFrequency);
+    if ('digestRecipients' in body) data.digestRecipients = emailList(body.digestRecipients);
+    if ('slaAlertsEnabled' in body) data.slaAlertsEnabled = body.slaAlertsEnabled === true;
+    if ('alertRecipients' in body) data.alertRecipients = emailList(body.alertRecipients);
+    if ('csatEnabled' in body) data.csatEnabled = body.csatEnabled === true;
     if ('businessHours' in body) {
       // Invalid/empty clears — same philosophy as optionalPositive. NOTE:
       // a Json column needs Prisma.DbNull to write SQL NULL; a plain null
@@ -99,6 +132,11 @@ export async function PUT(request: NextRequest) {
       slaFirstResponseHours: settings.slaFirstResponseHours,
       staffingOccupancy: settings.staffingOccupancy,
       staffingShrinkage: settings.staffingShrinkage,
+      digestFrequency: settings.digestFrequency,
+      digestRecipients: settings.digestRecipients,
+      slaAlertsEnabled: settings.slaAlertsEnabled,
+      alertRecipients: settings.alertRecipients,
+      csatEnabled: settings.csatEnabled,
       businessHours: parseBusinessHours(settings.businessHours ?? null),
     });
   } catch (error) {

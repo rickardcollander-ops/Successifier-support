@@ -23,6 +23,17 @@ export const doldadress: ProductConfig = {
   allowedDomains: ['doldadress.se', 'becomeanon.com'],
   adminEmails: ['ida@doldadress.se'],
   agents: ['Ida Rosell', 'Malin Sundberg', 'Filippa Kramp'],
+  // Broad buckets mirroring the KEYWORD_GROUPS the AI search already uses.
+  ticketCategories: [
+    'uppsägning',
+    'faktura & betalning',
+    'abonnemang',
+    'adressändring',
+    'inloggning & konto',
+    'leverans & post',
+    'reklamation',
+    'övrigt',
+  ],
   agentSignatures: {
     'Ida Rosell': 'Bästa hälsningar,\nIda\nDoldAdress.se c/o Alpha Securities AB',
     'Malin Sundberg': 'Bästa hälsningar,\nMalin\nDoldAdress.se c/o Alpha Securities AB',

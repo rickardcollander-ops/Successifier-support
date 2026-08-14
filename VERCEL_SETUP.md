@@ -57,6 +57,44 @@ Gå till [Google Cloud Console → Credentials](https://console.cloud.google.com
 
 Utan dessa redirect URIs kommer Gmail OAuth att misslyckas med "Safari kan inte ansluta till servern" eller liknande fel.
 
+### 6. Schemalagda jobb (Vercel Cron)
+```
+CRON_SECRET=[slumpad sträng, t.ex. openssl rand -hex 32]
+APP_BASE_URL=https://doldadress.successifier.com
+```
+
+### 7. Kundnöjdhet (CSAT)
+```
+CSAT_TOKEN_SECRET=[minst 32 tecken, t.ex. openssl rand -hex 32]
+```
+
+När CSAT är aktiverat under Rapporter → Inställningar läggs 👍/👎-länkar till
+i HTML-delen av utgående svar. Länkarna innehåller en HMAC-signerad token
+(`lib/csat-token.ts`, giltig 30 dagar) och landar på den publika rutten
+`/api/public/csat`, som sparar EN rad per ärende (ett andra klick byter
+betyget). Utan `CSAT_TOKEN_SECRET` och `APP_BASE_URL` skickas svaren utan
+footer — en felkonfiguration blockerar aldrig själva utskicket.
+
+`vercel.json` definierar två cron-jobb som Vercel anropar med
+`Authorization: Bearer <CRON_SECRET>`:
+
+- `/api/cron/report-digest` (dagligen 05:00 UTC) — skickar vecko-/månadsrapport
+  via e-post till mottagarna som konfigureras under Rapporter → Inställningar.
+  Rutten avgör själv om idag är en utskicksdag (måndag för veckovis, den 1:a
+  för månadsvis) och är idempotent via `digestLastSentAt`.
+- `/api/cron/sla-check` (varje timme) — skickar SLA-larm (varning vid 80 % av
+  första-svarsmålet, larm vid överskridet mål) för öppna obesvarade ärenden.
+  Varje ärende larmas högst en gång per nivå (loggas som `sla_alert`-händelse).
+
+**Noteringar:**
+- Utan `CRON_SECRET` svarar cron-rutterna 503 — de är aldrig öppna.
+- Timvisa crons kräver Vercel Pro; på Hobby-planen kan `sla-check` schemaläggas
+  dagligen istället (ändra `schedule` i `vercel.json`).
+- `APP_BASE_URL` används för djuplänkar i utskicken (t.ex.
+  `/tickets?ticket=...`). Utan den skickas mejlen utan länkar.
+- Båda utskicken går via tenantens aktiva Resend-integration (Settings →
+  Integrationer).
+
 ## Deployment Checklist
 
 - [x] Kryptering implementerad för credentials

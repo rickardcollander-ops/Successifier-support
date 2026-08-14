@@ -7,6 +7,7 @@ import { google } from 'googleapis';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { ContextAggregator } from '@/lib/services/context-aggregator';
 import { upsertTicket } from '@/lib/services/deduplicator';
+import { classifyTicket } from '@/lib/services/ticket-classifier';
 import { logTicketEvent, TICKET_EVENT, EVENT_ACTOR } from '@/lib/services/ticket-events';
 import { sanitizeInboundText } from '@/lib/services/sanitize';
 import { sendConfirmationEmail } from '@/lib/services/confirmation-email';
@@ -332,6 +333,19 @@ async function syncSingleAccount(account: {
             originalSubject: subject,
           }).catch((err) => console.error('[Email Sync] Confirmation send failed:', err));
         }
+
+        // AI category for the reports' "vad kunderna frågar om" panel.
+        // Separate after() so a classifier hiccup never touches the draft
+        // generation. classifyTicket never throws; raw SQL so the write
+        // doesn't bump updatedAt and reorder the ticket list.
+        after(async () => {
+          const category = await classifyTicket(subject, body || 'No content');
+          if (category) {
+            await prisma.$executeRaw`
+              UPDATE "Ticket" SET "category" = ${category} WHERE id = ${ticket.id}
+            `;
+          }
+        });
 
         // after() keeps the generation alive past the response on
         // serverless hosts; a bare promise would be frozen and lost.

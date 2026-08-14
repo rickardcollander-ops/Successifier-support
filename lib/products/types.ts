@@ -68,6 +68,15 @@ export interface ProductConfig {
   /** Agents who can be assigned tickets and are broken out in reports. */
   agents: string[];
 
+  /**
+   * Fixed category list for AI classification of incoming tickets
+   * (lib/services/ticket-classifier.ts) and the "what do customers ask
+   * about" report panel. Written in the product's language. Keep it short —
+   * ~10 broad buckets classify far more reliably than a long specific list.
+   * Should end with a catch-all ("övrigt"/"other").
+   */
+  ticketCategories: string[];
+
   /** Per-agent personal e-mail signature block. */
   agentSignatures: Record<string, string>;
 

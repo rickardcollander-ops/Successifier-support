@@ -32,6 +32,11 @@ const ALLOWLIST: Record<string, string> = {
   'app/api/public/contact/answer/route.ts': 'AI contact form — grounded KB answer, chatEnabled-gated, rate-limited',
   'app/api/public/contact/submit/route.ts': 'AI contact form — public ticket intake, rate-limited (5/10 min per IP), validated, honeypot',
   'app/api/public/contact/feedback/route.ts': 'AI contact form — anonymous deflection stat, rate-limited, writes only a KnowledgeEvent',
+  // One-click CSAT rating links from outgoing reply emails: authenticated by
+  // an HMAC-signed token (verifyCsatToken from lib/csat-token.ts) that is the
+  // ONLY way to select a ticket; tenantId is read from the ticket row;
+  // rate-limited; writes only a CsatResponse upsert keyed on the ticket.
+  'app/api/public/csat/route.ts': 'CSAT rating landing — signed-token authenticated (lib/csat-token.ts), rate-limited, single upsert per ticket',
   // Logged-in customer chatbot: authenticated by a signed identity token
   // (verifyIdentityToken from lib/identity-token.ts), not a session/API key.
   // Rejects with 401 on a missing/invalid/expired token before any data is
@@ -39,9 +44,11 @@ const ALLOWLIST: Record<string, string> = {
   'app/api/me/chat/route.ts': 'Authenticated via signed identity token (lib/identity-token.ts); 401s before any data access, scopes data to the verified email',
 };
 
-// Guards from lib/api-auth.ts. A route calling one of these (and returning
-// the failure response) is considered protected.
-const LIB_GUARDS = /requireApiAuth|requireSession|requireSuperadmin|requireSettingsAdmin|validateApiKey/;
+// Guards from lib/api-auth.ts, plus requireCronSecret (lib/cron-auth.ts) for
+// the /api/cron/* routes Vercel Cron invokes with a bearer CRON_SECRET. A
+// route calling one of these (and returning the failure response) is
+// considered protected.
+const LIB_GUARDS = /requireApiAuth|requireSession|requireSuperadmin|requireSettingsAdmin|validateApiKey|requireCronSecret/;
 
 // Routes doing session checks by hand must both call auth() and reject
 // (401 for APIs, redirect for browser flows like the Gmail OAuth dance).

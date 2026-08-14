@@ -16,6 +16,7 @@ import {
 } from '@/lib/services/ticket-events';
 import { decryptCredentials } from '@/lib/integrations/credentials';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
+import { buildCsatFooterHtml } from '@/lib/csat-token';
 
 export async function POST(
   request: NextRequest,
@@ -105,6 +106,25 @@ export async function POST(
       );
     }
 
+    // Optional one-click CSAT footer (👍/👎, signed links to
+    // /api/public/csat), appended to the HTML part in BOTH send branches.
+    // Off unless the tenant has enabled it in the report settings AND
+    // CSAT_TOKEN_SECRET + APP_BASE_URL are configured — buildCsatFooterHtml
+    // returns null on any missing prerequisite so a misconfiguration can
+    // never block the send. The plain-text alternative stays link-free.
+    let csatFooterHtml = '';
+    try {
+      const settings = await prisma.reportSettings.findUnique({
+        where: { tenantId: ticket.tenantId },
+        select: { csatEnabled: true },
+      });
+      if (settings?.csatEnabled) {
+        csatFooterHtml = buildCsatFooterHtml(ticket.id) ?? '';
+      }
+    } catch (error) {
+      console.error('[Send] CSAT footer skipped:', error);
+    }
+
     let sentVia = 'unknown';
 
     // If a Gmail account is selected, send via Gmail. The account must
@@ -184,7 +204,7 @@ export async function POST(
       const htmlBody = [
         '<!DOCTYPE html>',
         '<html><body style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#222;">',
-        `<div style="max-width:640px;">${htmlParagraphs}${imageHtml}</div>`,
+        `<div style="max-width:640px;">${htmlParagraphs}${imageHtml}${csatFooterHtml}</div>`,
         '</body></html>',
       ].join('');
 
@@ -355,9 +375,10 @@ export async function POST(
       const hasImagesResend = response.includes('[INLINE_IMAGES]');
       const textPartResend = hasImagesResend ? response.split('[INLINE_IMAGES]')[0] : response;
       const imageHtmlResend = hasImagesResend ? response.split('[INLINE_IMAGES]')[1] : '';
-      const htmlContent = hasImagesResend
+      const htmlContent = (hasImagesResend
         ? `<div style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;">${textPartResend.replace(/\n/g, '<br/>')}</div>${imageHtmlResend}`
-        : `<div style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;">${response.replace(/\n/g, '<br/>')}</div>`;
+        : `<div style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;">${response.replace(/\n/g, '<br/>')}</div>`
+      ) + csatFooterHtml;
 
       try {
         await resendService.sendEmail(
