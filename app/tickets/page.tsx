@@ -95,9 +95,14 @@ export default function TicketsPage() {
     document.title = newCount > 0 ? `(${newCount}) ${base}` : base;
   }, [tickets]);
   const [archivedTickets, setArchivedTickets] = useState<Ticket[]>([]);
+  // True number of archived tickets on the server (for the current archive
+  // search). The archive is paged — the client only holds the pages loaded
+  // so far, so this drives the tab badge and the "Visar X av Y" footer.
+  const [archivedTotal, setArchivedTotal] = useState(0);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingArchived, setLoadingArchived] = useState(false);
+  const [loadingMoreArchived, setLoadingMoreArchived] = useState(false);
   const [activeStatus, setActiveStatus] = useState<string>('all');
   // Per-tenant inbox-tab configuration (visibility, order, renames, custom
   // folders). Empty = use the built-in defaults. Loaded once on mount; the
@@ -669,6 +674,9 @@ export default function TicketsPage() {
       if (res.ok) {
         recentlyDeletedRef.current.set(ticketId, Date.now());
         setTickets((prev) => prev.filter(t => t.id !== ticketId));
+        if (archivedTickets.some((t) => t.id === ticketId)) {
+          setArchivedTotal((n) => Math.max(0, n - 1));
+        }
         setArchivedTickets((prev) => prev.filter(t => t.id !== ticketId));
         if (selectedTicket?.id === ticketId) {
           setSelectedTicket(null);
@@ -697,21 +705,53 @@ export default function TicketsPage() {
     }
   };
 
-  const fetchArchivedTickets = async () => {
-    if (archivedTickets.length > 0) return;
-    setLoadingArchived(true);
+  // Sequence guard for archive fetches — a slow page-0 response for an old
+  // search term must not overwrite the results of a newer one.
+  const archivedSeqRef = useRef(0);
+
+  // Load a page of archived tickets from the server. The archive is searched
+  // server-side (`q`) and paged 200 at a time (`offset`), so every archived
+  // ticket is reachable — the old client-side search only covered the 200
+  // newest rows the server happened to send.
+  const loadArchived = async (opts: { q: string; offset: number; append: boolean }) => {
+    const seq = ++archivedSeqRef.current;
+    if (opts.append) setLoadingMoreArchived(true);
+    else setLoadingArchived(true);
     try {
-      const response = await fetch('/api/tickets?status=archived');
-      if (response.ok) {
-        const data = await response.json();
-        setArchivedTickets(data.tickets);
-      }
+      const params = new URLSearchParams({ status: 'archived' });
+      if (opts.q) params.set('q', opts.q);
+      if (opts.offset > 0) params.set('offset', String(opts.offset));
+      const response = await fetch(`/api/tickets?${params.toString()}`);
+      if (!response.ok || seq !== archivedSeqRef.current) return;
+      const data = await response.json();
+      if (seq !== archivedSeqRef.current) return;
+      const incoming: Ticket[] = Array.isArray(data.tickets) ? data.tickets : [];
+      setArchivedTotal(typeof data.total === 'number' ? data.total : incoming.length);
+      setArchivedTickets((prev) =>
+        opts.append
+          ? [...prev, ...incoming.filter((tk) => !prev.some((p) => p.id === tk.id))]
+          : incoming,
+      );
     } catch (error) {
       console.error('Error fetching archived tickets:', error);
     } finally {
-      setLoadingArchived(false);
+      if (seq === archivedSeqRef.current) {
+        setLoadingArchived(false);
+        setLoadingMoreArchived(false);
+      }
     }
   };
+
+  // Fetch the archive when the tab is opened, and re-fetch page 0 (debounced)
+  // as the user types in the archive search box.
+  useEffect(() => {
+    if (activeStatus !== 'archived') return;
+    const timer = setTimeout(() => {
+      loadArchived({ q: archivedSearch.trim(), offset: 0, append: false });
+    }, archivedSearch ? 300 : 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStatus, archivedSearch]);
 
   // Folder partitions depend only on the ticket set, so memoize them. With
   // 2000+ tickets in memory, recomputing these filter passes on every render
@@ -826,15 +866,8 @@ export default function TicketsPage() {
     });
   }, [activeTab, ticketsForTab, searchQuery, sortBy, sortOrder]);
 
-  const filteredArchivedTickets = useMemo(() => archivedTickets.filter(t => {
-    if (!archivedSearch) return true;
-    const search = archivedSearch.toLowerCase();
-    return (
-      t.subject.toLowerCase().includes(search) ||
-      t.customerEmail.toLowerCase().includes(search) ||
-      (t.customerName || '').toLowerCase().includes(search)
-    );
-  }), [archivedTickets, archivedSearch]);
+  // Archive search happens server-side (see loadArchived), so the list is
+  // rendered as-is — no client-side filtering that could hide older rows.
 
   // Initial-load spinner. This early return MUST stay below every hook above
   // (the useMemo filtering/counts especially) — a conditional return placed
@@ -851,9 +884,10 @@ export default function TicketsPage() {
   const tabs = visibleTabs.map((tb) => ({
     id: tb.key,
     label: tb.label,
-    // Archived is lazy-loaded, so show a placeholder until its list arrives.
+    // Archived is lazy-loaded and paged, so show the server's total once it
+    // has arrived and a placeholder until then.
     count: tb.key === 'archived'
-      ? (archivedTickets.length || '...')
+      ? (archivedTotal || (archivedTickets.length ? archivedTickets.length : '...'))
       : (tabCounts[tb.key] ?? 0),
   }));
 
@@ -895,10 +929,7 @@ export default function TicketsPage() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => {
-                setActiveStatus(tab.id);
-                if (tab.id === 'archived') fetchArchivedTickets();
-              }}
+              onClick={() => setActiveStatus(tab.id)}
               className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-all ${
                 activeStatus === tab.id
                   ? 'text-[#7C5CFF] border-b-2 border-[#7C5CFF] bg-[#7C5CFF]/5'
@@ -992,10 +1023,20 @@ export default function TicketsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">
               <div className="lg:col-span-1 overflow-auto">
                 <TicketList
-                  tickets={filteredArchivedTickets}
+                  tickets={archivedTickets}
                   selectedTicket={selectedTicket}
                   onSelectTicket={setSelectedTicket}
                   onDelete={handleDeleteTicket}
+                  totalCount={archivedTotal}
+                  hasMore={archivedTickets.length < archivedTotal}
+                  loadingMore={loadingMoreArchived}
+                  onLoadMore={() =>
+                    loadArchived({
+                      q: archivedSearch.trim(),
+                      offset: archivedTickets.length,
+                      append: true,
+                    })
+                  }
                 />
               </div>
               <div className="lg:col-span-2 overflow-auto">
@@ -1025,7 +1066,11 @@ export default function TicketsPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">
           <div className="lg:col-span-1 overflow-auto">
+            {/* key resets the list's "Visa fler"-expansion when switching
+                tabs, so a folder expanded to thousands of rows doesn't keep
+                that render cost in every other folder. */}
             <TicketList
+              key={activeStatus}
               tickets={filteredTickets}
               selectedTicket={selectedTicket}
               onSelectTicket={setSelectedTicket}

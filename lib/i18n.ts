@@ -276,6 +276,9 @@ const EN: Record<string, string> = {
   'konton': 'accounts',
   'Sök i arkiverade ärenden (ämne, e-post, namn)...': 'Search archived tickets (subject, email, name)...',
   'Laddar arkiverade ärenden...': 'Loading archived tickets...',
+  'Visa fler äldre ärenden': 'Show more older tickets',
+  'Laddar fler…': 'Loading more…',
+  'Visar': 'Showing',
 
   // Settings page
   'Kunde inte markera som hanterad:': 'Could not mark as handled:',
