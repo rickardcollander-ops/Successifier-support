@@ -79,6 +79,22 @@ export default async function HelpHome() {
       {categories.length === 0 && popular.articles.length === 0 && (
         <p className="text-center text-[color:var(--kb-muted)]">Inga publicerade artiklar ännu.</p>
       )}
+
+      <section
+        className="rounded-xl border border-[color:var(--kb-border)] bg-[color:var(--kb-surface)] p-6 text-center space-y-2"
+      >
+        <h2 className="text-lg font-semibold">Hittar du inte svaret?</h2>
+        <p className="text-sm text-[color:var(--kb-muted)]">
+          Ställ din fråga i vårt kontaktformulär — AI-assistenten svarar direkt, och kundservice tar över om det behövs.
+        </p>
+        <Link
+          href="/help/kontakt"
+          className="inline-block rounded-xl px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          style={{ background: 'var(--kb-accent)' }}
+        >
+          Kontakta oss
+        </Link>
+      </section>
     </div>
   );
 }

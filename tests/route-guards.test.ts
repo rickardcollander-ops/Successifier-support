@@ -25,6 +25,13 @@ const ALLOWLIST: Record<string, string> = {
   'app/api/public/kb/search/route.ts': 'Public help center — read-only search, published content only',
   'app/api/public/kb/chat/route.ts': 'Public help center — AI chatbot grounded only in published, public articles via lib/services/public-kb.ts; rate-limited',
   'app/api/public/kb/config/route.ts': 'Public help center — read-only appearance/chat UI config (safe subset, no operator prompt) for the embeddable widget',
+  // AI contact form (/help/kontakt): serves the help center's own anonymous
+  // visitors. answer = same grounded KB chatbot as kb/chat (chatEnabled-gated,
+  // rate-limited); submit = ticket creation with strict per-IP rate limit,
+  // field validation and honeypot; feedback = anonymous deflection counter.
+  'app/api/public/contact/answer/route.ts': 'AI contact form — grounded KB answer, chatEnabled-gated, rate-limited',
+  'app/api/public/contact/submit/route.ts': 'AI contact form — public ticket intake, rate-limited (5/10 min per IP), validated, honeypot',
+  'app/api/public/contact/feedback/route.ts': 'AI contact form — anonymous deflection stat, rate-limited, writes only a KnowledgeEvent',
   // Logged-in customer chatbot: authenticated by a signed identity token
   // (verifyIdentityToken from lib/identity-token.ts), not a session/API key.
   // Rejects with 401 on a missing/invalid/expired token before any data is
