@@ -12,9 +12,9 @@ import {
   dayKey,
   stockholmMidnight,
   shiftDayKey,
-  stockholmWeekday,
   stockholmSlot,
 } from '@/lib/time/stockholm';
+import { resolveReportWindow } from '@/lib/report-window';
 import { TICKET_EVENT } from '@/lib/services/ticket-events';
 
 // Same marker /api/tickets uses to hide imported Zendesk history from the
@@ -32,6 +32,10 @@ const STATUS_ORDER = ['new', 'in_progress', 'waiting_ai', 'review', 'sent', 'clo
 const OPEN_STATUSES = ['new', 'in_progress', 'waiting_ai', 'review'];
 // Statuses that close a ticket for backlog purposes.
 const TERMINAL_STATUSES = ['sent', 'closed', 'archived', 'duplicate'];
+
+// Window resolution lives in lib/report-window.ts (shared with the
+// drill-down endpoints so every report view slices time identically); the
+// underlying Stockholm calendar helpers in lib/time/stockholm.ts.
 
 // Build counts into a stable, ordered object: known keys first in their
 // canonical order, anything unexpected appended so it still shows up.
@@ -94,55 +98,16 @@ export async function GET(request: NextRequest) {
     }
 
     const now = new Date();
-    const isHourly = range === '1d';
 
-    // Resolve the report window [windowStart, windowEnd). Named calendar ranges
-    // (this/last week & month) are anchored to Stockholm calendar boundaries;
-    // "custom" reads explicit from/to dates; the rolling "senaste N" ranges end
-    // at `now`. Everything downstream (buckets, filtering, trend) derives from
-    // this window, so all panels describe exactly the same set of tickets.
-    const fromParam = searchParams.get('from');
-    const toParam = searchParams.get('to');
-    const isDateKey = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
-
-    const nowKey = dayKey(now);
-    const [nowY, nowM] = nowKey.split('-').map(Number);
-    const pad = (n: number) => String(n).padStart(2, '0');
-
-    let windowStart: Date;
-    let windowEnd: Date;
-    if (isHourly) {
-      windowStart = new Date(now.getTime() - DAY_MS);
-      windowEnd = now;
-    } else if (range === 'thisWeek') {
-      windowStart = stockholmMidnight(shiftDayKey(nowKey, -stockholmWeekday(now)));
-      windowEnd = now;
-    } else if (range === 'lastWeek') {
-      const thisMonday = shiftDayKey(nowKey, -stockholmWeekday(now));
-      windowStart = stockholmMidnight(shiftDayKey(thisMonday, -7));
-      windowEnd = stockholmMidnight(thisMonday);
-    } else if (range === 'thisMonth') {
-      windowStart = stockholmMidnight(`${nowY}-${pad(nowM)}-01`);
-      windowEnd = now;
-    } else if (range === 'lastMonth') {
-      const prevY = nowM === 1 ? nowY - 1 : nowY;
-      const prevM = nowM === 1 ? 12 : nowM - 1;
-      windowStart = stockholmMidnight(`${prevY}-${pad(prevM)}-01`);
-      windowEnd = stockholmMidnight(`${nowY}-${pad(nowM)}-01`);
-    } else if (range === 'custom' && isDateKey(fromParam) && isDateKey(toParam) && fromParam <= toParam) {
-      // Inclusive day range: end is midnight AFTER the `to` day. Cap the span
-      // (to ~1 year) so a hand-typed URL can't request thousands of buckets,
-      // and never let the end run past `now`.
-      const minFrom = shiftDayKey(toParam, -365);
-      windowStart = stockholmMidnight(fromParam < minFrom ? minFrom : fromParam);
-      windowEnd = stockholmMidnight(shiftDayKey(toParam, 1));
-      if (windowEnd.getTime() > now.getTime()) windowEnd = now;
-    } else {
-      // Rolling "senaste N dagar": today plus the previous N-1 calendar days.
-      const daysAgo = range === '7d' ? 7 : range === '90d' ? 90 : 30;
-      windowStart = stockholmMidnight(shiftDayKey(nowKey, -(daysAgo - 1)));
-      windowEnd = now;
-    }
+    // Resolve the report window [windowStart, windowEnd). Everything
+    // downstream (buckets, filtering, trend) derives from this window, so all
+    // panels describe exactly the same set of tickets.
+    const { windowStart, windowEnd, isHourly } = resolveReportWindow(
+      range,
+      searchParams.get('from'),
+      searchParams.get('to'),
+      now
+    );
 
     // The activity buckets define the report window: a ticket belongs to the
     // report iff its bucket key exists in this map. That guarantees

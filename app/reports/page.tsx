@@ -96,6 +96,19 @@ interface RoiSettings {
   slaFirstResponseHours: number | null;
 }
 
+// One rewritten reply from /api/reports/rewritten — draft vs what was sent.
+interface RewrittenItem {
+  ticketId: string;
+  subject: string;
+  customerEmail: string;
+  sentAt: string | null;
+  sentBy: string | null;
+  keptPct: number;
+  question: string;
+  aiDraft: string;
+  sentReply: string;
+}
+
 type TimeRange = '1d' | '7d' | '30d' | '90d' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'custom';
 
 // Local YYYY-MM-DD for <input type="date"> defaults — must be the browser's
@@ -133,6 +146,12 @@ export default function ReportsPage() {
   const [filterPriority, setFilterPriority] = useState('');
   const filtersActive = Boolean(filterAgent || filterStatus || filterPriority);
 
+  // Rewritten-replies drill-down (lazy: only fetched when the list is opened).
+  const [showRewritten, setShowRewritten] = useState(false);
+  const [rewritten, setRewritten] = useState<RewrittenItem[] | null>(null);
+  const [loadingRewritten, setLoadingRewritten] = useState(false);
+  const [expandedRewritten, setExpandedRewritten] = useState<string | null>(null);
+
   // A custom range with from after to is invalid — don't fetch (and don't
   // blank the current data) until it's sane.
   const customInvalid = timeRange === 'custom' && customFrom > customTo;
@@ -140,7 +159,34 @@ export default function ReportsPage() {
   useEffect(() => {
     if (customInvalid) return;
     fetchReportData();
+    // The drill-down list belongs to the old window — drop it so an open list
+    // refetches for the new range instead of showing stale rows.
+    setRewritten(null);
   }, [timeRange, customFrom, customTo, filterAgent, filterStatus, filterPriority]);
+
+  useEffect(() => {
+    if (!showRewritten || rewritten !== null || customInvalid) return;
+    const fetchRewritten = async () => {
+      setLoadingRewritten(true);
+      try {
+        const params = new URLSearchParams({ range: timeRange });
+        if (timeRange === 'custom') {
+          params.set('from', customFrom);
+          params.set('to', customTo);
+        }
+        const res = await fetch(`/api/reports/rewritten?${params.toString()}`);
+        if (res.ok) {
+          const payload = await res.json();
+          setRewritten(payload.items || []);
+        }
+      } catch (error) {
+        console.error('Error fetching rewritten replies:', error);
+      } finally {
+        setLoadingRewritten(false);
+      }
+    };
+    fetchRewritten();
+  }, [showRewritten, rewritten, timeRange, customFrom, customTo, customInvalid]);
 
   useEffect(() => {
     fetchRoiSettings();
@@ -651,6 +697,73 @@ export default function ReportsPage() {
                 </div>
               ))}
               <p className="text-[11px] text-slate-400 mt-3">{t('Baserat på')} {editStats.count} {t('svar med AI-utkast.')}</p>
+
+              {/* Drill-down: the actual rewritten replies, draft vs sent.
+                  This is the working list for fixing the AI — each row shows
+                  what the draft missed and what the right answer was. */}
+              {editStats.heavy > 0 && (
+                <div className="mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
+                  <button
+                    onClick={() => setShowRewritten((v) => !v)}
+                    className="text-sm font-medium text-[#7C5CFF] hover:underline"
+                  >
+                    {showRewritten
+                      ? t('Dölj omskrivna svar')
+                      : `${t('Visa omskrivna svar')} (${editStats.heavy})`}
+                  </button>
+
+                  {showRewritten && (
+                    <div className="mt-3 space-y-2">
+                      {loadingRewritten && (
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{t('Laddar…')}</p>
+                      )}
+                      {!loadingRewritten && rewritten && rewritten.length === 0 && (
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{t('Inga omskrivna svar i perioden.')}</p>
+                      )}
+                      {!loadingRewritten && rewritten && rewritten.map((item) => {
+                        const isOpen = expandedRewritten === item.ticketId;
+                        return (
+                          <div key={item.ticketId} className="rounded-lg border border-slate-200 dark:border-slate-700">
+                            <button
+                              onClick={() => setExpandedRewritten(isOpen ? null : item.ticketId)}
+                              className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg"
+                            >
+                              <span className="shrink-0 text-[11px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                {item.keptPct}% {t('behållet')}
+                              </span>
+                              <span className="flex-1 min-w-0 truncate text-sm text-slate-800 dark:text-slate-200">{item.subject}</span>
+                              <span className="shrink-0 text-xs text-slate-400">
+                                {item.sentAt ? new Date(item.sentAt).toLocaleDateString('sv-SE') : ''}
+                                {item.sentBy ? ` · ${item.sentBy.split('@')[0].split(' ')[0]}` : ''}
+                              </span>
+                            </button>
+                            {isOpen && (
+                              <div className="px-3 pb-3 space-y-3">
+                                {item.question && (
+                                  <div>
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">{t('Kundens fråga')}</p>
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap max-h-32 overflow-y-auto">{item.question}</p>
+                                  </div>
+                                )}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div className="rounded-md border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 p-2.5">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-500 dark:text-rose-400 mb-1">{t('AI-utkastet (skickades inte)')}</p>
+                                    <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap max-h-64 overflow-y-auto">{item.aiDraft}</p>
+                                  </div>
+                                  <div className="rounded-md border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 p-2.5">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 mb-1">{t('Skickat svar')}</p>
+                                    <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap max-h-64 overflow-y-auto">{item.sentReply}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
