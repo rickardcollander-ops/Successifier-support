@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { requireApiAuth } from '@/lib/api-auth';
 import { findScopedTicket } from '@/lib/db/scoped';
+import { logTicketEvent, TICKET_EVENT, EVENT_ACTOR } from '@/lib/services/ticket-events';
 
 export async function POST(
   request: NextRequest,
@@ -26,6 +27,18 @@ export async function POST(
         originalMessage: `[SPAM] ${existing.originalMessage}`,
       },
     });
+
+    if (existing.status !== 'closed') {
+      await logTicketEvent(prisma, {
+        tenantId: existing.tenantId,
+        ticketId: existing.id,
+        type: TICKET_EVENT.statusChanged,
+        actor: EVENT_ACTOR.api,
+        fromValue: existing.status,
+        toValue: 'closed',
+        meta: { spam: true },
+      });
+    }
 
     return NextResponse.json(ticket);
   } catch (error) {

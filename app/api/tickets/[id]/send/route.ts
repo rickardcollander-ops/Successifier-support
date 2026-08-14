@@ -8,6 +8,12 @@ import { applyAgentSignature } from '@/lib/constants';
 import { gmailOAuthClient } from '@/lib/integrations/gmail-account';
 import { requireApiAuth } from '@/lib/api-auth';
 import { findScopedTicket, findScopedEmailAccount } from '@/lib/db/scoped';
+import {
+  logTicketEvents,
+  replyResponseSeconds,
+  eventActor,
+  TICKET_EVENT,
+} from '@/lib/services/ticket-events';
 import { decryptCredentials } from '@/lib/integrations/credentials';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
 
@@ -380,16 +386,48 @@ export async function POST(
     const supportSeparator = `\n\n---\n[Support-svar ${sentTimestamp}${agentLabel}]\n`;
     const responseBodyOnly = response.split('[INLINE_IMAGES]')[0].trim();
 
+    const sentAtDate = new Date();
     const updatedTicket = await prisma.ticket.update({
       where: { id },
       data: {
         finalResponse: response,
         originalMessage: ticket.originalMessage + supportSeparator + responseBodyOnly,
         status: 'sent',
-        sentAt: new Date(),
+        sentAt: sentAtDate,
         sentBy: sentBy,
       },
     });
+
+    // Event log: the reply itself (with per-reply response time — sentAt on
+    // the Ticket is overwritten by the next reply, the event is not) plus
+    // the status transition. After the primary write; logTicketEvents
+    // swallows failures so bookkeeping can never undo a sent mail.
+    try {
+      const responseSeconds = await replyResponseSeconds(prisma, ticket, sentAtDate);
+      await logTicketEvents(prisma, [
+        {
+          tenantId: ticket.tenantId,
+          ticketId: ticket.id,
+          type: TICKET_EVENT.replySent,
+          actor: eventActor(sentBy),
+          responseSeconds,
+          createdAt: sentAtDate,
+        },
+        ...(ticket.status !== 'sent'
+          ? [{
+              tenantId: ticket.tenantId,
+              ticketId: ticket.id,
+              type: TICKET_EVENT.statusChanged,
+              actor: eventActor(sentBy),
+              fromValue: ticket.status,
+              toValue: 'sent',
+              createdAt: sentAtDate,
+            }]
+          : []),
+      ]);
+    } catch (eventError) {
+      console.error('Failed to log send events:', eventError);
+    }
 
     // Learning system: Save sent response as knowledge base article
     // This helps AI learn from actual responses sent to customers

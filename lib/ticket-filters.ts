@@ -17,6 +17,20 @@ export interface TicketLike {
 export const isVendorTicket = (t: TicketLike) =>
   product.vendorFolder.senders.includes(t.customerEmail.toLowerCase());
 
+// The population the reports and staffing calculations count: the same
+// tickets the inbox shows in its normal tabs. Vendor mail (Billecta/Stripe),
+// bounces, dubletter and archived tickets live in separate folders and are
+// excluded from the counters there — if the reports counted them the numbers
+// would stop matching what support sees.
+export interface ReportableLike extends TicketLike {
+  status: string;
+}
+export const isReportable = (t: ReportableLike) =>
+  t.status !== 'archived' &&
+  t.status !== 'duplicate' &&
+  !isVendorTicket(t) &&
+  !isBounceTicket(t);
+
 // "Red traffic-light" tickets (urgent/high) drive the "Akut ärende" folder so
 // support finds the cases needing attention first.
 export interface PriorityLike {
