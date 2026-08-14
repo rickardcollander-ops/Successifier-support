@@ -16,6 +16,7 @@ import {
 } from '@/lib/time/stockholm';
 import { resolveReportWindow } from '@/lib/report-window';
 import { TICKET_EVENT } from '@/lib/services/ticket-events';
+import { parseBusinessHours, businessHoursBetween } from '@/lib/business-hours';
 
 // Same marker /api/tickets uses to hide imported Zendesk history from the
 // inbox. The reports must exclude them too, or the historical import shows
@@ -411,6 +412,14 @@ export async function GET(request: NextRequest) {
     const reportSettings = await prisma.reportSettings.findUnique({
       where: { tenantId: tenant.id },
     });
+    // Öppettider: when configured, firstResponse and sla below count
+    // elapsed OPEN hours instead of calendar hours (calendar kept as a
+    // secondary figure). Null = calendar semantics, exactly as before.
+    // NOTE: medianResponseTime/avgResponseTime above deliberately STAY
+    // calendar — their ROI baseline (baselineResponseHours) was measured
+    // in calendar time in the Zendesk era, so changing their basis would
+    // silently break that comparison.
+    const businessHours = parseBusinessHours(reportSettings?.businessHours ?? null);
     // "Time now" is the REAL active work time (presence) — the same few-minute
     // figure shown elsewhere, NOT the queue-inclusive workStartedAt→sentAt span
     // that produced absurd hours. The baseline is the team's configured
@@ -587,14 +596,26 @@ export async function GET(request: NextRequest) {
       : [];
     const hadEarlierReply = new Set(earlierReplies.map((e) => e.ticketId));
 
-    const firstResponseHoursList = Array.from(repliesByTicket.entries())
+    const firstPairs = Array.from(repliesByTicket.entries())
       .filter(([id]) => !hadEarlierReply.has(id))
-      .map(([, v]) => (v.first.getTime() - v.ticketCreatedAt.getTime()) / HOUR_MS)
-      .filter((h) => h >= 0);
+      .map(([, v]) => v)
+      .filter((v) => v.first.getTime() >= v.ticketCreatedAt.getTime());
+    const firstCalendarList = firstPairs.map(
+      (v) => (v.first.getTime() - v.ticketCreatedAt.getTime()) / HOUR_MS
+    );
+    // Primary figures follow the configured basis; calendar always kept as
+    // the secondary perspective (what the customer experiences).
+    const firstBusinessList = businessHours
+      ? firstPairs.map((v) => businessHoursBetween(businessHours, v.ticketCreatedAt, v.first))
+      : null;
+    const firstPrimaryList = firstBusinessList ?? firstCalendarList;
     const firstResponse = {
-      count: firstResponseHoursList.length,
-      medianHours: Math.round(median(firstResponseHoursList) * 10) / 10,
-      p90Hours: Math.round(percentile(firstResponseHoursList, 90) * 10) / 10,
+      count: firstPairs.length,
+      basis: businessHours ? ('business' as const) : ('calendar' as const),
+      medianHours: Math.round(median(firstPrimaryList) * 10) / 10,
+      p90Hours: Math.round(percentile(firstPrimaryList, 90) * 10) / 10,
+      medianHoursCalendar: Math.round(median(firstCalendarList) * 10) / 10,
+      p90HoursCalendar: Math.round(percentile(firstCalendarList, 90) * 10) / 10,
     };
 
     // Replies per ticket: for tickets with at least one reply in the window,
@@ -629,10 +650,14 @@ export async function GET(request: NextRequest) {
     const slaTarget = reportSettings?.slaFirstResponseHours ?? null;
     let sla: null | {
       targetHours: number;
+      basis: 'business' | 'calendar';
       answered: number;
       met: number;
       attainmentPct: number | null;
-      openOverdue: { count: number; tickets: Array<{ id: string; subject: string; ageHours: number }> };
+      openOverdue: {
+        count: number;
+        tickets: Array<{ id: string; subject: string; ageHours: number; ageHoursCalendar: number }>;
+      };
     } = null;
     if (slaTarget != null) {
       const createdIds = reportableTickets.map((t) => t.id);
@@ -647,19 +672,33 @@ export async function GET(request: NextRequest) {
       for (const r of firstReplies) {
         if (r._min.createdAt) firstReplyAt.set(r.ticketId, r._min.createdAt);
       }
+      // Elapsed time to first reply in the configured basis. A mail that
+      // arrives while closed and is answered before the next opening has 0
+      // open hours elapsed → met — correct: the team answered before the
+      // SLA clock even started.
       let answered = 0;
       let met = 0;
       for (const t of reportableTickets) {
         const fr = firstReplyAt.get(t.id);
         if (!fr) continue;
         answered += 1;
-        if ((fr.getTime() - t.createdAt.getTime()) / HOUR_MS <= slaTarget) met += 1;
+        const elapsed = businessHours
+          ? businessHoursBetween(businessHours, t.createdAt, fr)
+          : (fr.getTime() - t.createdAt.getTime()) / HOUR_MS;
+        if (elapsed <= slaTarget) met += 1;
       }
 
       // Follow-up list: open tickets already past the target with no reply
       // at all — the ones an agent should grab next. Regardless of the
       // selected range (an overdue ticket from before the window still needs
       // answering).
+      //
+      // The createdAt cutoff below is intentionally CALENDAR-based even when
+      // öppettider are configured: open hours elapsed <= calendar hours
+      // elapsed, always, so the SQL filter is a correct SUPERSET prefilter —
+      // a ticket cannot be overdue in open hours without being at least that
+      // old in calendar time. The precise business-hours test runs in JS
+      // below. Do not "fix" this filter to use business hours.
       const openRows = await prisma.ticket.findMany({
         where: {
           tenantId: tenant.id,
@@ -680,10 +719,15 @@ export async function GET(request: NextRequest) {
           })
         : [];
       const repliedSet = new Set(openWithReply.map((e) => e.ticketId));
-      const overdue = openReportable.filter((t) => !repliedSet.has(t.id));
+      const overdue = openReportable.filter(
+        (t) =>
+          !repliedSet.has(t.id) &&
+          (!businessHours || businessHoursBetween(businessHours, t.createdAt, now) > slaTarget)
+      );
 
       sla = {
         targetHours: slaTarget,
+        basis: businessHours ? 'business' : 'calendar',
         answered,
         met,
         attainmentPct: answered > 0 ? Math.round((met / answered) * 100) : null,
@@ -692,7 +736,12 @@ export async function GET(request: NextRequest) {
           tickets: overdue.slice(0, 20).map((t) => ({
             id: t.id,
             subject: t.subject,
-            ageHours: Math.round((now.getTime() - t.createdAt.getTime()) / HOUR_MS),
+            // Age in the active basis; calendar always included so the UI
+            // can phrase long waits in "dygn" regardless of basis.
+            ageHours: businessHours
+              ? Math.round(businessHoursBetween(businessHours, t.createdAt, now))
+              : Math.round((now.getTime() - t.createdAt.getTime()) / HOUR_MS),
+            ageHoursCalendar: Math.round((now.getTime() - t.createdAt.getTime()) / HOUR_MS),
           })),
         },
       };

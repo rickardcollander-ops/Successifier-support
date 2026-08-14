@@ -12,6 +12,7 @@ import {
   DEFAULT_OCCUPANCY,
   DEFAULT_SHRINKAGE,
 } from '@/lib/staffing';
+import { parseBusinessHours, openMask } from '@/lib/business-hours';
 
 // Same exclusion as the reports API — the Zendesk history import must not
 // look like arrival volume.
@@ -51,6 +52,12 @@ export async function GET(request: NextRequest) {
     // after it. Without an SLA target, no smoothing.
     const slaHours = settings?.slaFirstResponseHours ?? null;
     const smoothingHours = slaHours != null ? Math.min(4, Math.max(1, Math.round(slaHours))) : 1;
+
+    // Öppettider: when configured, agents are only planned during open
+    // hours and closed-hour volume rolls forward to opening (see
+    // lib/staffing.ts). Null = 24/7, exactly the pre-öppettider behavior.
+    const businessHours = parseBusinessHours(settings?.businessHours ?? null);
+    const mask = businessHours ? openMask(businessHours) : undefined;
 
     // Arrival profile from ticket creation times (true arrival timestamps —
     // createdAt carries Gmail's internalDate).
@@ -99,7 +106,7 @@ export async function GET(request: NextRequest) {
     }
 
     const required = aht
-      ? requiredAgentsGrid(profile, aht.minutes, { occupancy, shrinkage, smoothingHours })
+      ? requiredAgentsGrid(profile, aht.minutes, { occupancy, shrinkage, smoothingHours, openMask: mask })
       : null;
 
     // Actually worked hours from the persisted sessions. Forward-filling
@@ -130,6 +137,7 @@ export async function GET(request: NextRequest) {
       actual,
       aht,
       sessionsSince: firstSession?.startedAt ?? null,
+      businessHours,
       params: { weeks, occupancy, shrinkage, smoothingHours, slaHours },
       weekdaySummary: required ? weekdaySummary(required.smoothed) : null,
       totalArrivals: arrivals.length,

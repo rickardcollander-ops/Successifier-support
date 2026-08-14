@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { getTenantId } from '@/lib/products/tenant';
 import { requireApiAuth } from '@/lib/api-auth';
+import { parseBusinessHours } from '@/lib/business-hours';
 
 async function resolveTenantId(): Promise<string> {
   const tenantId = await getTenantId();
@@ -43,6 +45,8 @@ export async function GET(request: NextRequest) {
       slaFirstResponseHours: settings?.slaFirstResponseHours ?? null,
       staffingOccupancy: settings?.staffingOccupancy ?? null,
       staffingShrinkage: settings?.staffingShrinkage ?? null,
+      // Defensive parse: a corrupted column can never reach the client.
+      businessHours: parseBusinessHours(settings?.businessHours ?? null),
     });
   } catch (error) {
     console.error('Error fetching report settings:', error);
@@ -64,13 +68,23 @@ export async function PUT(request: NextRequest) {
     // their own fields without clearing the other's. (Sending an empty
     // value still clears that specific field — that's how the UI blanks
     // one to "ej satt".)
-    const data: Record<string, number | null> = {};
+    const data: Record<string, number | null | Prisma.InputJsonValue | typeof Prisma.DbNull> = {};
     if ('agentHourlyCost' in body) data.agentHourlyCost = optionalPositive(body.agentHourlyCost);
     if ('baselineResponseHours' in body) data.baselineResponseHours = optionalPositive(body.baselineResponseHours);
     if ('baselineHandlingMinutes' in body) data.baselineHandlingMinutes = optionalPositive(body.baselineHandlingMinutes);
     if ('slaFirstResponseHours' in body) data.slaFirstResponseHours = optionalPositive(body.slaFirstResponseHours);
     if ('staffingOccupancy' in body) data.staffingOccupancy = optionalFraction(body.staffingOccupancy);
     if ('staffingShrinkage' in body) data.staffingShrinkage = optionalFraction(body.staffingShrinkage);
+    if ('businessHours' in body) {
+      // Invalid/empty clears — same philosophy as optionalPositive. NOTE:
+      // a Json column needs Prisma.DbNull to write SQL NULL; a plain null
+      // is rejected by the client.
+      const bh = parseBusinessHours(body.businessHours);
+      // Cast: InputJsonValue's array type doesn't admit null ELEMENTS, but
+      // Postgres JSONB stores them fine and parseBusinessHours guarantees
+      // the shape on the way back out.
+      data.businessHours = bh ? (bh as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
+    }
 
     const settings = await prisma.reportSettings.upsert({
       where: { tenantId },
@@ -85,6 +99,7 @@ export async function PUT(request: NextRequest) {
       slaFirstResponseHours: settings.slaFirstResponseHours,
       staffingOccupancy: settings.staffingOccupancy,
       staffingShrinkage: settings.staffingShrinkage,
+      businessHours: parseBusinessHours(settings.businessHours ?? null),
     });
   } catch (error) {
     console.error('Error saving report settings:', error);

@@ -73,7 +73,14 @@ interface ReportData {
   };
   filtersApplied?: { agent: string | null; status: string | null; priority: string | null };
   heatmap?: number[][];
-  firstResponse?: { count: number; medianHours: number; p90Hours: number };
+  firstResponse?: {
+    count: number;
+    basis?: 'business' | 'calendar';
+    medianHours: number;
+    p90Hours: number;
+    medianHoursCalendar?: number;
+    p90HoursCalendar?: number;
+  };
   repliesPerTicket?: {
     ticketCount: number;
     avg: number;
@@ -81,10 +88,14 @@ interface ReportData {
   };
   sla?: null | {
     targetHours: number;
+    basis?: 'business' | 'calendar';
     answered: number;
     met: number;
     attainmentPct: number | null;
-    openOverdue: { count: number; tickets: Array<{ id: string; subject: string; ageHours: number }> };
+    openOverdue: {
+      count: number;
+      tickets: Array<{ id: string; subject: string; ageHours: number; ageHoursCalendar?: number }>;
+    };
   };
   backlog?: Array<{ date: string; open: number; approximate: boolean }>;
 }
@@ -454,7 +465,9 @@ export default function ReportsPage() {
               </p>
               <p className="text-[11px] text-slate-400 mt-1">
                 {data.firstResponse && data.firstResponse.count > 0
-                  ? `${t('median')} · p90 ${data.firstResponse.p90Hours}h · ${data.firstResponse.count} ${t('ärenden')}`
+                  ? data.firstResponse.basis === 'business'
+                    ? `${t('median (öppettid)')} · p90 ${data.firstResponse.p90Hours}h · ${t('kalender')} ${data.firstResponse.medianHoursCalendar}h`
+                    : `${t('median')} · p90 ${data.firstResponse.p90Hours}h · ${data.firstResponse.count} ${t('ärenden')}`
                   : t('Första svaret per ärende')}
               </p>
             </div>
@@ -509,7 +522,7 @@ export default function ReportsPage() {
                 {data.sla.attainmentPct != null ? `${data.sla.attainmentPct}%` : '–'}
               </span>
               <span className="text-sm text-slate-500 dark:text-slate-400">
-                {t('inom målet')} {data.sla.targetHours}h
+                {t('inom målet')} {data.sla.targetHours}h{data.sla.basis === 'business' ? ` (${t('öppettid')})` : ''}
               </span>
             </div>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
@@ -530,7 +543,15 @@ export default function ReportsPage() {
                         {ov.subject || t('(utan ämne)')}
                       </a>
                       <span className="text-xs text-slate-400 ml-2">
-                        {ov.ageHours >= 48 ? `${Math.round(ov.ageHours / 24)} ${t('dygn')}` : `${ov.ageHours}h`} {t('gammalt')}
+                        {(() => {
+                          // Long waits read best in calendar days regardless
+                          // of basis; short ones in hours of the active basis.
+                          const calendar = ov.ageHoursCalendar ?? ov.ageHours;
+                          if (calendar >= 48) return `${Math.round(calendar / 24)} ${t('dygn')} ${t('gammalt')}`;
+                          return data.sla?.basis === 'business'
+                            ? `${ov.ageHours}h ${t('öppettid')}`
+                            : `${ov.ageHours}h ${t('gammalt')}`;
+                        })()}
                       </span>
                     </li>
                   ))}
@@ -647,7 +668,7 @@ export default function ReportsPage() {
                   value={roiDraft.slaFirstResponseHours}
                   onChange={(e) => setRoiDraft((d) => ({ ...d, slaFirstResponseHours: e.target.value }))}
                   placeholder={t('t.ex. 24')}
-                  title={t('Räknas i kalendertimmar, inte kontorstid')}
+                  title={t('Räknas i öppettid när öppettider är angivna (Bemanning → Antaganden), annars i kalendertimmar')}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
                 />
               </div>

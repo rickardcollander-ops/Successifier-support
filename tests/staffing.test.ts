@@ -77,6 +77,67 @@ describe('requiredAgentsGrid', () => {
   });
 });
 
+describe('requiredAgentsGrid with openMask', () => {
+  // Mon–Fri 08–17 (exclusive close), weekend closed.
+  const officeMask = (): boolean[][] =>
+    Array.from({ length: 7 }, (_, wd) =>
+      Array.from({ length: 24 }, (_, h) => wd < 5 && h >= 8 && h < 17)
+    );
+  const opts = { occupancy: 0.8, shrinkage: 0.1, smoothingHours: 1 };
+
+  it('rolls night volume forward to the opening hour', () => {
+    const profile = flatProfile(0);
+    profile[0][2] = 6; // Monday 02:00 spike — arrives while closed
+    const { raw } = requiredAgentsGrid(profile, 12, { ...opts, openMask: officeMask() });
+    expect(raw[0][2]).toBe(0); // closed slot needs nobody
+    expect(raw[0][8]).toBe(2); // the work waits at Monday 08 (1.2/0.72 → 2)
+  });
+
+  it('wraps closed-Sunday volume around the ring to Monday open', () => {
+    const profile = flatProfile(0);
+    profile[6][14] = 6; // Sunday afternoon
+    const { raw } = requiredAgentsGrid(profile, 12, { ...opts, openMask: officeMask() });
+    expect(raw[6][14]).toBe(0);
+    expect(raw[0][8]).toBe(2);
+  });
+
+  it('forces closed slots to 0 in both grids even with in-slot volume', () => {
+    const profile = flatProfile(1);
+    const { raw, smoothed } = requiredAgentsGrid(profile, 12, {
+      ...opts,
+      smoothingHours: 3,
+      openMask: officeMask(),
+    });
+    expect(raw[5].every((v) => v === 0)).toBe(true); // Saturday
+    expect(smoothed[5].every((v) => v === 0)).toBe(true);
+    expect(raw[0][7]).toBe(0);
+    expect(raw[0][8]).toBeGreaterThan(0);
+  });
+
+  it('returns zero grids for an all-closed mask instead of hanging', () => {
+    const closed = Array.from({ length: 7 }, () => Array(24).fill(false));
+    const { raw, smoothed } = requiredAgentsGrid(flatProfile(5), 12, { ...opts, openMask: closed });
+    expect(raw.flat().every((v) => v === 0)).toBe(true);
+    expect(smoothed.flat().every((v) => v === 0)).toBe(true);
+  });
+
+  it('smoothing window skips closed slots — Monday morning absorbs Friday afternoon', () => {
+    const profile = flatProfile(0);
+    profile[4][16] = 6; // Friday 16:00 spike, last open hour of the week
+    const { smoothed } = requiredAgentsGrid(profile, 12, {
+      ...opts,
+      smoothingHours: 3,
+      openMask: officeMask(),
+    });
+    // Window of 3 OPEN slots: Mon 08's window = [Mon 08, Fri 16, Fri 15]
+    // — it reaches back across the closed weekend to Friday's tail.
+    expect(smoothed[0][8]).toBe(1); // 1.2/3 = 0.4 → /0.72 → 1
+    expect(smoothed[0][9]).toBe(1); // [Mon 09, Mon 08, Fri 16] still sees it
+    expect(smoothed[0][10]).toBe(0); // spike outside the window
+    expect(smoothed[5].every((v) => v === 0)).toBe(true);
+  });
+});
+
 describe('actualHoursGrid', () => {
   it('splits a session across hour boundaries proportionally', () => {
     // 10:30–12:30 UTC on Wed 2026-01-07 = 11:30–13:30 Stockholm (CET):
