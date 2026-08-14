@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/client';
 import type { KnowledgeBase } from '@/lib/types';
 import { product } from '@/lib/products';
 import { parseTicketThread, type ThreadEntry } from '@/lib/services/ticket-thread';
+import { selectLearningExamples, formatLearningExamples } from '@/lib/services/learning-examples';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -208,21 +209,6 @@ async function findRelevantKnowledge(
 
 // --- Local query result types ---
 
-interface FeedbackRow {
-  subject: string;
-  originalMessage: string;
-  finalResponse: string | null;
-  wasEdited: boolean;
-  rating: string | null;
-}
-
-interface NegativeFeedbackRow {
-  subject: string;
-  originalMessage: string;
-  aiResponse: string;
-  finalResponse: string | null;
-}
-
 interface PreviousTicketRow {
   subject: string;
   originalMessage: string;
@@ -231,8 +217,15 @@ interface PreviousTicketRow {
   createdAt: Date;
 }
 
-// --- Learning Examples (positive + sent, with edit signal) ---
+// --- Learning Examples (from what agents actually sent) ---
 
+// Every send with a draft logs an AIResponseFeedback row; explicit thumbs
+// ratings are rare. So we learn from behaviour: verbatim/lightly-edited sends
+// become exemplars, rewritten drafts become corrective pairs (bad draft vs
+// what the agent actually sent). Selection/formatting lives in
+// lib/services/learning-examples.ts (pure, unit-tested); this function only
+// does the query. Previously only rating='positive' rows were used — which
+// almost never existed — and the rewrite signal was ignored entirely.
 async function findLearningExamples(tenantId: string, subject: string, message: string): Promise<string> {
   try {
     const fullText = `${subject} ${message}`;
@@ -243,109 +236,25 @@ async function findLearningExamples(tenantId: string, subject: string, message: 
 
     if (searchTerms.length === 0) return '';
 
-    // Only use explicitly positive-rated feedback as learning examples.
-    // Legacy / unrated rows are excluded — they may contain stale data that
-    // should not influence current responses.
-    const feedback = await prisma.aIResponseFeedback.findMany({
+    const rows = await prisma.aIResponseFeedback.findMany({
       where: {
         tenantId,
-        rating: 'positive',
         finalResponse: { not: null },
-        wasEdited: false, // Unedited = AI already got it right
       },
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      take: 150,
       select: {
+        ticketId: true,
         subject: true,
         originalMessage: true,
-        finalResponse: true,
-      },
-    });
-
-    // Also fetch edited-but-approved ones as secondary pool
-    const editedFeedback = await prisma.aIResponseFeedback.findMany({
-      where: {
-        tenantId,
-        rating: 'positive',
-        finalResponse: { not: null },
-        wasEdited: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 30,
-      select: {
-        subject: true,
-        originalMessage: true,
+        aiResponse: true,
         finalResponse: true,
         wasEdited: true,
         rating: true,
       },
     });
 
-    const allFeedback = [...feedback, ...editedFeedback];
-    if (allFeedback.length === 0) return '';
-
-    // Score by text overlap
-    const scored: { fb: FeedbackRow; score: number }[] = (feedback as FeedbackRow[])
-      .map((fb: FeedbackRow) => {
-        const fbText = `${fb.subject} ${fb.originalMessage}`.toLowerCase();
-        const matchCount = searchTerms.filter(t => fbText.includes(t)).length;
-        // Prefer non-edited (AI was already good) and explicitly positive rated
-        const editBonus = fb.wasEdited ? 0 : 0.5;
-        const ratingBonus = fb.rating === 'positive' ? 1 : 0;
-        return { fb, score: matchCount + editBonus + ratingBonus };
-      })
-      .filter(({ score }: { fb: FeedbackRow; score: number }) => score > 0)
-      .sort((a: { fb: FeedbackRow; score: number }, b: { fb: FeedbackRow; score: number }) => b.score - a.score)
-      .slice(0, 3);
-
-    if (scored.length === 0) return '';
-
-    let formatted = '\n\n=== GODKÄNDA EXEMPELSVAR (Använd som riktlinje för ton, format och längd) ===\n';
-    scored.forEach(({ fb }: { fb: FeedbackRow; score: number }, index: number) => {
-      formatted += `\nExempel ${index + 1}${fb.wasEdited ? ' (redigerat av agent)' : ' (AI-svar, godkänt direkt)'}:\n`;
-      formatted += `Ämne: ${fb.subject}\n`;
-      formatted += `Kund: ${fb.originalMessage.replace(/\[Gmail ID:.*?\]\n?\[Inbox account:.*?\]\n?\n?/g, '').substring(0, 300).trim()}\n`;
-      formatted += `Godkänt svar: ${fb.finalResponse?.substring(0, 500) || 'N/A'}\n`;
-    });
-
-    // Anti-examples: recently edited responses where AI clearly got it wrong
-    const negatives = await prisma.aIResponseFeedback.findMany({
-      where: {
-        tenantId,
-        rating: 'negative',
-        wasEdited: true,
-        finalResponse: { not: null },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: {
-        subject: true,
-        originalMessage: true,
-        aiResponse: true,
-        finalResponse: true,
-      },
-    });
-
-    const relevantNegatives: { fb: NegativeFeedbackRow; score: number }[] = (negatives as NegativeFeedbackRow[])
-      .map((fb: NegativeFeedbackRow) => {
-        const fbText = `${fb.subject} ${fb.originalMessage}`.toLowerCase();
-        const matchCount = searchTerms.filter(t => fbText.includes(t)).length;
-        return { fb, score: matchCount };
-      })
-      .filter(({ score }: { fb: NegativeFeedbackRow; score: number }) => score > 0)
-      .sort((a: { fb: NegativeFeedbackRow; score: number }, b: { fb: NegativeFeedbackRow; score: number }) => b.score - a.score)
-      .slice(0, 2);
-
-    if (relevantNegatives.length > 0) {
-      formatted += '\n=== UNDVIK (AI-svar som inte godkändes och korrigerades) ===\n';
-      relevantNegatives.forEach(({ fb }: { fb: NegativeFeedbackRow; score: number }, index: number) => {
-        formatted += `\nUndvik-exempel ${index + 1} (ämne: ${fb.subject}):\n`;
-        formatted += `AI svarade: ${fb.aiResponse.substring(0, 300).trim()}\n`;
-        formatted += `Korrekta svaret: ${fb.finalResponse?.substring(0, 300).trim()}\n`;
-      });
-    }
-
-    return formatted;
+    return formatLearningExamples(selectLearningExamples(rows, searchTerms));
   } catch (error) {
     console.error('[AI] Error fetching learning examples:', error);
     return '';
