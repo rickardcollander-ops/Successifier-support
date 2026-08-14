@@ -362,6 +362,17 @@ const EN: Record<string, string> = {
   'lösta ärenden klarades med ett enda svar.': 'resolved tickets were handled with a single reply.',
   '(för få lösta för en andel)': '(too few resolved for a rate)',
   'Händelseloggen täcker inte hela perioden – siffrorna kan vara ofullständiga.': 'The event log does not cover the whole period – figures may be incomplete.',
+  // Digest & alert settings
+  'Utskick & larm': 'Emails & alerts',
+  'Rapport via e-post': 'Report by email',
+  'Av': 'Off',
+  'Veckovis (måndag morgon)': 'Weekly (Monday morning)',
+  'Månadsvis (den 1:a)': 'Monthly (on the 1st)',
+  'Mottagare av rapporten (kommaseparerade)': 'Report recipients (comma-separated)',
+  'SLA-larm via e-post (varning vid 80 % av målet, larm vid överskridet mål)': 'SLA alerts by email (warning at 80% of the target, alert when the target is passed)',
+  'Mottagare av SLA-larm (kommaseparerade)': 'SLA alert recipients (comma-separated)',
+  'namn@företag.se, chef@företag.se': 'name@company.com, manager@company.com',
+  'namn@företag.se': 'name@company.com',
   // Ticket timeline
   'Historik': 'History',
   'Laddar historik...': 'Loading history...',

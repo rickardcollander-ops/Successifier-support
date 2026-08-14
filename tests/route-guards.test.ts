@@ -39,9 +39,11 @@ const ALLOWLIST: Record<string, string> = {
   'app/api/me/chat/route.ts': 'Authenticated via signed identity token (lib/identity-token.ts); 401s before any data access, scopes data to the verified email',
 };
 
-// Guards from lib/api-auth.ts. A route calling one of these (and returning
-// the failure response) is considered protected.
-const LIB_GUARDS = /requireApiAuth|requireSession|requireSuperadmin|requireSettingsAdmin|validateApiKey/;
+// Guards from lib/api-auth.ts, plus requireCronSecret (lib/cron-auth.ts) for
+// the /api/cron/* routes Vercel Cron invokes with a bearer CRON_SECRET. A
+// route calling one of these (and returning the failure response) is
+// considered protected.
+const LIB_GUARDS = /requireApiAuth|requireSession|requireSuperadmin|requireSettingsAdmin|validateApiKey|requireCronSecret/;
 
 // Routes doing session checks by hand must both call auth() and reject
 // (401 for APIs, redirect for browser flows like the Gmail OAuth dance).

@@ -15,6 +15,11 @@ export const TICKET_EVENT = {
   assigned: 'assigned',
   replySent: 'reply_sent',
   workStarted: 'work_started',
+  // An SLA alert email was sent for this ticket (meta.level: 'warning' at
+  // ≥80% of the first-response target, 'breach' at ≥100%). Doubles as the
+  // idempotency record — the cron never re-alerts a (ticket, level) pair
+  // that already has one of these.
+  slaAlert: 'sla_alert',
 } as const;
 
 export type TicketEventType = (typeof TICKET_EVENT)[keyof typeof TICKET_EVENT];

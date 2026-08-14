@@ -127,6 +127,10 @@ interface RoiSettings {
   baselineHandlingMinutes: number | null;
   baselineResponseHours: number | null;
   slaFirstResponseHours: number | null;
+  digestFrequency: string | null;
+  digestRecipients: string[];
+  slaAlertsEnabled: boolean;
+  alertRecipients: string[];
 }
 
 // One rewritten reply from /api/reports/rewritten — draft vs what was sent.
@@ -200,7 +204,15 @@ function ReportsContent() {
   // money figure at all — we ask for them instead.
   const [roi, setRoi] = useState<RoiSettings | null>(null);
   const [editingRoi, setEditingRoi] = useState(false);
-  const [roiDraft, setRoiDraft] = useState({ baselineHandlingMinutes: '', agentHourlyCost: '', slaFirstResponseHours: '' });
+  const [roiDraft, setRoiDraft] = useState({
+    baselineHandlingMinutes: '',
+    agentHourlyCost: '',
+    slaFirstResponseHours: '',
+    digestFrequency: '',
+    digestRecipients: '',
+    slaAlertsEnabled: false,
+    alertRecipients: '',
+  });
   const [savingRoi, setSavingRoi] = useState(false);
 
   // Filters: '' = no filter. Applied server-side; the API echoes what it
@@ -332,6 +344,10 @@ function ReportsContent() {
           baselineHandlingMinutes: s.baselineHandlingMinutes != null ? String(s.baselineHandlingMinutes) : '',
           agentHourlyCost: s.agentHourlyCost != null ? String(s.agentHourlyCost) : '',
           slaFirstResponseHours: s.slaFirstResponseHours != null ? String(s.slaFirstResponseHours) : '',
+          digestFrequency: s.digestFrequency ?? '',
+          digestRecipients: (s.digestRecipients || []).join(', '),
+          slaAlertsEnabled: s.slaAlertsEnabled ?? false,
+          alertRecipients: (s.alertRecipients || []).join(', '),
         });
       }
     } catch (error) {
@@ -349,6 +365,10 @@ function ReportsContent() {
           baselineHandlingMinutes: roiDraft.baselineHandlingMinutes,
           agentHourlyCost: roiDraft.agentHourlyCost,
           slaFirstResponseHours: roiDraft.slaFirstResponseHours,
+          digestFrequency: roiDraft.digestFrequency,
+          digestRecipients: roiDraft.digestRecipients,
+          slaAlertsEnabled: roiDraft.slaAlertsEnabled,
+          alertRecipients: roiDraft.alertRecipients,
         }),
       });
       if (res.ok) {
@@ -864,45 +884,100 @@ function ReportsContent() {
           )}
 
           {editingRoi && (
-            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Tid/ärende före verktyget (min)')}</label>
-                <input
-                  type="number" min="0" inputMode="decimal"
-                  value={roiDraft.baselineHandlingMinutes}
-                  onChange={(e) => setRoiDraft((d) => ({ ...d, baselineHandlingMinutes: e.target.value }))}
-                  placeholder={t('t.ex. 15')}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
-                />
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Tid/ärende före verktyget (min)')}</label>
+                  <input
+                    type="number" min="0" inputMode="decimal"
+                    value={roiDraft.baselineHandlingMinutes}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, baselineHandlingMinutes: e.target.value }))}
+                    placeholder={t('t.ex. 15')}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Timkostnad agent (kr)')}</label>
+                  <input
+                    type="number" min="0" inputMode="decimal"
+                    value={roiDraft.agentHourlyCost}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, agentHourlyCost: e.target.value }))}
+                    placeholder={t('t.ex. 300')}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('SLA-mål: första svar inom (timmar)')}</label>
+                  <input
+                    type="number" min="0" inputMode="decimal"
+                    value={roiDraft.slaFirstResponseHours}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, slaFirstResponseHours: e.target.value }))}
+                    placeholder={t('t.ex. 24')}
+                    title={t('Räknas i kalendertimmar, inte kontorstid')}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Timkostnad agent (kr)')}</label>
-                <input
-                  type="number" min="0" inputMode="decimal"
-                  value={roiDraft.agentHourlyCost}
-                  onChange={(e) => setRoiDraft((d) => ({ ...d, agentHourlyCost: e.target.value }))}
-                  placeholder={t('t.ex. 300')}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
-                />
+
+              {/* Scheduled digest + SLA alert settings (sent by the cron
+                  routes; see app/api/cron). Recipients are comma-separated. */}
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-4 mb-2">{t('Utskick & larm')}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Rapport via e-post')}</label>
+                  <select
+                    value={roiDraft.digestFrequency}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, digestFrequency: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                  >
+                    <option value="">{t('Av')}</option>
+                    <option value="weekly">{t('Veckovis (måndag morgon)')}</option>
+                    <option value="monthly">{t('Månadsvis (den 1:a)')}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Mottagare av rapporten (kommaseparerade)')}</label>
+                  <input
+                    type="text"
+                    value={roiDraft.digestRecipients}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, digestRecipients: e.target.value }))}
+                    placeholder={t('namn@företag.se, chef@företag.se')}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="slaAlertsEnabled"
+                    type="checkbox"
+                    checked={roiDraft.slaAlertsEnabled}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, slaAlertsEnabled: e.target.checked }))}
+                    className="w-4 h-4 accent-[#7C5CFF]"
+                  />
+                  <label htmlFor="slaAlertsEnabled" className="text-xs text-slate-600 dark:text-slate-300">
+                    {t('SLA-larm via e-post (varning vid 80 % av målet, larm vid överskridet mål)')}
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Mottagare av SLA-larm (kommaseparerade)')}</label>
+                  <input
+                    type="text"
+                    value={roiDraft.alertRecipients}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, alertRecipients: e.target.value }))}
+                    placeholder={t('namn@företag.se')}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('SLA-mål: första svar inom (timmar)')}</label>
-                <input
-                  type="number" min="0" inputMode="decimal"
-                  value={roiDraft.slaFirstResponseHours}
-                  onChange={(e) => setRoiDraft((d) => ({ ...d, slaFirstResponseHours: e.target.value }))}
-                  placeholder={t('t.ex. 24')}
-                  title={t('Räknas i kalendertimmar, inte kontorstid')}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
-                />
+
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={saveRoiSettings}
+                  disabled={savingRoi}
+                  className="px-4 py-2 rounded-md bg-[#7C5CFF] text-white text-sm font-medium hover:brightness-110 disabled:opacity-50"
+                >
+                  {savingRoi ? t('Sparar…') : t('Spara')}
+                </button>
               </div>
-              <button
-                onClick={saveRoiSettings}
-                disabled={savingRoi}
-                className="px-4 py-2 rounded-md bg-[#7C5CFF] text-white text-sm font-medium hover:brightness-110 disabled:opacity-50"
-              >
-                {savingRoi ? t('Sparar…') : t('Spara')}
-              </button>
             </div>
           )}
         </div>

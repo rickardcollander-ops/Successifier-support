@@ -93,6 +93,15 @@ model ReportSettings {
   // app-side defaults (0.80 / 0.10) apply.
   staffingOccupancy Float?
   staffingShrinkage Float?
+  // Scheduled email digest + proactive SLA alerts (sent by the cron routes
+  // in app/api/cron/*). digestFrequency: 'weekly' | 'monthly' | null = off.
+  // digestLastSentAt makes the daily cron idempotent — a re-fired run sees
+  // it already sent this period and does nothing.
+  digestFrequency  String?
+  digestRecipients String[]  @default([])
+  slaAlertsEnabled Boolean   @default(false)
+  alertRecipients  String[]  @default([])
+  digestLastSentAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
