@@ -63,6 +63,18 @@ CRON_SECRET=[slumpad sträng, t.ex. openssl rand -hex 32]
 APP_BASE_URL=https://doldadress.successifier.com
 ```
 
+### 7. Kundnöjdhet (CSAT)
+```
+CSAT_TOKEN_SECRET=[minst 32 tecken, t.ex. openssl rand -hex 32]
+```
+
+När CSAT är aktiverat under Rapporter → Inställningar läggs 👍/👎-länkar till
+i HTML-delen av utgående svar. Länkarna innehåller en HMAC-signerad token
+(`lib/csat-token.ts`, giltig 30 dagar) och landar på den publika rutten
+`/api/public/csat`, som sparar EN rad per ärende (ett andra klick byter
+betyget). Utan `CSAT_TOKEN_SECRET` och `APP_BASE_URL` skickas svaren utan
+footer — en felkonfiguration blockerar aldrig själva utskicket.
+
 `vercel.json` definierar två cron-jobb som Vercel anropar med
 `Authorization: Bearer <CRON_SECRET>`:
 

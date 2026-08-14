@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
       digestRecipients: settings?.digestRecipients ?? [],
       slaAlertsEnabled: settings?.slaAlertsEnabled ?? false,
       alertRecipients: settings?.alertRecipients ?? [],
+      csatEnabled: settings?.csatEnabled ?? false,
     });
   } catch (error) {
     console.error('Error fetching report settings:', error);
@@ -99,6 +100,7 @@ export async function PUT(request: NextRequest) {
     if ('digestRecipients' in body) data.digestRecipients = emailList(body.digestRecipients);
     if ('slaAlertsEnabled' in body) data.slaAlertsEnabled = body.slaAlertsEnabled === true;
     if ('alertRecipients' in body) data.alertRecipients = emailList(body.alertRecipients);
+    if ('csatEnabled' in body) data.csatEnabled = body.csatEnabled === true;
 
     const settings = await prisma.reportSettings.upsert({
       where: { tenantId },
@@ -117,6 +119,7 @@ export async function PUT(request: NextRequest) {
       digestRecipients: settings.digestRecipients,
       slaAlertsEnabled: settings.slaAlertsEnabled,
       alertRecipients: settings.alertRecipients,
+      csatEnabled: settings.csatEnabled,
     });
   } catch (error) {
     console.error('Error saving report settings:', error);

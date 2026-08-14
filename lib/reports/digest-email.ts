@@ -32,6 +32,7 @@ const STRINGS = {
     firstResponse: 'Första svarstid (median)',
     activeWork: 'Aktiv arbetstid per ärende (median)',
     aiKept: 'Andel av svaren från AI-utkastet (median)',
+    csat: 'Kundnöjdhet (andel 👍)',
     slaAttainment: 'SLA-uppfyllnad',
     overdue: (n: number) =>
       n === 1
@@ -55,6 +56,7 @@ const STRINGS = {
     firstResponse: 'First response time (median)',
     activeWork: 'Active work per ticket (median)',
     aiKept: 'Share of replies from the AI draft (median)',
+    csat: 'Customer satisfaction (👍 share)',
     slaAttainment: 'SLA attainment',
     overdue: (n: number) =>
       n === 1
@@ -160,6 +162,17 @@ export function buildDigestEmail(
       ),
     },
   ];
+  if (summary.csat.count > 0 || previous.csat.count > 0) {
+    rows.push({
+      label: s.csat,
+      value: summary.csat.sharePct != null ? `${summary.csat.sharePct}%` : `${summary.csat.positive}/${summary.csat.count}`,
+      prev: previous.csat.sharePct != null ? `${previous.csat.sharePct}%` : previous.csat.count > 0 ? `${previous.csat.positive}/${previous.csat.count}` : dash,
+      delta:
+        summary.csat.sharePct != null && previous.csat.sharePct != null
+          ? deltaHtml(summary.csat.sharePct, previous.csat.sharePct, summary.csat.count, previous.csat.count, false)
+          : '',
+    });
+  }
   if (summary.sla) {
     rows.push({
       label: `${s.slaAttainment} (≤ ${summary.sla.targetHours} ${s.hours})`,

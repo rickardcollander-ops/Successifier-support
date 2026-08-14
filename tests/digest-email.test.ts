@@ -16,6 +16,7 @@ const summary = (over: Partial<KpiSummary> = {}): KpiSummary => ({
     { category: 'uppsägning', count: 30 },
     { category: 'faktura & betalning', count: 20 },
   ],
+  csat: { count: 25, positive: 22, sharePct: 88 },
   ...over,
 });
 
@@ -43,6 +44,8 @@ describe('buildDigestEmail', () => {
     expect(html).toContain('2 öppna ärenden har passerat SLA-målet utan svar.');
     expect(html).toContain('Vanligaste ämnen:');
     expect(html).toContain('uppsägning (30)');
+    expect(html).toContain('Kundnöjdhet');
+    expect(html).toContain('88%');
     expect(html).toContain('https://app.example.com/reports');
   });
 
@@ -56,6 +59,7 @@ describe('buildDigestEmail', () => {
       editStats: { count: 0, medianKeptPct: 0 },
       sla: null,
       topCategories: [],
+      csat: { count: 0, positive: 0, sharePct: null },
     });
     const { html } = buildDigestEmail(empty, empty, { ...OPTS, overdueCount: null });
     expect(html).toContain('–');

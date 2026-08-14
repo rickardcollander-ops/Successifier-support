@@ -41,6 +41,11 @@ export const TERMINAL_STATUSES = ['sent', 'closed', 'archived', 'duplicate'];
 // MIN_GROUP on the reports page.
 export const MIN_RATE_SAMPLE = 15;
 
+// CSAT responses trickle in slowly (a click per emailed reply at best), so
+// the floor for claiming a satisfaction percentage is lower than for the
+// volume-based rates — but there is still a floor.
+export const MIN_CSAT_SAMPLE = 10;
+
 // Window resolution lives in lib/report-window.ts (shared with the
 // drill-down endpoints so every report view slices time identically); the
 // underlying Stockholm calendar helpers in lib/time/stockholm.ts.
@@ -262,6 +267,8 @@ export interface KpiSummary {
   sla: { targetHours: number; answered: number; met: number; attainmentPct: number | null } | null;
   // Top 3 categorised topics in the window, for the digest.
   topCategories: Array<{ category: string; count: number }>;
+  // One-click customer satisfaction: sharePct null below MIN_CSAT_SAMPLE.
+  csat: { count: number; positive: number; sharePct: number | null };
 }
 
 export async function computeKpiSummary(
@@ -275,7 +282,7 @@ export async function computeKpiSummary(
   const comparableBody = (s: string | null | undefined) =>
     stripAgentSignature((s ?? '').split('[INLINE_IMAGES]')[0]);
 
-  const [createdRows, sentRows, feedbackRows, replyEvents] = await Promise.all([
+  const [createdRows, sentRows, feedbackRows, replyEvents, csatRows] = await Promise.all([
     prisma.ticket.findMany({
       where: {
         tenantId,
@@ -315,7 +322,21 @@ export async function computeKpiSummary(
       },
       orderBy: { createdAt: 'asc' },
     }),
+    prisma.csatResponse.findMany({
+      where: { tenantId, createdAt: { gte: windowStart, lt: windowEnd } },
+      select: { rating: true },
+    }),
   ]);
+
+  const csatPositive = csatRows.filter((r) => r.rating === 'positive').length;
+  const csat = {
+    count: csatRows.length,
+    positive: csatPositive,
+    sharePct:
+      csatRows.length >= MIN_CSAT_SAMPLE
+        ? Math.round((csatPositive / csatRows.length) * 100)
+        : null,
+  };
 
   const reportableCreated = createdRows.filter((t) => isReportable(t));
   const filteredCreated = reportableCreated.filter(
@@ -452,6 +473,7 @@ export async function computeKpiSummary(
     editStats,
     sla,
     topCategories,
+    csat,
   };
 }
 
@@ -551,7 +573,7 @@ export async function computeReportData(
 
   // The six window-level queries are independent of each other — run them
   // concurrently instead of as a waterfall.
-  const [rows, sentRows, feedbackRows, reportSettings, resolvedTodayRows, replyEvents] =
+  const [rows, sentRows, feedbackRows, reportSettings, resolvedTodayRows, replyEvents, csatRows] =
     await Promise.all([
       prisma.ticket.findMany({
         where: {
@@ -624,6 +646,19 @@ export async function computeReportData(
           },
         },
         orderBy: { createdAt: 'asc' },
+      }),
+      // One-click CSAT ratings received in the window (newest first — the
+      // negative drill-down shows the latest cases).
+      prisma.csatResponse.findMany({
+        where: { tenantId, createdAt: { gte: windowStart, lte: windowEnd } },
+        select: {
+          ticketId: true,
+          rating: true,
+          comment: true,
+          createdAt: true,
+          ticket: { select: { subject: true } },
+        },
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
 
@@ -1272,6 +1307,31 @@ export async function computeReportData(
     // "What do customers ask about": counts + response medians per category,
     // over the same filtered populations as the rest of the report.
     ticketsByCategory: categoryStats(tickets, sentInRange),
+    // Customer satisfaction from the one-click email links. Team-level
+    // (ignores filters — a rating belongs to the ticket, not the view).
+    // sharePct is only claimed at MIN_CSAT_SAMPLE responses or more; the
+    // negative drill-down lists the latest cases to follow up.
+    csat: (() => {
+      const positive = csatRows.filter((r) => r.rating === 'positive').length;
+      return {
+        count: csatRows.length,
+        positive,
+        negative: csatRows.length - positive,
+        sharePct:
+          csatRows.length >= MIN_CSAT_SAMPLE
+            ? Math.round((positive / csatRows.length) * 100)
+            : null,
+        negatives: csatRows
+          .filter((r) => r.rating === 'negative')
+          .slice(0, 10)
+          .map((r) => ({
+            ticketId: r.ticketId,
+            subject: r.ticket.subject,
+            comment: r.comment,
+            createdAt: r.createdAt,
+          })),
+      };
+    })(),
     followUp,
     sla,
     backlog,

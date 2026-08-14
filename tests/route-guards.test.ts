@@ -32,6 +32,11 @@ const ALLOWLIST: Record<string, string> = {
   'app/api/public/contact/answer/route.ts': 'AI contact form — grounded KB answer, chatEnabled-gated, rate-limited',
   'app/api/public/contact/submit/route.ts': 'AI contact form — public ticket intake, rate-limited (5/10 min per IP), validated, honeypot',
   'app/api/public/contact/feedback/route.ts': 'AI contact form — anonymous deflection stat, rate-limited, writes only a KnowledgeEvent',
+  // One-click CSAT rating links from outgoing reply emails: authenticated by
+  // an HMAC-signed token (verifyCsatToken from lib/csat-token.ts) that is the
+  // ONLY way to select a ticket; tenantId is read from the ticket row;
+  // rate-limited; writes only a CsatResponse upsert keyed on the ticket.
+  'app/api/public/csat/route.ts': 'CSAT rating landing — signed-token authenticated (lib/csat-token.ts), rate-limited, single upsert per ticket',
   // Logged-in customer chatbot: authenticated by a signed identity token
   // (verifyIdentityToken from lib/identity-token.ts), not a session/API key.
   // Rejects with 401 on a missing/invalid/expired token before any data is

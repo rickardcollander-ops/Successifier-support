@@ -102,6 +102,13 @@ interface ReportData {
     reopenRatePct: number | null;
     oneTouch: { resolved: number; oneReply: number; pct: number | null };
   };
+  csat?: {
+    count: number;
+    positive: number;
+    negative: number;
+    sharePct: number | null;
+    negatives: Array<{ ticketId: string; subject: string; comment: string | null; createdAt: string }>;
+  };
   // Same KPI definitions over the period immediately before the window —
   // the source for the "vs föregående period" delta badges.
   comparison?: {
@@ -138,6 +145,7 @@ interface RoiSettings {
   digestRecipients: string[];
   slaAlertsEnabled: boolean;
   alertRecipients: string[];
+  csatEnabled: boolean;
 }
 
 // One rewritten reply from /api/reports/rewritten — draft vs what was sent.
@@ -219,6 +227,7 @@ function ReportsContent() {
     digestRecipients: '',
     slaAlertsEnabled: false,
     alertRecipients: '',
+    csatEnabled: false,
   });
   const [savingRoi, setSavingRoi] = useState(false);
 
@@ -358,6 +367,7 @@ function ReportsContent() {
           digestRecipients: (s.digestRecipients || []).join(', '),
           slaAlertsEnabled: s.slaAlertsEnabled ?? false,
           alertRecipients: (s.alertRecipients || []).join(', '),
+          csatEnabled: s.csatEnabled ?? false,
         });
       }
     } catch (error) {
@@ -379,6 +389,7 @@ function ReportsContent() {
           digestRecipients: roiDraft.digestRecipients,
           slaAlertsEnabled: roiDraft.slaAlertsEnabled,
           alertRecipients: roiDraft.alertRecipients,
+          csatEnabled: roiDraft.csatEnabled,
         }),
       });
       if (res.ok) {
@@ -416,6 +427,10 @@ function ReportsContent() {
       rows.push([t('Återöppnade ärenden'), String(data.followUp.reopenedCount), '']);
       rows.push([t('Stängda ärenden i perioden'), String(data.followUp.closedCount), '']);
       rows.push([`${t('Löst med 1 svar')} (%)`, num(data.followUp.oneTouch.pct), '']);
+    }
+    if (data.csat && data.csat.count > 0) {
+      rows.push([`${t('Kundnöjdhet (CSAT)')} (%)`, num(data.csat.sharePct), '']);
+      rows.push([`${t('Kundnöjdhet (CSAT)')} 👍/👎`, `${data.csat.positive}/${data.csat.negative}`, '']);
     }
     if (data.ticketsByCategory && data.ticketsByCategory.length > 0) {
       rows.push([]);
@@ -1001,6 +1016,18 @@ function ReportsContent() {
                     placeholder={t('namn@företag.se')}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
                   />
+                </div>
+                <div className="flex items-center gap-2 sm:col-span-2">
+                  <input
+                    id="csatEnabled"
+                    type="checkbox"
+                    checked={roiDraft.csatEnabled}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, csatEnabled: e.target.checked }))}
+                    className="w-4 h-4 accent-[#7C5CFF]"
+                  />
+                  <label htmlFor="csatEnabled" className="text-xs text-slate-600 dark:text-slate-300">
+                    {t('Kundnöjdhet (CSAT): lägg till 👍/👎-länkar i utgående svar')}
+                  </label>
                 </div>
               </div>
 
@@ -1697,6 +1724,71 @@ function ReportsContent() {
             <p className="text-[11px] text-slate-400 mt-3">
               {t('Händelseloggen täcker inte hela perioden – siffrorna kan vara ofullständiga.')}
             </p>
+          )}
+        </div>
+      )}
+
+      {/* Customer satisfaction from the one-click 👍/👎 email links. */}
+      {data.csat && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Kundnöjdhet (CSAT)')}</h3>
+            </div>
+            {filtersActive && (
+              <span className="text-[11px] text-slate-400">{t('Filter påverkar inte denna panel')}</span>
+            )}
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Ett-klicks-betyg (👍/👎) från kunderna via länkarna i utgående svar.')}
+          </p>
+          {data.csat.count === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {roi?.csatEnabled
+                ? t('Inga betyg i perioden ännu – de kommer in i takt med att kunder klickar i mejlen.')
+                : t('Inga betyg ännu. Aktivera CSAT under Inställningar för att lägga till betygslänkar i utgående svar.')}
+            </p>
+          ) : (
+            <>
+              <div className="flex items-baseline gap-3">
+                <span className={`text-4xl font-bold ${
+                  data.csat.sharePct == null ? 'text-slate-900 dark:text-slate-100'
+                  : data.csat.sharePct >= 85 ? 'text-emerald-600 dark:text-emerald-400'
+                  : data.csat.sharePct >= 60 ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-red-500'
+                }`}>
+                  {data.csat.sharePct != null ? `${data.csat.sharePct}%` : `${data.csat.positive}/${data.csat.count}`}
+                </span>
+                <span className="text-sm text-slate-500 dark:text-slate-400">
+                  {data.csat.sharePct != null ? t('nöjda av de som svarat') : t('positiva betyg')}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                👍 {data.csat.positive} · 👎 {data.csat.negative} · {data.csat.count} {t('svar totalt')}
+                {data.csat.sharePct == null && ` · ${t('för få svar för en andel (minst')} ${10})`}
+              </p>
+              {data.csat.negatives.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-2">{t('Senaste missnöjda:')}</p>
+                  <ul className="space-y-1.5">
+                    {data.csat.negatives.map((n) => (
+                      <li key={n.ticketId} className="text-sm">
+                        <a href={`/tickets?ticket=${n.ticketId}`} className="text-[#7C5CFF] hover:underline">
+                          {n.subject || t('(utan ämne)')}
+                        </a>
+                        <span className="text-xs text-slate-400 ml-2">
+                          {new Date(n.createdAt).toLocaleDateString('sv-SE')}
+                        </span>
+                        {n.comment && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 italic">”{n.comment}”</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

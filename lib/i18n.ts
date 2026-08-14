@@ -382,6 +382,17 @@ const EN: Record<string, string> = {
   'Mottagare av SLA-larm (kommaseparerade)': 'SLA alert recipients (comma-separated)',
   'namn@företag.se, chef@företag.se': 'name@company.com, manager@company.com',
   'namn@företag.se': 'name@company.com',
+  // CSAT
+  'Kundnöjdhet (CSAT)': 'Customer satisfaction (CSAT)',
+  'Kundnöjdhet (CSAT): lägg till 👍/👎-länkar i utgående svar': 'Customer satisfaction (CSAT): add 👍/👎 links to outgoing replies',
+  'Ett-klicks-betyg (👍/👎) från kunderna via länkarna i utgående svar.': 'One-click ratings (👍/👎) from customers via the links in outgoing replies.',
+  'Inga betyg i perioden ännu – de kommer in i takt med att kunder klickar i mejlen.': 'No ratings in the period yet – they arrive as customers click in the emails.',
+  'Inga betyg ännu. Aktivera CSAT under Inställningar för att lägga till betygslänkar i utgående svar.': 'No ratings yet. Enable CSAT under Settings to add rating links to outgoing replies.',
+  'nöjda av de som svarat': 'satisfied among respondents',
+  'positiva betyg': 'positive ratings',
+  'svar totalt': 'responses in total',
+  'för få svar för en andel (minst': 'too few responses for a share (at least',
+  'Senaste missnöjda:': 'Latest dissatisfied:',
   // Ticket timeline
   'Historik': 'History',
   'Laddar historik...': 'Loading history...',

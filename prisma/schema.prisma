@@ -28,6 +28,7 @@ model Tenant {
   inboxTabs      InboxTab[]
   ticketEvents   TicketEvent[]
   workSessions   AgentWorkSession[]
+  csatResponses  CsatResponse[]
 }
 
 // Per-tenant configuration of the inbox tabs (folders) shown on the tickets
@@ -102,10 +103,32 @@ model ReportSettings {
   slaAlertsEnabled Boolean   @default(false)
   alertRecipients  String[]  @default([])
   digestLastSentAt DateTime?
+  // Append the one-click 👍/👎 CSAT footer to outgoing replies (send route).
+  // Requires CSAT_TOKEN_SECRET and APP_BASE_URL to be configured.
+  csatEnabled      Boolean   @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// One-click customer satisfaction rating from the signed 👍/👎 links in
+// outgoing replies (lib/csat-token.ts + /api/public/csat). ONE row per
+// ticket — a second click flips the rating via upsert instead of stacking
+// duplicate votes.
+model CsatResponse {
+  id        String   @id @default(cuid())
+  tenantId  String
+  ticketId  String   @unique
+  rating    String   // 'positive' | 'negative'
+  comment   String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
 }
 
 model Agent {
@@ -165,6 +188,7 @@ model Ticket {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   events TicketEvent[]
+  csat   CsatResponse?
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
