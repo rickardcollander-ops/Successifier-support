@@ -93,6 +93,12 @@ model ReportSettings {
   // app-side defaults (0.80 / 0.10) apply.
   staffingOccupancy Float?
   staffingShrinkage Float?
+  // Öppettider per weekday: JSON array of 7 entries (Monday = 0), each
+  // { open, close } in whole hours (close exclusive) or null = closed day
+  // (see lib/business-hours.ts). Null column = not configured → staffing
+  // and SLA behave as 24/7 (calendar time), exactly as before this field
+  // existed.
+  businessHours Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
