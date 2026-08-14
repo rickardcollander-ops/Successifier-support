@@ -62,18 +62,40 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ tickets: [] });
     }
 
-    // If requesting archived tickets
+    // If requesting archived tickets. The archive can grow unbounded, so the
+    // list is paged (200 per request via `offset`) and searched server-side
+    // (`q`) — the old hard `take: 200` made anything older than the 200 newest
+    // archived tickets unreachable in the UI, even through the search box.
     if (status === 'archived') {
-      const tickets = await prisma.ticket.findMany({
-        where: {
-          tenantId: tenant.id,
-          status: 'archived',
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 200,
-        select: LIST_SELECT,
-      });
-      return NextResponse.json({ tickets });
+      const q = searchParams.get('q')?.trim() || '';
+      const offsetParam = Number(searchParams.get('offset'));
+      const offset = Number.isInteger(offsetParam) && offsetParam > 0 ? offsetParam : 0;
+
+      const where: Prisma.TicketWhereInput = {
+        tenantId: tenant.id,
+        status: 'archived',
+        ...(q
+          ? {
+              OR: [
+                { subject: { contains: q, mode: 'insensitive' } },
+                { customerEmail: { contains: q, mode: 'insensitive' } },
+                { customerName: { contains: q, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      };
+
+      const [tickets, total] = await Promise.all([
+        prisma.ticket.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: offset,
+          take: 200,
+          select: LIST_SELECT,
+        }),
+        prisma.ticket.count({ where }),
+      ]);
+      return NextResponse.json({ tickets, total });
     }
 
     // Default scope: exclude archived and Zendesk imports (include

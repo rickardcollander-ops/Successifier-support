@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Ticket } from '@/lib/types';
 import { statusLabelSv, agentColor } from '@/lib/constants';
 import { t } from '@/lib/i18n';
@@ -12,19 +13,42 @@ interface TicketListProps {
   onSelectTicket: (ticket: Ticket) => void;
   presence?: PresenceMap;
   onDelete?: (ticketId: string) => void;
+  // Server-side pagination (used by the archived folder, where the client
+  // only holds a page at a time): `totalCount` is the true total on the
+  // server, `hasMore`/`onLoadMore` fetch the next page, `loadingMore` shows
+  // the spinner state on the button while that fetch runs.
+  totalCount?: number;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+  loadingMore?: boolean;
 }
 
 // Cap how many rows we put in the DOM at once. Folders like "Alla" and
 // "Stängda" can hold 2000+ tickets, and rendering every one as a rich row
-// (with no virtualization) froze the tab. Support scans the top of the list
-// or uses search, so showing the most recent slice is enough; the count in
-// the header still reflects the true total.
+// (with no virtualization) froze the tab. Older rows are still reachable:
+// the "Visa fler äldre ärenden" button at the bottom raises the cap one page
+// at a time (and pulls the next page from the server when the local list
+// runs out), so nothing is permanently hidden.
 const MAX_RENDERED_ROWS = 200;
 
-export default function TicketList({ tickets, selectedTicket, onSelectTicket, presence = {}, onDelete }: TicketListProps) {
-  const visibleTickets = tickets.length > MAX_RENDERED_ROWS
-    ? tickets.slice(0, MAX_RENDERED_ROWS)
+export default function TicketList({ tickets, selectedTicket, onSelectTicket, presence = {}, onDelete, totalCount, hasMore = false, onLoadMore, loadingMore = false }: TicketListProps) {
+  const [renderLimit, setRenderLimit] = useState(MAX_RENDERED_ROWS);
+  const visibleTickets = tickets.length > renderLimit
+    ? tickets.slice(0, renderLimit)
     : tickets;
+  // True total for the header/footer: the server's count when paginated,
+  // otherwise the in-memory list length.
+  const trueTotal = Math.max(totalCount ?? 0, tickets.length);
+
+  const handleShowMore = () => {
+    const nextLimit = renderLimit + MAX_RENDERED_ROWS;
+    setRenderLimit(nextLimit);
+    // The local list is about to run out — pull the next page from the
+    // server so the expanded view actually has older tickets to show.
+    if (hasMore && onLoadMore && !loadingMore && tickets.length < nextLimit) {
+      onLoadMore();
+    }
+  };
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'new':
@@ -87,7 +111,7 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Ärenden')}</h2>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{tickets.length} {t('totalt')}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{trueTotal} {t('totalt')}</p>
       </div>
       <div className="divide-y divide-slate-200 dark:divide-slate-700 max-h-[calc(100vh-12rem)] overflow-y-auto">
         {tickets.length === 0 ? (
@@ -244,9 +268,19 @@ export default function TicketList({ tickets, selectedTicket, onSelectTicket, pr
             </div>
             );
           })}
-          {tickets.length > visibleTickets.length && (
-            <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400">
-              {t('Visar')} {visibleTickets.length} {t('av')} {tickets.length} {t('ärenden — använd sökrutan för att hitta fler.')}
+          {(tickets.length > visibleTickets.length || hasMore) && (
+            <div className="p-4 text-center">
+              <button
+                type="button"
+                onClick={handleShowMore}
+                disabled={loadingMore}
+                className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              >
+                {loadingMore ? t('Laddar fler…') : t('Visa fler äldre ärenden')}
+              </button>
+              <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                {t('Visar')} {visibleTickets.length} / {trueTotal} {t('ärenden')}
+              </div>
             </div>
           )}
           </>
