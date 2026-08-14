@@ -155,6 +155,11 @@ model Ticket {
   // elapsed workStartedAt → sentAt span which also covers time the ticket
   // just sat open while the agent did other things.
   activeWorkSeconds Int    @default(0)
+  // What the customer's question is about, from the product's fixed category
+  // list (lib/products/*.ts ticketCategories) — AI-classified at creation by
+  // lib/services/ticket-classifier.ts. Null = not (yet) categorised; reports
+  // show those as "Okategoriserat" rather than hiding them.
+  category        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -166,6 +171,7 @@ model Ticket {
   @@index([tenantId, updatedAt])
   @@index([tenantId, assignedTo])
   @@index([tenantId, sentBy])
+  @@index([tenantId, category])
 }
 
 // Append-only ticket activity log — the structured history the Ticket row

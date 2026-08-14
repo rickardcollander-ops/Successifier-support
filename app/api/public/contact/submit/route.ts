@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { prisma } from '@/lib/db/client';
+import { classifyTicket } from '@/lib/services/ticket-classifier';
 import { getTenantId } from '@/lib/products/tenant';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
 import { corsHeaders, logKbEvent } from '@/lib/services/public-kb';
@@ -95,6 +96,19 @@ export async function POST(request: NextRequest) {
 
     // Deflection analytics: this question got past the AI and became a ticket.
     void logKbEvent(tenantId, { type: 'form_escalated', query: message.slice(0, 200) });
+
+    // AI category for the reports (same hook as the mail sync). after() keeps
+    // it alive past the response on serverless; classifyTicket never throws.
+    if (created) {
+      after(async () => {
+        const category = await classifyTicket(deriveSubject(message), message);
+        if (category) {
+          await prisma.$executeRaw`
+            UPDATE "Ticket" SET "category" = ${category} WHERE id = ${ticket.id}
+          `;
+        }
+      });
+    }
 
     return NextResponse.json({ success: true, ticketId: ticket.id, merged: !created }, { headers: cors });
   } catch (error) {

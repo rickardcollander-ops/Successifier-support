@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/client';
+import { product } from '@/lib/products';
 import { AGENTS, stripAgentSignature } from '@/lib/constants';
 import { isVendorTicket, isBounceTicket, isReportable } from '@/lib/ticket-filters';
 import { resolveAgentName } from '@/lib/agent-match';
@@ -133,21 +134,83 @@ export interface ReportFilters {
   agent: string | null;
   status: string | null;
   priority: string | null;
+  category: string | null;
 }
 
 // Validate raw filter params against the known value sets so a typo'd URL
 // degrades to "no filter" instead of an empty report. The agent filter
-// accepts anything resolveAgentName maps to a known agent.
+// accepts anything resolveAgentName maps to a known agent; the category
+// filter accepts the product's category list plus 'uncategorized'.
 export function validateFilters(raw: {
   agent?: string | null;
   status?: string | null;
   priority?: string | null;
+  category?: string | null;
 }): ReportFilters {
+  const categories = product.ticketCategories ?? [];
   return {
     agent: resolveAgentName(raw.agent ?? null),
     status: raw.status && STATUS_ORDER.includes(raw.status) ? raw.status : null,
     priority: raw.priority && PRIORITY_ORDER.includes(raw.priority) ? raw.priority : null,
+    category:
+      raw.category && (categories.includes(raw.category) || raw.category === 'uncategorized')
+        ? raw.category
+        : null,
   };
+}
+
+// Matches a ticket against the category filter. 'uncategorized' selects the
+// tickets that have no category (yet) — they must stay reachable, not hidden.
+export function matchesCategory(
+  ticketCategory: string | null | undefined,
+  filter: string | null
+): boolean {
+  if (!filter) return true;
+  if (filter === 'uncategorized') return ticketCategory == null;
+  return ticketCategory === filter;
+}
+
+// The "what do customers ask about" breakdown: ticket counts per category
+// (created population) with first-response medians from the sent population.
+// Pure — exported for unit tests. Uncategorised tickets get their own row
+// (category: null) so nothing is hidden.
+export function categoryStats(
+  created: Array<{ category: string | null }>,
+  sent: Array<{ category: string | null; createdAt: Date; sentAt: Date | null }>
+): Array<{ category: string | null; count: number; responseCount: number; responseMedianHours: number }> {
+  const rows = new Map<
+    string | null,
+    { count: number; responseHoursList: number[] }
+  >();
+  const bucket = (key: string | null) => {
+    let entry = rows.get(key);
+    if (!entry) {
+      entry = { count: 0, responseHoursList: [] };
+      rows.set(key, entry);
+    }
+    return entry;
+  };
+  for (const t of created) bucket(t.category ?? null).count += 1;
+  for (const t of sent) {
+    if (!t.sentAt) continue;
+    bucket(t.category ?? null).responseHoursList.push(
+      (t.sentAt.getTime() - t.createdAt.getTime()) / HOUR_MS
+    );
+  }
+  return Array.from(rows.entries())
+    .map(([category, r]) => ({
+      category,
+      count: r.count,
+      responseCount: r.responseHoursList.length,
+      responseMedianHours: Math.round(median(r.responseHoursList) * 10) / 10,
+    }))
+    // Biggest first; the uncategorised row always last so the real
+    // categories lead the chart.
+    .sort((a, b) =>
+      (a.category === null ? 1 : 0) - (b.category === null ? 1 : 0) ||
+      b.count - a.count ||
+      String(a.category).localeCompare(String(b.category))
+    );
 }
 
 // Open, still-unanswered tickets that have already passed the first-response
@@ -197,13 +260,15 @@ export interface KpiSummary {
   activeWork: { count: number; medianMinutes: number };
   editStats: { count: number; medianKeptPct: number };
   sla: { targetHours: number; answered: number; met: number; attainmentPct: number | null } | null;
+  // Top 3 categorised topics in the window, for the digest.
+  topCategories: Array<{ category: string; count: number }>;
 }
 
 export async function computeKpiSummary(
   tenantId: string,
   windowStart: Date,
   windowEnd: Date,
-  filters: ReportFilters = { agent: null, status: null, priority: null },
+  filters: ReportFilters = { agent: null, status: null, priority: null, category: null },
   slaTargetHours: number | null = null
 ): Promise<KpiSummary> {
   const norm = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim();
@@ -217,7 +282,7 @@ export async function computeKpiSummary(
         createdAt: { gte: windowStart, lt: windowEnd },
         NOT: { originalMessage: { contains: ZENDESK_IMPORT_MARKER } },
       },
-      select: { id: true, status: true, priority: true, customerEmail: true, subject: true, assignedTo: true, createdAt: true },
+      select: { id: true, status: true, priority: true, customerEmail: true, subject: true, assignedTo: true, category: true, createdAt: true },
     }),
     prisma.ticket.findMany({
       where: {
@@ -227,7 +292,7 @@ export async function computeKpiSummary(
       },
       select: {
         id: true, status: true, customerEmail: true, subject: true, sentBy: true,
-        sentAt: true, createdAt: true, activeWorkSeconds: true,
+        category: true, sentAt: true, createdAt: true, activeWorkSeconds: true,
         aiResponse: true, finalResponse: true,
       },
     }),
@@ -253,20 +318,33 @@ export async function computeKpiSummary(
   ]);
 
   const reportableCreated = createdRows.filter((t) => isReportable(t));
-  const totalTickets = reportableCreated.filter(
+  const filteredCreated = reportableCreated.filter(
     (t) =>
       (!filters.status || t.status === filters.status) &&
       (!filters.priority || t.priority === filters.priority) &&
-      (!filters.agent || resolveAgentName(t.assignedTo) === filters.agent)
-  ).length;
+      (!filters.agent || resolveAgentName(t.assignedTo) === filters.agent) &&
+      matchesCategory(t.category, filters.category)
+  );
+  const totalTickets = filteredCreated.length;
 
   const sentInRange = sentRows.filter(
     (t) =>
       t.sentAt &&
       !isVendorTicket(t) &&
       !isBounceTicket(t) &&
-      (!filters.agent || resolveAgentName(t.sentBy) === filters.agent)
+      (!filters.agent || resolveAgentName(t.sentBy) === filters.agent) &&
+      matchesCategory(t.category, filters.category)
   );
+
+  // Top topics for the digest — categorised tickets only, biggest first.
+  const catCounts = new Map<string, number>();
+  for (const t of filteredCreated) {
+    if (t.category) catCounts.set(t.category, (catCounts.get(t.category) || 0) + 1);
+  }
+  const topCategories = Array.from(catCounts.entries())
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category))
+    .slice(0, 3);
   const medianResponseHours = median(
     sentInRange.map((t) => (t.sentAt!.getTime() - t.createdAt.getTime()) / HOUR_MS)
   );
@@ -373,6 +451,7 @@ export async function computeKpiSummary(
     activeWork,
     editStats,
     sla,
+    topCategories,
   };
 }
 
@@ -383,6 +462,7 @@ export interface ReportQuery {
   agent?: string | null;
   status?: string | null;
   priority?: string | null;
+  category?: string | null;
 }
 
 // The full report payload — everything the /reports page renders. Exactly the
@@ -393,7 +473,12 @@ export async function computeReportData(
   now: Date = new Date()
 ) {
   const range = query.range || '30d';
-  const { agent: agentFilter, status: statusFilter, priority: priorityFilter } = validateFilters(query);
+  const {
+    agent: agentFilter,
+    status: statusFilter,
+    priority: priorityFilter,
+    category: categoryFilter,
+  } = validateFilters(query);
 
   // Resolve the report window [windowStart, windowEnd). Everything
   // downstream (buckets, filtering, trend) derives from this window, so all
@@ -455,6 +540,7 @@ export async function computeReportData(
     subject: true,
     assignedTo: true,
     sentBy: true,
+    category: true,
     sentAt: true,
     createdAt: true,
     workStartedAt: true,
@@ -555,7 +641,8 @@ export async function computeReportData(
     (t) =>
       (!statusFilter || t.status === statusFilter) &&
       (!priorityFilter || t.priority === priorityFilter) &&
-      (!agentFilter || resolveAgentName(t.assignedTo) === agentFilter)
+      (!agentFilter || resolveAgentName(t.assignedTo) === agentFilter) &&
+      matchesCategory(t.category, categoryFilter)
   );
   for (const t of tickets) {
     const key = bucketKeyFor(t.createdAt);
@@ -587,7 +674,8 @@ export async function computeReportData(
       // The agent filter follows who SENT the reply here (assignee on the
       // created population above) — that's the natural reading for
       // response/handling metrics.
-      (!agentFilter || resolveAgentName(t.sentBy) === agentFilter)
+      (!agentFilter || resolveAgentName(t.sentBy) === agentFilter) &&
+      matchesCategory(t.category, categoryFilter)
   );
 
   // Average time from the customer's mail to the agent clicking Send,
@@ -1141,7 +1229,7 @@ export async function computeReportData(
     tenantId,
     prev.windowStart,
     prev.windowEnd,
-    { agent: agentFilter, status: statusFilter, priority: priorityFilter },
+    { agent: agentFilter, status: statusFilter, priority: priorityFilter, category: categoryFilter },
     slaTarget
   );
 
@@ -1176,10 +1264,14 @@ export async function computeReportData(
       agent: agentFilter,
       status: statusFilter,
       priority: priorityFilter,
+      category: categoryFilter,
     },
     heatmap,
     firstResponse,
     repliesPerTicket,
+    // "What do customers ask about": counts + response medians per category,
+    // over the same filtered populations as the rest of the report.
+    ticketsByCategory: categoryStats(tickets, sentInRange),
     followUp,
     sla,
     backlog,

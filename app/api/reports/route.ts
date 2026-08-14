@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
       agent: searchParams.get('agent'),
       status: searchParams.get('status'),
       priority: searchParams.get('priority'),
+      category: searchParams.get('category'),
     });
 
     return NextResponse.json(data);

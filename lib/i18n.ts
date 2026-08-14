@@ -362,6 +362,15 @@ const EN: Record<string, string> = {
   'lösta ärenden klarades med ett enda svar.': 'resolved tickets were handled with a single reply.',
   '(för få lösta för en andel)': '(too few resolved for a rate)',
   'Händelseloggen täcker inte hela perioden – siffrorna kan vara ofullständiga.': 'The event log does not cover the whole period – figures may be incomplete.',
+  // Ticket categories
+  'Kategori': 'Category',
+  'Alla kategorier': 'All categories',
+  'Okategoriserat': 'Uncategorised',
+  'Vad ärendena handlar om': 'What the tickets are about',
+  'AI-klassade kategorier för inkomna ärenden i perioden. Klicka på en kategori för att filtrera hela rapporten.': 'AI-classified categories for tickets received in the period. Click a category to filter the whole report.',
+  'median svarstid': 'median response time',
+  'Filtrera på denna kategori': 'Filter on this category',
+  'Nya ärenden klassas automatiskt; äldre ärenden kan kategoriseras i efterhand med backfill-skriptet.': 'New tickets are classified automatically; older tickets can be categorised retroactively with the backfill script.',
   // Digest & alert settings
   'Utskick & larm': 'Emails & alerts',
   'Rapport via e-post': 'Report by email',

@@ -2,9 +2,10 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, PencilLine, MousePointerClick, Wallet, Settings, CalendarDays, Layers, MessageSquare, Target, Download, RefreshCcw, ChevronDown, ChevronRight } from 'lucide-react';
+import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, PencilLine, MousePointerClick, Wallet, Settings, CalendarDays, Layers, MessageSquare, Target, Download, RefreshCcw, ChevronDown, ChevronRight, Tag } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { AGENTS, statusLabelSv, priorityLabelSv } from '@/lib/constants';
+import { product } from '@/lib/products';
 
 // Below this many tickets in a group we don't make comparative claims — a
 // "23% faster" line off a handful of tickets is noise, not a result.
@@ -72,7 +73,13 @@ interface ReportData {
     medianMinutes: number;
     avgMinutes: number;
   };
-  filtersApplied?: { agent: string | null; status: string | null; priority: string | null };
+  filtersApplied?: { agent: string | null; status: string | null; priority: string | null; category?: string | null };
+  ticketsByCategory?: Array<{
+    category: string | null;
+    count: number;
+    responseCount: number;
+    responseMedianHours: number;
+  }>;
   heatmap?: number[][];
   firstResponse?: { count: number; medianHours: number; p90Hours: number };
   repliesPerTicket?: {
@@ -220,7 +227,8 @@ function ReportsContent() {
   const [filterAgent, setFilterAgent] = useState(() => searchParams.get('agent') ?? '');
   const [filterStatus, setFilterStatus] = useState(() => searchParams.get('status') ?? '');
   const [filterPriority, setFilterPriority] = useState(() => searchParams.get('priority') ?? '');
-  const filtersActive = Boolean(filterAgent || filterStatus || filterPriority);
+  const [filterCategory, setFilterCategory] = useState(() => searchParams.get('category') ?? '');
+  const filtersActive = Boolean(filterAgent || filterStatus || filterPriority || filterCategory);
 
   // Per-agent drill-down (lazy: fetched the first time a row is expanded).
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
@@ -244,7 +252,7 @@ function ReportsContent() {
     // list refetches for the new range instead of showing stale rows.
     setRewritten(null);
     setAgentDetails(null);
-  }, [timeRange, customFrom, customTo, filterAgent, filterStatus, filterPriority]);
+  }, [timeRange, customFrom, customTo, filterAgent, filterStatus, filterPriority, filterCategory]);
 
   // Mirror the current view into the URL (without adding history entries) so
   // the report can be linked and reloaded. Defaults are omitted → clean URLs.
@@ -258,9 +266,10 @@ function ReportsContent() {
     if (filterAgent) params.set('agent', filterAgent);
     if (filterStatus) params.set('status', filterStatus);
     if (filterPriority) params.set('priority', filterPriority);
+    if (filterCategory) params.set('category', filterCategory);
     const qs = params.toString();
     router.replace(qs ? `/reports?${qs}` : '/reports', { scroll: false });
-  }, [timeRange, customFrom, customTo, filterAgent, filterStatus, filterPriority, router]);
+  }, [timeRange, customFrom, customTo, filterAgent, filterStatus, filterPriority, filterCategory, router]);
 
   // Fetch the per-agent drill-down once per window, when first expanded.
   useEffect(() => {
@@ -325,6 +334,7 @@ function ReportsContent() {
       if (filterAgent) params.set('agent', filterAgent);
       if (filterStatus) params.set('status', filterStatus);
       if (filterPriority) params.set('priority', filterPriority);
+      if (filterCategory) params.set('category', filterCategory);
       const response = await fetch(`/api/reports?${params.toString()}`);
       if (response.ok) setData(await response.json());
     } catch (error) {
@@ -406,6 +416,17 @@ function ReportsContent() {
       rows.push([t('Återöppnade ärenden'), String(data.followUp.reopenedCount), '']);
       rows.push([t('Stängda ärenden i perioden'), String(data.followUp.closedCount), '']);
       rows.push([`${t('Löst med 1 svar')} (%)`, num(data.followUp.oneTouch.pct), '']);
+    }
+    if (data.ticketsByCategory && data.ticketsByCategory.length > 0) {
+      rows.push([]);
+      rows.push([t('Kategori'), t('Ärenden'), `${t('Median svarstid')} (h)`]);
+      for (const c of data.ticketsByCategory) {
+        rows.push([
+          c.category ?? t('Okategoriserat'),
+          String(c.count),
+          c.responseCount > 0 ? String(c.responseMedianHours) : '',
+        ]);
+      }
     }
     rows.push([]);
     rows.push([t('Medarbetare'), t('Tilldelade'), t('Skickade')]);
@@ -611,9 +632,23 @@ function ReportsContent() {
             <option key={p} value={p}>{priorityLabelSv(p)}</option>
           ))}
         </select>
+        {(product.ticketCategories?.length ?? 0) > 0 && (
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            aria-label={t('Kategori')}
+            className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+          >
+            <option value="">{t('Alla kategorier')}</option>
+            {product.ticketCategories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+            <option value="uncategorized">{t('Okategoriserat')}</option>
+          </select>
+        )}
         {filtersActive && (
           <button
-            onClick={() => { setFilterAgent(''); setFilterStatus(''); setFilterPriority(''); }}
+            onClick={() => { setFilterAgent(''); setFilterStatus(''); setFilterPriority(''); setFilterCategory(''); }}
             className="text-xs text-[#7C5CFF] hover:underline"
           >
             {t('Rensa filter')}
@@ -1561,6 +1596,62 @@ function ReportsContent() {
             </div>
           ))}
           <p className="text-[11px] text-slate-400 mt-3">{t('Baserat på')} {data.repliesPerTicket.ticketCount} {t('ärenden med minst ett svar i perioden.')}</p>
+        </div>
+      )}
+
+      {/* What customers ask about: AI-classified ticket categories with
+          per-category response medians. Clicking a row filters the report. */}
+      {data.ticketsByCategory && data.ticketsByCategory.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Tag className="w-5 h-5 text-[#7C5CFF]" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Vad ärendena handlar om')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('AI-klassade kategorier för inkomna ärenden i perioden. Klicka på en kategori för att filtrera hela rapporten.')}
+          </p>
+          {(() => {
+            const cats = data.ticketsByCategory!;
+            const maxCount = Math.max(1, ...cats.map((c) => c.count));
+            return (
+              <div className="space-y-2.5">
+                {cats.map((c) => {
+                  const key = c.category ?? 'uncategorized';
+                  const label = c.category ?? t('Okategoriserat');
+                  const isActive = filterCategory === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setFilterCategory(isActive ? '' : key)}
+                      className={`w-full text-left group ${isActive ? '' : ''}`}
+                      title={isActive ? t('Rensa filter') : t('Filtrera på denna kategori')}
+                    >
+                      <div className="flex items-center justify-between mb-1 text-xs">
+                        <span className={`${isActive ? 'text-[#7C5CFF] font-semibold' : 'text-slate-600 dark:text-slate-400'} group-hover:text-[#7C5CFF]`}>
+                          {label}
+                        </span>
+                        <span className="text-slate-600 dark:text-slate-400">
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">{c.count}</span> {t('ärenden')}
+                          {c.responseCount >= MIN_GROUP && (
+                            <span className="text-slate-400"> · {t('median svarstid')} {c.responseMedianHours}h</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all ${c.category == null ? 'bg-slate-400' : 'bg-[#7C5CFF]'} group-hover:brightness-110`}
+                          style={{ width: `${(c.count / maxCount) * 100}%` }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          <p className="text-[11px] text-slate-400 mt-3">
+            {t('Nya ärenden klassas automatiskt; äldre ärenden kan kategoriseras i efterhand med backfill-skriptet.')}
+          </p>
         </div>
       )}
 

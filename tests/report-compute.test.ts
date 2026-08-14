@@ -5,6 +5,8 @@ import {
   orderedCounts,
   validateFilters,
   previousReportWindow,
+  matchesCategory,
+  categoryStats,
 } from '@/lib/reports/compute';
 import { resolveReportWindow } from '@/lib/report-window';
 
@@ -57,6 +59,51 @@ describe('validateFilters', () => {
   it('resolves agent aliases through resolveAgentName', () => {
     // Unknown names → null (no filter) instead of an empty report.
     expect(validateFilters({ agent: 'someone@else.com' }).agent).toBeNull();
+  });
+});
+
+describe('matchesCategory', () => {
+  it('passes everything without a filter', () => {
+    expect(matchesCategory('faktura & betalning', null)).toBe(true);
+    expect(matchesCategory(null, null)).toBe(true);
+  });
+
+  it('matches exact categories and the uncategorized pseudo-filter', () => {
+    expect(matchesCategory('uppsägning', 'uppsägning')).toBe(true);
+    expect(matchesCategory('uppsägning', 'faktura & betalning')).toBe(false);
+    expect(matchesCategory(null, 'uncategorized')).toBe(true);
+    expect(matchesCategory('uppsägning', 'uncategorized')).toBe(false);
+  });
+});
+
+describe('categoryStats', () => {
+  it('counts per category with response medians, uncategorised last', () => {
+    const created = [
+      { category: 'uppsägning' },
+      { category: 'uppsägning' },
+      { category: 'faktura & betalning' },
+      { category: null },
+    ];
+    const sent = [
+      // Two uppsägning replies: 2h and 4h → median 3h.
+      { category: 'uppsägning', createdAt: new Date('2026-08-10T10:00:00Z'), sentAt: new Date('2026-08-10T12:00:00Z') },
+      { category: 'uppsägning', createdAt: new Date('2026-08-10T10:00:00Z'), sentAt: new Date('2026-08-10T14:00:00Z') },
+      { category: 'faktura & betalning', createdAt: new Date('2026-08-10T10:00:00Z'), sentAt: null },
+    ];
+    const stats = categoryStats(created, sent);
+    expect(stats.map((s) => s.category)).toEqual(['uppsägning', 'faktura & betalning', null]);
+    expect(stats[0]).toMatchObject({ count: 2, responseCount: 2, responseMedianHours: 3 });
+    // A null sentAt never contributes a response time.
+    expect(stats[1]).toMatchObject({ count: 1, responseCount: 0 });
+    expect(stats[2]).toMatchObject({ category: null, count: 1 });
+  });
+
+  it('includes categories that only appear in the sent population', () => {
+    const stats = categoryStats([], [
+      { category: 'abonnemang', createdAt: new Date('2026-08-10T10:00:00Z'), sentAt: new Date('2026-08-10T11:00:00Z') },
+    ]);
+    expect(stats).toHaveLength(1);
+    expect(stats[0]).toMatchObject({ category: 'abonnemang', count: 0, responseCount: 1 });
   });
 });
 

@@ -189,6 +189,15 @@ export function buildDigestEmail(
     )
     .join('');
 
+  const topCategoriesLine =
+    summary.topCategories.length === 0
+      ? ''
+      : `<p style="margin:16px 0 0;color:#475569;">${esc(
+          opts.language === 'sv' ? 'Vanligaste ämnen:' : 'Top topics:'
+        )} ${summary.topCategories
+          .map((c) => `${esc(c.category)} (${c.count})`)
+          .join(', ')}</p>`;
+
   const overdueLine =
     summary.sla == null || opts.overdueCount == null
       ? ''
@@ -215,6 +224,7 @@ export function buildDigestEmail(
     <tbody>${tableRows}
     </tbody>
   </table>
+  ${topCategoriesLine}
   ${overdueLine}
   ${reportsLink}
   <p style="margin:24px 0 0;color:#94a3b8;font-size:12px;">${esc(s.footer)}</p>
