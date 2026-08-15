@@ -75,6 +75,20 @@ describe('requiredAgentsGrid', () => {
     });
     expect(smoothed[1][0]).toBeGreaterThan(0); // Tuesday 00 absorbs part of it
   });
+
+  it('exposes the unrounded demand next to the ceiled requirement', () => {
+    // 6 tickets/h × 12 min = 1.2 agent-hours; ÷ 0.72 = 1.666… — the demand
+    // grid keeps the fraction, the requirement ceils it.
+    const { raw, rawDemand, smoothedDemand } = requiredAgentsGrid(flatProfile(6), 12, {
+      occupancy: 0.8,
+      shrinkage: 0.1,
+      smoothingHours: 1,
+    });
+    expect(raw[0][9]).toBe(2);
+    expect(rawDemand[0][9]).toBeCloseTo(1.667, 2);
+    // With no smoothing (k=1) the smoothed demand equals the raw demand.
+    expect(smoothedDemand[0][9]).toBeCloseTo(rawDemand[0][9], 6);
+  });
 });
 
 describe('requiredAgentsGrid with openMask', () => {
@@ -170,5 +184,18 @@ describe('weekdaySummary', () => {
     const summary = weekdaySummary(grid);
     expect(summary[0]).toEqual({ weekday: 0, peakAgents: 3, agentHours: 6 });
     expect(summary[6]).toEqual({ weekday: 6, peakAgents: 0, agentHours: 0 });
+  });
+
+  it('takes agent-hours from the unrounded demand when provided', () => {
+    const required = flatProfile(0);
+    required[0][9] = 1;
+    required[0][10] = 1;
+    const demand = flatProfile(0);
+    demand[0][9] = 0.3;
+    demand[0][10] = 0.4;
+    const summary = weekdaySummary(required, demand);
+    // Peak stays whole people; hours come from the real workload — summing
+    // the ceiled grid would have claimed 2h for 0.7h of work.
+    expect(summary[0]).toEqual({ weekday: 0, peakAgents: 1, agentHours: 0.7 });
   });
 });

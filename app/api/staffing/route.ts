@@ -105,8 +105,20 @@ export async function GET(request: NextRequest) {
       aht = { minutes: settings.baselineHandlingMinutes, sampleCount: ahtSamples.length, source: 'baseline' };
     }
 
-    const required = aht
+    const requiredFull = aht
       ? requiredAgentsGrid(profile, aht.minutes, { occupancy, shrinkage, smoothingHours, openMask: mask })
+      : null;
+    // Round the demand grids for transport: one decimal, but never let a
+    // slot that needs SOME agent round down to a blank 0.0.
+    const roundDemand = (grid: number[][]) =>
+      grid.map((row) => row.map((d) => (d > 0 ? Math.max(0.1, Math.round(d * 10) / 10) : 0)));
+    const required = requiredFull
+      ? {
+          raw: requiredFull.raw,
+          smoothed: requiredFull.smoothed,
+          rawDemand: roundDemand(requiredFull.rawDemand),
+          smoothedDemand: roundDemand(requiredFull.smoothedDemand),
+        }
       : null;
 
     // Actually worked hours from the persisted sessions. Forward-filling
@@ -139,7 +151,9 @@ export async function GET(request: NextRequest) {
       sessionsSince: firstSession?.startedAt ?? null,
       businessHours,
       params: { weeks, occupancy, shrinkage, smoothingHours, slaHours },
-      weekdaySummary: required ? weekdaySummary(required.smoothed) : null,
+      weekdaySummary: requiredFull
+        ? weekdaySummary(requiredFull.smoothed, requiredFull.smoothedDemand)
+        : null,
       totalArrivals: arrivals.length,
     });
   } catch (error) {

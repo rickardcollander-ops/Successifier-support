@@ -11,7 +11,14 @@ import { t } from '@/lib/i18n';
 
 interface StaffingData {
   profile: number[][];
-  required: { raw: number[][]; smoothed: number[][] } | null;
+  required: {
+    raw: number[][];
+    smoothed: number[][];
+    // Unrounded demand in fractional agents (one decimal) — what the grid
+    // displays; raw/smoothed are the ceiled "book whole people" values.
+    rawDemand?: number[][];
+    smoothedDemand?: number[][];
+  } | null;
   actual: number[][];
   aht: { minutes: number; sampleCount: number; source: 'measured' | 'baseline' } | null;
   sessionsSince: string | null;
@@ -167,13 +174,21 @@ export default function BemanningPage() {
   };
 
   const requiredGrid = data.required ? (showRaw ? data.required.raw : data.required.smoothed) : null;
+  // The grid shows the decimal DEMAND (0.3 agents tells you something; a
+  // wall of ceiled 1:or does not). Fall back to the ceiled grid for older
+  // payloads without demand.
+  const demandGrid = data.required
+    ? (showRaw ? data.required.rawDemand : data.required.smoothedDemand) ?? requiredGrid
+    : null;
   const maxProfile = Math.max(0.001, ...data.profile.flat());
-  const maxRequired = requiredGrid ? Math.max(1, ...requiredGrid.flat()) : 1;
+  const maxDemand = demandGrid ? Math.max(0.5, ...demandGrid.flat()) : 1;
   const effectivePct = Math.round(data.params.occupancy * (1 - data.params.shrinkage) * 100);
 
-  // Per-weekday comparison: recommended agent-hours vs actually worked hours.
+  // Per-weekday comparison: recommended agent-hours (unrounded workload —
+  // summing ceiled hours would overstate a small team's day) vs actually
+  // worked hours.
   const actualPerDay = data.actual.map((row) => row.reduce((a, b) => a + b, 0));
-  const requiredPerDay = requiredGrid ? requiredGrid.map((row) => row.reduce((a, b) => a + b, 0)) : null;
+  const requiredPerDay = demandGrid ? demandGrid.map((row) => row.reduce((a, b) => a + b, 0)) : null;
   const maxDayHours = Math.max(1, ...actualPerDay, ...(requiredPerDay ?? []));
 
   const fmtSince = data.sessionsSince
@@ -404,7 +419,7 @@ export default function BemanningPage() {
         ) : (
           <>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-              {t('Antal agenter som behöver vara i tjänst per timme för att hinna med inflödet.')}
+              {t('Bemanningsbehov per timme, i agenter — 0,3 betyder en tredjedels agents arbete. Håll muspekaren över en ruta för att se hur många hela personer som behöver bokas.')}
               {data.params.smoothingHours > 1 && !showRaw &&
                 ` ${t('Utjämnat över')} ${data.params.smoothingHours} ${t('timmar eftersom mejl kan vänta inom SLA-målet.')}`}
             </p>
@@ -414,7 +429,11 @@ export default function BemanningPage() {
                   <div key={wd} className="flex items-center gap-1 mb-1">
                     <span className="w-10 shrink-0 text-[11px] text-slate-500 dark:text-slate-400">{t(WEEKDAYS[wd])}</span>
                     {hours.map((h) => {
-                      const v = row[h];
+                      const booked = row[h];
+                      // Displayed value: fractional agents needed (0.3 says
+                      // more than a ceiled 1). Whole-person booking lives in
+                      // the tooltip.
+                      const v = demandGrid ? demandGrid[wd][h] : booked;
                       const closed = closedSlot(wd, h);
                       return (
                         <div
@@ -422,7 +441,7 @@ export default function BemanningPage() {
                           title={
                             closed
                               ? `${t(WEEKDAYS[wd])} ${String(h).padStart(2, '0')}:00 – ${t('stängt')}`
-                              : `${t(WEEKDAYS[wd])} ${String(h).padStart(2, '0')}:00 – ${v} ${t('agenter')}`
+                              : `${t(WEEKDAYS[wd])} ${String(h).padStart(2, '0')}:00 – ${t('behov')} ${v} ${t('agenter')}${booked > 0 ? ` (${t('boka')} ${booked})` : ''}`
                           }
                           className={`h-6 flex-1 rounded-sm flex items-center justify-center text-[10px] font-semibold ${
                             v === 0
@@ -430,7 +449,7 @@ export default function BemanningPage() {
                               : 'text-white'
                           }`}
                           style={{
-                            ...(v > 0 ? { backgroundColor: `rgba(16, 158, 106, ${0.35 + 0.65 * (v / maxRequired)})` } : {}),
+                            ...(v > 0 ? { backgroundColor: `rgba(16, 158, 106, ${0.35 + 0.65 * Math.min(1, v / maxDemand)})` } : {}),
                             ...(closed ? { backgroundImage: CLOSED_STRIPES } : {}),
                           }}
                         >
@@ -475,7 +494,7 @@ export default function BemanningPage() {
             )}
 
             <p className="text-[11px] text-slate-400 mt-4">
-              {t('Formel:')} {t('ärenden/timme')} × {data.aht.minutes} {t('min/ärende')} ÷ {effectivePct}% {t('effektiv kapacitet')} ({Math.round(data.params.occupancy * 100)}% {t('beläggning')}, {Math.round(data.params.shrinkage * 100)}% {t('frånvaro')}){t(', avrundat uppåt.')}
+              {t('Formel:')} {t('ärenden/timme')} × {data.aht.minutes} {t('min/ärende')} ÷ {effectivePct}% {t('effektiv kapacitet')} ({Math.round(data.params.occupancy * 100)}% {t('beläggning')}, {Math.round(data.params.shrinkage * 100)}% {t('frånvaro')}){t('. Decimaler visar behovet; "Flest samtidiga agenter" avrundas uppåt till hela personer.')}
               {' '}{data.aht.source === 'measured'
                 ? `${t('Hanteringstid: median av')} ${data.aht.sampleCount} ${t('uppmätta ärenden.')}`
                 : t('Hanteringstid: angiven baslinje (för få uppmätta ärenden ännu).')}
