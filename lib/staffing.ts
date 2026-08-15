@@ -61,12 +61,17 @@ export function buildArrivalProfile(arrivals: Slot[], weeksObserved: number): nu
 }
 
 // Required agents per slot from the arrival profile and average handle time.
-// Returns both the raw per-hour requirement and the SLA-window-smoothed one.
+// Returns both the raw per-hour requirement and the SLA-window-smoothed one,
+// plus the corresponding UNROUNDED demand grids (fractional agents needed).
+// For a small team almost every open hour ceils to "1 agent", which reads as
+// no information at all — the decimal demand (0.3 vs 0.9) is what actually
+// shows where the load sits; the ceiled grids remain the "book whole people"
+// recommendation.
 export function requiredAgentsGrid(
   profile: number[][],
   ahtMinutes: number,
   opts: StaffingOptions
-): { raw: number[][]; smoothed: number[][] } {
+): { raw: number[][]; smoothed: number[][]; rawDemand: number[][]; smoothedDemand: number[][] } {
   const effective = Math.max(0.05, opts.occupancy * (1 - opts.shrinkage));
   const k = Math.max(1, Math.round(opts.smoothingHours));
 
@@ -87,7 +92,9 @@ export function requiredAgentsGrid(
     // Defensive: parseBusinessHours already collapses an all-closed config
     // to "not configured", but the mask argument is public API — never
     // enter the rollforward scan with nothing open.
-    if (!mask.some(Boolean)) return { raw: emptyGrid(), smoothed: emptyGrid() };
+    if (!mask.some(Boolean)) {
+      return { raw: emptyGrid(), smoothed: emptyGrid(), rawDemand: emptyGrid(), smoothedDemand: emptyGrid() };
+    }
 
     // nextOpen[i] = first open index at or after i (ring-wrapped). One
     // backward pass over two laps of the ring.
@@ -110,11 +117,14 @@ export function requiredAgentsGrid(
 
   const raw = emptyGrid();
   const smoothed = emptyGrid();
+  const rawDemand = emptyGrid();
+  const smoothedDemand = emptyGrid();
   for (let i = 0; i < 168; i++) {
     const wd = Math.floor(i / 24);
     const h = i % 24;
-    if (mask && !mask[i]) continue; // closed: both grids stay 0
+    if (mask && !mask[i]) continue; // closed: all grids stay 0
 
+    rawDemand[wd][h] = workload[i] / effective;
     raw[wd][h] = workload[i] > 0 ? Math.ceil(workload[i] / effective) : 0;
 
     // Trailing window: the hours whose arrivals this hour's staffing can
@@ -133,9 +143,10 @@ export function requiredAgentsGrid(
       for (let j = 0; j < k; j++) sum += workload[(i - j + 168) % 168];
     }
     const avg = sum / k;
+    smoothedDemand[wd][h] = avg / effective;
     smoothed[wd][h] = avg > 0 ? Math.ceil(avg / effective) : 0;
   }
-  return { raw, smoothed };
+  return { raw, smoothed, rawDemand, smoothedDemand };
 }
 
 export interface WorkSpan {
@@ -168,11 +179,20 @@ export function actualHoursGrid(sessions: WorkSpan[], weeksObserved: number): nu
 }
 
 // Per-weekday roll-up of a required-agents grid: the day's peak concurrent
-// agents and its total rostered agent-hours.
-export function weekdaySummary(required: number[][]): Array<{ weekday: number; peakAgents: number; agentHours: number }> {
-  return required.map((row, weekday) => ({
-    weekday,
-    peakAgents: Math.max(0, ...row),
-    agentHours: row.reduce((a, b) => a + b, 0),
-  }));
+// agents (whole people — you can't roster a fraction) and its total
+// agent-hours. When the unrounded demand grid is provided the hours come
+// from it (one decimal) — summing ceiled per-hour values would overstate a
+// small team's day by up to an hour per open hour.
+export function weekdaySummary(
+  required: number[][],
+  demand?: number[][]
+): Array<{ weekday: number; peakAgents: number; agentHours: number }> {
+  return required.map((row, weekday) => {
+    const hours = (demand ? demand[weekday] : row).reduce((a, b) => a + b, 0);
+    return {
+      weekday,
+      peakAgents: Math.max(0, ...row),
+      agentHours: demand ? Math.round(hours * 10) / 10 : hours,
+    };
+  });
 }
