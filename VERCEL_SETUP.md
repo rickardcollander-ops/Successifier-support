@@ -85,6 +85,10 @@ footer — en felkonfiguration blockerar aldrig själva utskicket.
 - `/api/cron/sla-check` (varje timme) — skickar SLA-larm (varning vid 80 % av
   första-svarsmålet, larm vid överskridet mål) för öppna obesvarade ärenden.
   Varje ärende larmas högst en gång per nivå (loggas som `sla_alert`-händelse).
+- `/api/cron/backfill-categories` (var 10:e minut) — AI-klassar historiska
+  ärenden utan kategori i batchar om 15 tills backloggen är tom, sedan no-op.
+  Ersätter manuell körning av `scripts/oneoff/backfill-categories.mjs`;
+  cron-raden kan tas bort ur `vercel.json` när `remaining` rapporterar 0.
 
 **Noteringar:**
 - Utan `CRON_SECRET` svarar cron-rutterna 503 — de är aldrig öppna.
