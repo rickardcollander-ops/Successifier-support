@@ -26,6 +26,16 @@ export const DEFAULT_TENANT_CONFIG: ProductConfig = {
   agents: [],
   agentSignatures: {},
   agentColors: {},
+  ticketCategories: [
+    'Konto & inloggning',
+    'Fakturering & betalning',
+    'Prenumeration & uppsägning',
+    'Tekniskt problem',
+    'Leverans & tjänst',
+    'Klagomål',
+    'Frågor om tjänsten',
+    'Övrigt',
+  ],
   confirmation: {
     greeting: 'Hej,',
     bodyLines: [

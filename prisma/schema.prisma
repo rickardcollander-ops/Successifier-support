@@ -47,6 +47,9 @@ model Tenant {
   helpCenter     HelpCenterConfig?
   reportSettings ReportSettings?
   inboxTabs      InboxTab[]
+  ticketEvents   TicketEvent[]
+  workSessions   AgentWorkSession[]
+  csatResponses  CsatResponse[]
 }
 
 // Per-tenant configuration of the inbox tabs (folders) shown on the tickets
@@ -101,10 +104,58 @@ model ReportSettings {
   // implicit baseline.
   baselineResponseHours   Float?
   baselineHandlingMinutes Float?
+  // SLA target for the FIRST reply to a ticket, in calendar hours (a
+  // deliberate simplification — no business-hours calendar; matches how the
+  // response-time metrics are computed). Null = SLA panel hidden and the UI
+  // prompts for a target instead of assuming one.
+  slaFirstResponseHours Float?
+  // Staffing-model knobs for the bemanning page. Occupancy = share of a
+  // rostered hour an agent realistically spends on tickets; shrinkage =
+  // share of rostered time lost to breaks/meetings/absence. Null = the
+  // app-side defaults (0.80 / 0.10) apply.
+  staffingOccupancy Float?
+  staffingShrinkage Float?
+  // Scheduled email digest + proactive SLA alerts (sent by the cron routes
+  // in app/api/cron/*). digestFrequency: 'weekly' | 'monthly' | null = off.
+  // digestLastSentAt makes the daily cron idempotent — a re-fired run sees
+  // it already sent this period and does nothing.
+  digestFrequency  String?
+  digestRecipients String[]  @default([])
+  slaAlertsEnabled Boolean   @default(false)
+  alertRecipients  String[]  @default([])
+  digestLastSentAt DateTime?
+  // Append the one-click 👍/👎 CSAT footer to outgoing replies (send route).
+  // Requires CSAT_TOKEN_SECRET and APP_BASE_URL to be configured.
+  csatEnabled      Boolean   @default(false)
+  // Öppettider per weekday: JSON array of 7 entries (Monday = 0), each
+  // { open, close } in whole hours (close exclusive) or null = closed day
+  // (see lib/business-hours.ts). Null column = not configured → staffing
+  // and SLA behave as 24/7 (calendar time), exactly as before this field
+  // existed.
+  businessHours Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// One-click customer satisfaction rating from the signed 👍/👎 links in
+// outgoing replies (lib/csat-token.ts + /api/public/csat). ONE row per
+// ticket — a second click flips the rating via upsert instead of stacking
+// duplicate votes.
+model CsatResponse {
+  id        String   @id @default(cuid())
+  tenantId  String
+  ticketId  String   @unique
+  rating    String   // 'positive' | 'negative'
+  comment   String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
 }
 
 model Agent {
@@ -154,16 +205,85 @@ model Ticket {
   // elapsed workStartedAt → sentAt span which also covers time the ticket
   // just sat open while the agent did other things.
   activeWorkSeconds Int    @default(0)
+  // What the customer's question is about, from the product's fixed category
+  // list (lib/products/*.ts ticketCategories) — AI-classified at creation by
+  // lib/services/ticket-classifier.ts. Null = not (yet) categorised; reports
+  // show those as "Okategoriserat" rather than hiding them.
+  category        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  events TicketEvent[]
+  csat   CsatResponse?
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
   @@index([tenantId, updatedAt])
   @@index([tenantId, assignedTo])
   @@index([tenantId, sentBy])
+  @@index([tenantId, category])
+}
+
+// Append-only ticket activity log — the structured history the Ticket row
+// itself can't provide (sentAt/sentBy are overwritten on every reply, and
+// status changes leave no trace). Written by every code path that mutates
+// status/assignedTo or sends/receives a message (see lib/services/
+// ticket-events.ts). Population filtering (vendor/bounce/Zendesk) is done on
+// the READ side by joining the Ticket — never at write time — so report
+// queries stay consistent with the inbox rules however those evolve.
+model TicketEvent {
+  id       String @id @default(cuid())
+  tenantId String
+  ticketId String
+  // 'created' | 'inbound_received' | 'status_changed' | 'assigned' |
+  // 'reply_sent' | 'work_started' (see TICKET_EVENT in ticket-events.ts)
+  type     String
+  // Canonical agent name (via resolveAgentName), or a system actor:
+  // 'system' | 'gmail-sync' | 'api' | 'backfill'.
+  actor    String?
+  // status_changed / assigned: previous and new value.
+  fromValue String?
+  toValue   String?
+  // reply_sent only: seconds from the latest prior inbound message (or the
+  // ticket's creation) to this reply — the per-reply response time.
+  responseSeconds Int?
+  meta            Json?
+  // Set explicitly for backfilled events and events anchored to the mail's
+  // real arrival time (receivedAt); otherwise the insert time.
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, type, createdAt])
+  @@index([ticketId, createdAt])
+}
+
+// DB-persisted agent presence sessions, accrued from the same 5s heartbeats
+// that feed Ticket.activeWorkSeconds (see app/api/tickets/presence/route.ts).
+// Unlike the in-memory viewers map (which stays for the live "who is
+// viewing" UI) these rows survive restarts and multiple serverless
+// instances, giving the bemanning page real "hours worked" per weekday/hour.
+// A session is one contiguous stretch of heartbeats on one ticket; a gap
+// longer than the active window, or a switch to another ticket, starts a
+// new row.
+model AgentWorkSession {
+  id         String  @id @default(cuid())
+  tenantId   String
+  agentEmail String
+  // Canonical agent name via resolveAgentName; null when the email doesn't
+  // match a known agent.
+  agentName String?
+  ticketId  String?
+  startedAt  DateTime
+  lastSeenAt DateTime
+  seconds    Int      @default(0)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, agentEmail, lastSeenAt])
+  @@index([tenantId, startedAt])
 }
 
 model KnowledgeBase {

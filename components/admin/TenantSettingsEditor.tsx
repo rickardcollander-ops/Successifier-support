@@ -43,6 +43,7 @@ interface FormState {
   agents: AgentRow[];
   vendorLabel: string;
   vendorSenders: string;
+  ticketCategories: string;
   confirmationGreeting: string;
   confirmationBody: string;
   confirmationSignoff: string;
@@ -82,6 +83,7 @@ function toForm(config: ProductConfig): FormState {
     })),
     vendorLabel: config.vendorFolder.label,
     vendorSenders: config.vendorFolder.senders.join(', '),
+    ticketCategories: (config.ticketCategories ?? []).join('\n'),
     confirmationGreeting: config.confirmation.greeting,
     confirmationBody: config.confirmation.bodyLines.join('\n'),
     confirmationSignoff: config.confirmation.signoff,
@@ -125,6 +127,7 @@ function toSettings(form: FormState): Record<string, unknown> {
       label: form.vendorLabel.trim(),
       senders: splitList(form.vendorSenders),
     },
+    ticketCategories: form.ticketCategories.split('\n').map((l) => l.trim()).filter(Boolean),
     confirmation: {
       greeting: form.confirmationGreeting,
       bodyLines: form.confirmationBody.split('\n').map((l) => l.trim()).filter(Boolean),
@@ -349,6 +352,18 @@ export default function TenantSettingsEditor({
             <Plus className="h-4 w-4" /> Lägg till agent
           </button>
         </div>
+      </Section>
+
+      {/* AI-kategorisering */}
+      <Section title="AI-kategorisering av ärenden">
+        <Field label="Kategorier (en per rad, avsluta med en övrigt-kategori)" wide>
+          <textarea
+            value={form.ticketCategories}
+            onChange={(e) => set('ticketCategories', e.target.value)}
+            rows={6}
+            className="w-full rounded-lg border border-white/10 bg-[#0B0F1A] px-3 py-2 text-sm focus:border-[#7C5CFF] focus:outline-none"
+          />
+        </Field>
       </Section>
 
       {/* Leverantörsmapp */}

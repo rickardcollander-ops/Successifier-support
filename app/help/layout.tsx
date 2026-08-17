@@ -43,7 +43,7 @@ export default async function HelpLayout({ children }: { children: React.ReactNo
       <footer className="mx-auto max-w-4xl px-4 py-8 text-sm text-[color:var(--kb-muted)] flex flex-wrap items-center justify-between gap-3">
         <span>{config.footerText || `© ${new Date().getFullYear()} ${product.brandName}`}</span>
         <span className="flex items-center gap-4">
-          {config.supportUrl && (
+          {config.supportUrl ? (
             <a
               href={config.supportUrl}
               className="hover:underline"
@@ -51,6 +51,10 @@ export default async function HelpLayout({ children }: { children: React.ReactNo
             >
               {config.supportLabel || 'Kontakta supporten'}
             </a>
+          ) : (
+            <Link href="/help/kontakt" className="hover:underline" style={{ color: 'var(--kb-accent)' }}>
+              Kontakta oss
+            </Link>
           )}
           <a
             href="https://successifier.com"

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Eye, Search, ThumbsUp, AlertTriangle } from 'lucide-react';
+import { Eye, Search, ThumbsUp, AlertTriangle, Sparkles } from 'lucide-react';
 
 interface Analytics {
   days: number;
@@ -10,6 +10,7 @@ interface Analytics {
   topSearches: Array<{ query: string; count: number }>;
   noResultSearches: Array<{ query: string; count: number }>;
   feedback: Array<{ articleId: string; title: string; slug: string | null; helpful: number; unhelpful: number; ratio: number | null }>;
+  contactForm?: { resolved: number; escalated: number; deflectionRate: number | null };
 }
 
 const card = 'bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm p-5';
@@ -55,6 +56,30 @@ export default function KnowledgeAnalyticsPage() {
         <div className="text-slate-600 dark:text-slate-400">Kunde inte ladda statistik.</div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
+          <div className={`${card} lg:col-span-2`}>
+            <h2 className={heading}><Sparkles className="w-4 h-4 text-[#7C5CFF]" /> AI-kontaktformuläret</h2>
+            {!data.contactForm || data.contactForm.resolved + data.contactForm.escalated === 0 ? (
+              <p className="text-sm text-slate-500">Inga frågor via kontaktformuläret ännu.</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">{data.contactForm.resolved}</div>
+                  <div className="text-sm text-slate-500">Lösta direkt av AI (inget ärende)</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">{data.contactForm.escalated}</div>
+                  <div className="text-sm text-slate-500">Skickade till kundservice</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-[#7C5CFF] tabular-nums">
+                    {data.contactForm.deflectionRate != null ? `${data.contactForm.deflectionRate}%` : '—'}
+                  </div>
+                  <div className="text-sm text-slate-500">Avvärjningsgrad</div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className={card}>
             <h2 className={heading}><Eye className="w-4 h-4 text-[#4DA3FF]" /> Mest visade artiklar</h2>
             {data.topArticles.length === 0 ? (

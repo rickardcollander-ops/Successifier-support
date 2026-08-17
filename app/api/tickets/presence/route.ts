@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db/client';
+import { getTenantId } from '@/lib/products/tenant';
+import { resolveAgentName } from '@/lib/agent-match';
 
 // In-memory presence store (cleared on server restart, which is fine for presence)
 const activeViewers = new Map<string, { userId: string; userName: string; userEmail: string; ticketId: string; lastSeen: number; typing: boolean; draft: string }>();
@@ -15,6 +17,43 @@ const MAX_DRAFT_LENGTH = 4000;
 // (other ticket, idle, tab closed) and isn't counted. The cap also stops a
 // single near-miss beat from inflating the total.
 const ACTIVE_WINDOW_MS = 15000;
+
+// DB-persisted work sessions, accrued from the same heartbeats. Unlike the
+// in-memory map (fine to lose — it only drives the live "who is viewing"
+// UI) these rows survive restarts and multiple serverless instances, and
+// feed the bemanning page's "actual hours worked" comparison. The open
+// session is found by its own lastSeenAt (not the map), so accrual stays
+// continuous across instance recycles. A gap over the active window, or a
+// switch to another ticket, starts a new row.
+async function accrueWorkSession(
+  agentEmail: string,
+  agentName: string | null,
+  ticketId: string,
+  now: Date
+): Promise<void> {
+  const tenantId = await getTenantId();
+  if (!tenantId) return;
+  const open = await prisma.agentWorkSession.findFirst({
+    where: {
+      tenantId,
+      agentEmail,
+      lastSeenAt: { gte: new Date(now.getTime() - ACTIVE_WINDOW_MS) },
+    },
+    orderBy: { lastSeenAt: 'desc' },
+    select: { id: true, ticketId: true, lastSeenAt: true },
+  });
+  if (open && open.ticketId === ticketId) {
+    const delta = Math.round((now.getTime() - open.lastSeenAt.getTime()) / 1000);
+    await prisma.agentWorkSession.update({
+      where: { id: open.id },
+      data: { lastSeenAt: now, seconds: { increment: Math.max(0, delta) } },
+    });
+  } else {
+    await prisma.agentWorkSession.create({
+      data: { tenantId, agentEmail, agentName, ticketId, startedAt: now, lastSeenAt: now },
+    });
+  }
+}
 
 // Clean up stale entries older than 15 seconds
 function cleanupStale() {
@@ -55,6 +94,16 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+      // Persist the work session in the DB. Fire-and-forget like the raw
+      // increment above — presence must stay cheap and never fail on
+      // bookkeeping. A duplicate row from a cross-instance race is
+      // acceptable noise in the hours-worked statistics.
+      accrueWorkSession(
+        session.user.email,
+        resolveAgentName(session.user.name || session.user.email),
+        ticketId,
+        new Date(now)
+      ).catch((e) => console.error('Failed to accrue work session:', e));
       activeViewers.set(session.user.email, {
         userId: (session.user as any).id || session.user.email,
         userName: session.user.name || session.user.email.split('@')[0],

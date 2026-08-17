@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { requireApiAuth } from '@/lib/api-auth';
 import { findScopedTicket } from '@/lib/db/scoped';
+import { auth } from '@/lib/auth';
+import {
+  eventsFromTicketPatch,
+  eventActor,
+  logTicketEvents,
+  EVENT_ACTOR,
+} from '@/lib/services/ticket-events';
 
 // Fields a client may set via PATCH. Everything else (tenantId, sentBy,
 // aiConfidence, contextData, timestamps…) is server-managed; spreading the
@@ -88,6 +95,22 @@ export async function PATCH(
       where: { id: existing.id },
       data,
     });
+
+    // Event log: status changes, assignments and work-start, credited to the
+    // signed-in agent when there is one (API-key calls fall back to 'api').
+    // After the primary write and error-swallowing, so a logging hiccup can
+    // never fail the PATCH itself.
+    let actor: string | null = null;
+    try {
+      const session = await auth();
+      actor = eventActor(session?.user?.name || session?.user?.email);
+    } catch {
+      actor = null;
+    }
+    await logTicketEvents(
+      prisma,
+      eventsFromTicketPatch(existing, data, actor ?? EVENT_ACTOR.api)
+    );
 
     return NextResponse.json(ticket);
   } catch (error) {

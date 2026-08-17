@@ -36,6 +36,15 @@ export const serus: ProductConfig = {
   // Same support team as Doldadress, plus Anthon Wansland and Argjent Sahiti.
   // Names must match how the agents appear in their Google accounts.
   agents: ['Ida Rosell', 'Malin Sundberg', 'Filippa Kramp', 'Anthon Wansland', 'Argjent Sahiti'],
+  ticketCategories: [
+    'cancellation',
+    'billing & payment',
+    'subscription',
+    'login & account',
+    'technical issue',
+    'complaint',
+    'other',
+  ],
   agentSignatures: {
     'Ida Rosell': 'Best regards,\nIda\nThe Serus Team',
     'Malin Sundberg': 'Best regards,\nMalin\nThe Serus Team',

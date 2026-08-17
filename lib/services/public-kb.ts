@@ -201,7 +201,10 @@ export async function getPublicArticleId(tenantId: string, slug: string): Promis
   return row?.id ?? null;
 }
 
-type KbEventType = 'view' | 'search' | 'helpful' | 'unhelpful';
+// form_resolved / form_escalated come from the AI contact form: the customer
+// said the instant answer solved it, or sent the question on as a ticket.
+// Together they measure how many tickets the form deflects.
+type KbEventType = 'view' | 'search' | 'helpful' | 'unhelpful' | 'form_resolved' | 'form_escalated';
 
 /** Append-only analytics event. Never throws into the request path. */
 export async function logKbEvent(

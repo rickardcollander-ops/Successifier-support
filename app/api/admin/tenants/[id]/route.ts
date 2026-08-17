@@ -29,6 +29,7 @@ const ALLOWED_SETTINGS_KEYS = new Set([
   'agentSignatures',
   'agentColors',
   'confirmation',
+  'ticketCategories',
 ]);
 
 async function loadTenant(id: string) {

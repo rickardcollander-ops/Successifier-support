@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, PencilLine, MousePointerClick, Wallet, Settings } from 'lucide-react';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { BarChart3, Clock, CheckCircle, AlertCircle, Users, Send, Timer, TrendingDown, Sparkles, PencilLine, MousePointerClick, Wallet, Settings, CalendarDays, Layers, MessageSquare, Target, Download, RefreshCcw, ChevronDown, ChevronRight, Tag } from 'lucide-react';
 import { t } from '@/lib/i18n';
+import { getAgents, statusLabelSv, priorityLabelSv } from '@/lib/constants';
+import { product } from '@/lib/products';
 
 // Below this many tickets in a group we don't make comparative claims — a
 // "23% faster" line off a handful of tickets is noise, not a result.
@@ -70,12 +73,103 @@ interface ReportData {
     medianMinutes: number;
     avgMinutes: number;
   };
+  filtersApplied?: { agent: string | null; status: string | null; priority: string | null; category?: string | null };
+  ticketsByCategory?: Array<{
+    category: string | null;
+    count: number;
+    responseCount: number;
+    responseMedianHours: number;
+  }>;
+  heatmap?: number[][];
+  firstResponse?: {
+    count: number;
+    basis?: 'business' | 'calendar';
+    medianHours: number;
+    p90Hours: number;
+    medianHoursCalendar?: number;
+    p90HoursCalendar?: number;
+  };
+  repliesPerTicket?: {
+    ticketCount: number;
+    avg: number;
+    distribution: { one: number; two: number; threePlus: number };
+  };
+  sla?: null | {
+    targetHours: number;
+    basis?: 'business' | 'calendar';
+    answered: number;
+    met: number;
+    attainmentPct: number | null;
+    openOverdue: {
+      count: number;
+      tickets: Array<{ id: string; subject: string; ageHours: number; ageHoursCalendar?: number }>;
+    };
+  };
+  backlog?: Array<{ date: string; open: number; approximate: boolean }>;
+  followUp?: {
+    covered: boolean;
+    closedCount: number;
+    reopenedCount: number;
+    reopenRatePct: number | null;
+    oneTouch: { resolved: number; oneReply: number; pct: number | null };
+  };
+  csat?: {
+    count: number;
+    positive: number;
+    negative: number;
+    sharePct: number | null;
+    negatives: Array<{ ticketId: string; subject: string; comment: string | null; createdAt: string }>;
+  };
+  // Same KPI definitions over the period immediately before the window —
+  // the source for the "vs föregående period" delta badges.
+  comparison?: {
+    from: string;
+    to: string;
+    totalTickets: number;
+    totalSent: number;
+    medianResponseHours: number;
+    firstResponse: { count: number; medianHours: number; p90Hours: number };
+    activeWork: { count: number; medianMinutes: number };
+    editStats: { count: number; medianKeptPct: number };
+    sla: { targetHours: number; answered: number; met: number; attainmentPct: number | null } | null;
+  };
+}
+
+// One agent's drill-down row from /api/reports/agents.
+interface AgentDetail {
+  name: string;
+  replies: number;
+  responseCount: number;
+  responseMedianHours: number;
+  activeWorkCount: number;
+  activeWorkMedianMinutes: number;
+  keptCount: number;
+  keptMedianPct: number;
 }
 
 interface RoiSettings {
   agentHourlyCost: number | null;
   baselineHandlingMinutes: number | null;
   baselineResponseHours: number | null;
+  slaFirstResponseHours: number | null;
+  digestFrequency: string | null;
+  digestRecipients: string[];
+  slaAlertsEnabled: boolean;
+  alertRecipients: string[];
+  csatEnabled: boolean;
+}
+
+// One rewritten reply from /api/reports/rewritten — draft vs what was sent.
+interface RewrittenItem {
+  ticketId: string;
+  subject: string;
+  customerEmail: string;
+  sentAt: string | null;
+  sentBy: string | null;
+  keptPct: number;
+  question: string;
+  aiDraft: string;
+  sentReply: string;
 }
 
 type TimeRange = '1d' | '7d' | '30d' | '90d' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'custom';
@@ -87,26 +181,85 @@ const todayInput = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+const VALID_RANGES: readonly TimeRange[] = ['1d', '7d', '30d', '90d', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth', 'custom'];
+const isDateKey = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+// useSearchParams needs a Suspense boundary during prerender — the actual
+// page lives in ReportsContent below.
 export default function ReportsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-96">
+          <div className="text-slate-600 dark:text-slate-400">{t('Laddar rapporter…')}</div>
+        </div>
+      }
+    >
+      <ReportsContent />
+    </Suspense>
+  );
+}
+
+function ReportsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+  // The view state initialises from the URL so a report view can be linked,
+  // bookmarked and reloaded; the write-back effect below keeps them in sync.
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
+    const r = searchParams.get('range');
+    return r && (VALID_RANGES as readonly string[]).includes(r) ? (r as TimeRange) : '30d';
+  });
   // Custom date range (only used when timeRange === 'custom'). Default to the
   // last 7 days so the picker opens on something sensible.
   const [customFrom, setCustomFrom] = useState(() => {
+    const fromUrl = searchParams.get('from');
+    if (isDateKey(fromUrl)) return fromUrl;
     const d = new Date();
     d.setDate(d.getDate() - 6);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
-  const [customTo, setCustomTo] = useState(todayInput);
+  const [customTo, setCustomTo] = useState(() => {
+    const toUrl = searchParams.get('to');
+    return isDateKey(toUrl) ? toUrl : todayInput();
+  });
 
   // ROI inputs (team-specific, not invented): time per ticket before the tool
   // and the fully-loaded hourly cost of an agent. Without them we don't show a
   // money figure at all — we ask for them instead.
   const [roi, setRoi] = useState<RoiSettings | null>(null);
   const [editingRoi, setEditingRoi] = useState(false);
-  const [roiDraft, setRoiDraft] = useState({ baselineHandlingMinutes: '', agentHourlyCost: '' });
+  const [roiDraft, setRoiDraft] = useState({
+    baselineHandlingMinutes: '',
+    agentHourlyCost: '',
+    slaFirstResponseHours: '',
+    digestFrequency: '',
+    digestRecipients: '',
+    slaAlertsEnabled: false,
+    alertRecipients: '',
+    csatEnabled: false,
+  });
   const [savingRoi, setSavingRoi] = useState(false);
+
+  // Filters: '' = no filter. Applied server-side; the API echoes what it
+  // actually applied in filtersApplied.
+  const [filterAgent, setFilterAgent] = useState(() => searchParams.get('agent') ?? '');
+  const [filterStatus, setFilterStatus] = useState(() => searchParams.get('status') ?? '');
+  const [filterPriority, setFilterPriority] = useState(() => searchParams.get('priority') ?? '');
+  const [filterCategory, setFilterCategory] = useState(() => searchParams.get('category') ?? '');
+  const filtersActive = Boolean(filterAgent || filterStatus || filterPriority || filterCategory);
+
+  // Per-agent drill-down (lazy: fetched the first time a row is expanded).
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+  const [agentDetails, setAgentDetails] = useState<AgentDetail[] | null>(null);
+  const [loadingAgentDetails, setLoadingAgentDetails] = useState(false);
+
+  // Rewritten-replies drill-down (lazy: only fetched when the list is opened).
+  const [showRewritten, setShowRewritten] = useState(false);
+  const [rewritten, setRewritten] = useState<RewrittenItem[] | null>(null);
+  const [loadingRewritten, setLoadingRewritten] = useState(false);
+  const [expandedRewritten, setExpandedRewritten] = useState<string | null>(null);
 
   // A custom range with from after to is invalid — don't fetch (and don't
   // blank the current data) until it's sane.
@@ -115,7 +268,77 @@ export default function ReportsPage() {
   useEffect(() => {
     if (customInvalid) return;
     fetchReportData();
-  }, [timeRange, customFrom, customTo]);
+    // The drill-down lists belong to the old window — drop them so an open
+    // list refetches for the new range instead of showing stale rows.
+    setRewritten(null);
+    setAgentDetails(null);
+  }, [timeRange, customFrom, customTo, filterAgent, filterStatus, filterPriority, filterCategory]);
+
+  // Mirror the current view into the URL (without adding history entries) so
+  // the report can be linked and reloaded. Defaults are omitted → clean URLs.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (timeRange !== '30d') params.set('range', timeRange);
+    if (timeRange === 'custom') {
+      params.set('from', customFrom);
+      params.set('to', customTo);
+    }
+    if (filterAgent) params.set('agent', filterAgent);
+    if (filterStatus) params.set('status', filterStatus);
+    if (filterPriority) params.set('priority', filterPriority);
+    if (filterCategory) params.set('category', filterCategory);
+    const qs = params.toString();
+    router.replace(qs ? `/reports?${qs}` : '/reports', { scroll: false });
+  }, [timeRange, customFrom, customTo, filterAgent, filterStatus, filterPriority, filterCategory, router]);
+
+  // Fetch the per-agent drill-down once per window, when first expanded.
+  useEffect(() => {
+    if (!expandedAgent || agentDetails !== null || customInvalid) return;
+    const fetchAgentDetails = async () => {
+      setLoadingAgentDetails(true);
+      try {
+        const params = new URLSearchParams({ range: timeRange });
+        if (timeRange === 'custom') {
+          params.set('from', customFrom);
+          params.set('to', customTo);
+        }
+        const res = await fetch(`/api/reports/agents?${params.toString()}`);
+        if (res.ok) {
+          const payload = await res.json();
+          setAgentDetails(payload.agents || []);
+        }
+      } catch (error) {
+        console.error('Error fetching per-agent details:', error);
+      } finally {
+        setLoadingAgentDetails(false);
+      }
+    };
+    fetchAgentDetails();
+  }, [expandedAgent, agentDetails, timeRange, customFrom, customTo, customInvalid]);
+
+  useEffect(() => {
+    if (!showRewritten || rewritten !== null || customInvalid) return;
+    const fetchRewritten = async () => {
+      setLoadingRewritten(true);
+      try {
+        const params = new URLSearchParams({ range: timeRange });
+        if (timeRange === 'custom') {
+          params.set('from', customFrom);
+          params.set('to', customTo);
+        }
+        const res = await fetch(`/api/reports/rewritten?${params.toString()}`);
+        if (res.ok) {
+          const payload = await res.json();
+          setRewritten(payload.items || []);
+        }
+      } catch (error) {
+        console.error('Error fetching rewritten replies:', error);
+      } finally {
+        setLoadingRewritten(false);
+      }
+    };
+    fetchRewritten();
+  }, [showRewritten, rewritten, timeRange, customFrom, customTo, customInvalid]);
 
   useEffect(() => {
     fetchRoiSettings();
@@ -128,6 +351,10 @@ export default function ReportsPage() {
         params.set('from', customFrom);
         params.set('to', customTo);
       }
+      if (filterAgent) params.set('agent', filterAgent);
+      if (filterStatus) params.set('status', filterStatus);
+      if (filterPriority) params.set('priority', filterPriority);
+      if (filterCategory) params.set('category', filterCategory);
       const response = await fetch(`/api/reports?${params.toString()}`);
       if (response.ok) setData(await response.json());
     } catch (error) {
@@ -146,6 +373,12 @@ export default function ReportsPage() {
         setRoiDraft({
           baselineHandlingMinutes: s.baselineHandlingMinutes != null ? String(s.baselineHandlingMinutes) : '',
           agentHourlyCost: s.agentHourlyCost != null ? String(s.agentHourlyCost) : '',
+          slaFirstResponseHours: s.slaFirstResponseHours != null ? String(s.slaFirstResponseHours) : '',
+          digestFrequency: s.digestFrequency ?? '',
+          digestRecipients: (s.digestRecipients || []).join(', '),
+          slaAlertsEnabled: s.slaAlertsEnabled ?? false,
+          alertRecipients: (s.alertRecipients || []).join(', '),
+          csatEnabled: s.csatEnabled ?? false,
         });
       }
     } catch (error) {
@@ -162,6 +395,12 @@ export default function ReportsPage() {
         body: JSON.stringify({
           baselineHandlingMinutes: roiDraft.baselineHandlingMinutes,
           agentHourlyCost: roiDraft.agentHourlyCost,
+          slaFirstResponseHours: roiDraft.slaFirstResponseHours,
+          digestFrequency: roiDraft.digestFrequency,
+          digestRecipients: roiDraft.digestRecipients,
+          slaAlertsEnabled: roiDraft.slaAlertsEnabled,
+          alertRecipients: roiDraft.alertRecipients,
+          csatEnabled: roiDraft.csatEnabled,
         }),
       });
       if (res.ok) {
@@ -175,6 +414,70 @@ export default function ReportsPage() {
       setSavingRoi(false);
     }
   };
+
+  // Export the loaded report as CSV (same Blob pattern as the settings page's
+  // affected-tickets export). Exports what the page currently shows — the
+  // selected window and filters — so the file always matches the screen.
+  const exportCsv = () => {
+    if (!data) return;
+    const c = data.comparison;
+    const num = (v: number | null | undefined) => (v == null ? '' : String(v));
+    const rows: string[][] = [
+      [t('Nyckeltal'), t('Värde'), t('Föregående period')],
+      [t('Totalt antal ärenden'), String(data.totalTickets), num(c?.totalTickets)],
+      [t('Skickade svar'), String(data.totalSent), num(c?.totalSent)],
+      [`${t('Median svarstid')} (h)`, String(data.medianResponseTime), num(c?.medianResponseHours)],
+      [`${t('Första svarstid')} ${t('median')} (h)`, num(data.firstResponse?.medianHours), num(c?.firstResponse.medianHours)],
+      [`${t('Första svarstid')} p90 (h)`, num(data.firstResponse?.p90Hours), num(c?.firstResponse.p90Hours)],
+      [`${t('Aktiv arbetstid / ärende')} (min)`, num(data.activeWork?.medianMinutes), num(c?.activeWork.medianMinutes)],
+      [`${t('SLA-uppfyllnad')} (%)`, num(data.sla?.attainmentPct), num(c?.sla?.attainmentPct)],
+      [t('Lösta idag'), String(data.resolvedToday), ''],
+      [t('Väntande'), String(data.pendingTickets), ''],
+    ];
+    if (data.followUp) {
+      rows.push([t('Återöppnade ärenden'), String(data.followUp.reopenedCount), '']);
+      rows.push([t('Stängda ärenden i perioden'), String(data.followUp.closedCount), '']);
+      rows.push([`${t('Löst med 1 svar')} (%)`, num(data.followUp.oneTouch.pct), '']);
+    }
+    if (data.csat && data.csat.count > 0) {
+      rows.push([`${t('Kundnöjdhet (CSAT)')} (%)`, num(data.csat.sharePct), '']);
+      rows.push([`${t('Kundnöjdhet (CSAT)')} 👍/👎`, `${data.csat.positive}/${data.csat.negative}`, '']);
+    }
+    if (data.ticketsByCategory && data.ticketsByCategory.length > 0) {
+      rows.push([]);
+      rows.push([t('Kategori'), t('Ärenden'), `${t('Median svarstid')} (h)`]);
+      for (const c of data.ticketsByCategory) {
+        rows.push([
+          c.category ?? t('Okategoriserat'),
+          String(c.count),
+          c.responseCount > 0 ? String(c.responseMedianHours) : '',
+        ]);
+      }
+    }
+    rows.push([]);
+    rows.push([t('Medarbetare'), t('Tilldelade'), t('Skickade')]);
+    for (const a of data.perUserStats || []) {
+      rows.push([a.name, String(a.assigned), String(a.sent)]);
+    }
+    if (trendForExport.length > 1) {
+      rows.push([]);
+      rows.push([t('Period'), `${t('Svarstid (timmar)')} ${t('median')}`, `${t('Aktiv arbetstid (min)')} ${t('median')}`, t('Ärenden')]);
+      for (const p of trendForExport) {
+        rows.push([p.label, String(p.responseMedian), String(p.handlingMedian), String(p.count)]);
+      }
+    }
+    const csv = rows
+      .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rapport-${timeRange}-${todayInput()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const trendForExport = data?.trend || [];
 
   if (loading) {
     return (
@@ -199,6 +502,51 @@ export default function ReportsPage() {
     return `${Math.round((minutes / 60) * 10) / 10} h`;
   };
 
+  // "vs föregående period" badge for a KPI card. Never claims a percentage
+  // when either period's sample is below minN — a delta off a handful of
+  // tickets is noise, not a trend (same philosophy as MIN_GROUP).
+  const DeltaBadge = ({
+    current,
+    previous,
+    lowerIsBetter = false,
+    neutral = false,
+    currentN,
+    previousN,
+    minN = 0,
+  }: {
+    current: number;
+    previous: number;
+    lowerIsBetter?: boolean;
+    neutral?: boolean;
+    currentN?: number;
+    previousN?: number;
+    minN?: number;
+  }) => {
+    if (!data?.comparison) return null;
+    if (minN > 0 && ((currentN ?? 0) < minN || (previousN ?? 0) < minN)) {
+      return <p className="text-[10px] text-slate-400 mt-1">{t('för få ärenden för jämförelse')}</p>;
+    }
+    if (previous === 0 && current === 0) return null;
+    const pct = previous > 0 ? Math.round(((current - previous) / previous) * 100) : null;
+    if (pct === 0) {
+      return <p className="text-[10px] text-slate-400 mt-1">± 0% {t('vs föregående period')}</p>;
+    }
+    const better = lowerIsBetter ? current < previous : current > previous;
+    const color = neutral
+      ? 'text-slate-500 dark:text-slate-400'
+      : better
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : 'text-red-500';
+    const label = pct != null
+      ? `${pct > 0 ? '+' : ''}${pct}%`
+      : `${current - previous > 0 ? '+' : ''}${Math.round((current - previous) * 10) / 10}`;
+    return (
+      <p className={`text-[10px] font-medium mt-1 ${color}`}>
+        {label} {t('vs föregående period')}
+      </p>
+    );
+  };
+
   const trend = data.trend || [];
   const aiComparison = data.aiComparison;
   const editStats = data.editStats;
@@ -221,6 +569,13 @@ export default function ReportsPage() {
           <p className="text-slate-600 dark:text-slate-400 mt-1">{t('Statistik och analys')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 justify-end">
+          <button
+            onClick={exportCsv}
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-slate-200 hover:border-[#7C5CFF]/50"
+            title={t('Ladda ner rapporten som CSV')}
+          >
+            <Download className="w-4 h-4" /> {t('Exportera CSV')}
+          </button>
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value as TimeRange)}
@@ -264,13 +619,79 @@ export default function ReportsPage() {
         <p className="text-sm text-red-500">{t('Från-datumet måste vara före till-datumet.')}</p>
       )}
 
+      {/* Filter row: narrow every panel that describes the created/sent
+          populations down to one agent / status / priority. Team-level
+          panels (ROI, SLA, backlogg, lösta idag) deliberately ignore the
+          filters and say so. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-slate-500 dark:text-slate-400">{t('Filtrera:')}</span>
+        <select
+          value={filterAgent}
+          onChange={(e) => setFilterAgent(e.target.value)}
+          aria-label={t('Medarbetare')}
+          className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+        >
+          <option value="">{t('Alla medarbetare')}</option>
+          {getAgents().map((a) => (
+            <option key={a} value={a}>{a}</option>
+          ))}
+        </select>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          aria-label={t('Status')}
+          className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+        >
+          <option value="">{t('Alla statusar')}</option>
+          {['new', 'in_progress', 'waiting_ai', 'review', 'sent', 'closed'].map((s) => (
+            <option key={s} value={s}>{statusLabelSv(s)}</option>
+          ))}
+        </select>
+        <select
+          value={filterPriority}
+          onChange={(e) => setFilterPriority(e.target.value)}
+          aria-label={t('Prioritet')}
+          className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+        >
+          <option value="">{t('Alla prioriteter')}</option>
+          {['urgent', 'high', 'normal', 'low'].map((p) => (
+            <option key={p} value={p}>{priorityLabelSv(p)}</option>
+          ))}
+        </select>
+        {(product.ticketCategories?.length ?? 0) > 0 && (
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            aria-label={t('Kategori')}
+            className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+          >
+            <option value="">{t('Alla kategorier')}</option>
+            {product.ticketCategories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+            <option value="uncategorized">{t('Okategoriserat')}</option>
+          </select>
+        )}
+        {filtersActive && (
+          <button
+            onClick={() => { setFilterAgent(''); setFilterStatus(''); setFilterPriority(''); setFilterCategory(''); }}
+            className="text-xs text-[#7C5CFF] hover:underline"
+          >
+            {t('Rensa filter')}
+          </button>
+        )}
+      </div>
+
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-slate-600 dark:text-slate-400">{t('Totalt antal ärenden')}</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.totalTickets}</p>
+              {data.comparison && (
+                <DeltaBadge current={data.totalTickets} previous={data.comparison.totalTickets} neutral />
+              )}
             </div>
             <div className="w-12 h-12 rounded-lg border border-blue-300 dark:border-blue-700 flex items-center justify-center">
               <BarChart3 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
@@ -310,9 +731,53 @@ export default function ReportsPage() {
               <p className="text-sm text-slate-600 dark:text-slate-400">{t('Median svarstid')}</p>
               <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">{data.medianResponseTime}h</p>
               <p className="text-[11px] text-slate-400 mt-1">{t('snitt')} {data.avgResponseTime}h</p>
+              {data.comparison && (
+                <DeltaBadge
+                  current={data.medianResponseTime}
+                  previous={data.comparison.medianResponseHours}
+                  lowerIsBetter
+                  currentN={data.totalSent}
+                  previousN={data.comparison.totalSent}
+                  minN={MIN_GROUP}
+                />
+              )}
             </div>
             <div className="w-12 h-12 rounded-lg border border-purple-300 dark:border-purple-700 flex items-center justify-center">
               <Clock className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+            </div>
+          </div>
+        </div>
+
+        {/* First response time — from the event log, so it survives
+            follow-up replies overwriting sentAt. Fills from go-live +
+            backfill; '–' until there is data. */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{t('Första svarstid')}</p>
+              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
+                {data.firstResponse && data.firstResponse.count > 0 ? `${data.firstResponse.medianHours}h` : '–'}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {data.firstResponse && data.firstResponse.count > 0
+                  ? data.firstResponse.basis === 'business'
+                    ? `${t('median (öppettid)')} · p90 ${data.firstResponse.p90Hours}h · ${t('kalender')} ${data.firstResponse.medianHoursCalendar}h`
+                    : `${t('median')} · p90 ${data.firstResponse.p90Hours}h · ${data.firstResponse.count} ${t('ärenden')}`
+                  : t('Första svaret per ärende')}
+              </p>
+              {data.comparison && data.firstResponse && (
+                <DeltaBadge
+                  current={data.firstResponse.medianHours}
+                  previous={data.comparison.firstResponse.medianHours}
+                  lowerIsBetter
+                  currentN={data.firstResponse.count}
+                  previousN={data.comparison.firstResponse.count}
+                  minN={MIN_GROUP}
+                />
+              )}
+            </div>
+            <div className="w-12 h-12 rounded-lg border border-sky-300 dark:border-sky-700 flex items-center justify-center">
+              <MessageSquare className="w-6 h-6 text-sky-600 dark:text-sky-400" />
             </div>
           </div>
         </div>
@@ -331,12 +796,104 @@ export default function ReportsPage() {
                   ? `${t('median, baserat på')} ${activeWork.count} ${t('ärenden')}`
                   : t('Mäts från faktisk närvaro i ärendet')}
               </p>
+              {data.comparison && activeWork && (
+                <DeltaBadge
+                  current={activeWork.medianMinutes}
+                  previous={data.comparison.activeWork.medianMinutes}
+                  lowerIsBetter
+                  currentN={activeWork.count}
+                  previousN={data.comparison.activeWork.count}
+                  minN={MIN_GROUP}
+                />
+              )}
             </div>
             <div className="w-12 h-12 rounded-lg border border-[#7C5CFF]/40 flex items-center justify-center">
               <Timer className="w-6 h-6 text-[#7C5CFF]" />
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── SLA vs the configured first-response target ─────────────────── */}
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('SLA: första svar inom mål')}</h3>
+          </div>
+          {filtersActive && (
+            <span className="text-[11px] text-slate-400">{t('Filter påverkar inte denna panel')}</span>
+          )}
+        </div>
+        {data.sla ? (
+          <>
+            <div className="flex items-baseline gap-2 mt-2">
+              <span className={`text-4xl font-bold ${
+                data.sla.attainmentPct == null ? 'text-slate-400'
+                : data.sla.attainmentPct >= 90 ? 'text-emerald-600 dark:text-emerald-400'
+                : data.sla.attainmentPct >= 70 ? 'text-amber-600 dark:text-amber-400'
+                : 'text-red-500'
+              }`}>
+                {data.sla.attainmentPct != null ? `${data.sla.attainmentPct}%` : '–'}
+              </span>
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                {t('inom målet')} {data.sla.targetHours}h{data.sla.basis === 'business' ? ` (${t('öppettid')})` : ''}
+              </span>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+              {data.sla.met} {t('av')} {data.sla.answered} {t('besvarade ärenden i perioden fick första svar inom målet.')}
+            </p>
+            {data.sla.openOverdue.count > 0 ? (
+              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-2">
+                  {data.sla.openOverdue.count} {t('öppna ärenden har passerat målet utan svar:')}
+                </p>
+                <ul className="space-y-1">
+                  {data.sla.openOverdue.tickets.map((ov) => (
+                    <li key={ov.id} className="text-sm">
+                      <a
+                        href={`/tickets?ticket=${ov.id}`}
+                        className="text-[#7C5CFF] hover:underline"
+                      >
+                        {ov.subject || t('(utan ämne)')}
+                      </a>
+                      <span className="text-xs text-slate-400 ml-2">
+                        {(() => {
+                          // Long waits read best in calendar days regardless
+                          // of basis; short ones in hours of the active basis.
+                          const calendar = ov.ageHoursCalendar ?? ov.ageHours;
+                          if (calendar >= 48) return `${Math.round(calendar / 24)} ${t('dygn')} ${t('gammalt')}`;
+                          return data.sla?.basis === 'business'
+                            ? `${ov.ageHours}h ${t('öppettid')}`
+                            : `${ov.ageHours}h ${t('gammalt')}`;
+                        })()}
+                      </span>
+                    </li>
+                  ))}
+                  {data.sla.openOverdue.count > data.sla.openOverdue.tickets.length && (
+                    <li className="text-xs text-slate-400">
+                      +{data.sla.openOverdue.count - data.sla.openOverdue.tickets.length} {t('till')}
+                    </li>
+                  )}
+                </ul>
+              </div>
+            ) : (
+              <p className="text-sm text-emerald-700 dark:text-emerald-400 mt-3">
+                {t('Inga öppna ärenden har passerat målet utan svar.')}
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            <p>{t('Sätt ett SLA-mål (t.ex. svar inom 24 timmar) för att följa upp hur stor andel av ärendena som besvaras i tid.')}</p>
+            <button
+              onClick={() => setEditingRoi(true)}
+              className="mt-3 px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700"
+            >
+              {t('Sätt SLA-mål')}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Section 1: ROI / value ──────────────────────────────────────── */}
@@ -347,12 +904,17 @@ export default function ReportsPage() {
               <Wallet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Värde: tid & pengar sparade')}</h3>
             </div>
-            <button
-              onClick={() => setEditingRoi((v) => !v)}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-            >
-              <Settings className="w-3.5 h-3.5" /> {t('Inställningar')}
-            </button>
+            <div className="flex items-center gap-3">
+              {(filterStatus || filterPriority) && (
+                <span className="text-[11px] text-slate-400">{t('Status-/prioritetsfilter påverkar inte denna panel')}</span>
+              )}
+              <button
+                onClick={() => setEditingRoi((v) => !v)}
+                className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              >
+                <Settings className="w-3.5 h-3.5" /> {t('Inställningar')}
+              </button>
+            </div>
           </div>
 
           {savings.moneySaved != null ? (
@@ -393,34 +955,112 @@ export default function ReportsPage() {
           )}
 
           {editingRoi && (
-            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Tid/ärende före verktyget (min)')}</label>
-                <input
-                  type="number" min="0" inputMode="decimal"
-                  value={roiDraft.baselineHandlingMinutes}
-                  onChange={(e) => setRoiDraft((d) => ({ ...d, baselineHandlingMinutes: e.target.value }))}
-                  placeholder={t('t.ex. 15')}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
-                />
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Tid/ärende före verktyget (min)')}</label>
+                  <input
+                    type="number" min="0" inputMode="decimal"
+                    value={roiDraft.baselineHandlingMinutes}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, baselineHandlingMinutes: e.target.value }))}
+                    placeholder={t('t.ex. 15')}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Timkostnad agent (kr)')}</label>
+                  <input
+                    type="number" min="0" inputMode="decimal"
+                    value={roiDraft.agentHourlyCost}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, agentHourlyCost: e.target.value }))}
+                    placeholder={t('t.ex. 300')}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('SLA-mål: första svar inom (timmar)')}</label>
+                  <input
+                    type="number" min="0" inputMode="decimal"
+                    value={roiDraft.slaFirstResponseHours}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, slaFirstResponseHours: e.target.value }))}
+                    placeholder={t('t.ex. 24')}
+                    title={t('Räknas i öppettid när öppettider är angivna (Bemanning → Antaganden), annars i kalendertimmar')}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Timkostnad agent (kr)')}</label>
-                <input
-                  type="number" min="0" inputMode="decimal"
-                  value={roiDraft.agentHourlyCost}
-                  onChange={(e) => setRoiDraft((d) => ({ ...d, agentHourlyCost: e.target.value }))}
-                  placeholder={t('t.ex. 300')}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
-                />
+
+              {/* Scheduled digest + SLA alert settings (sent by the cron
+                  routes; see app/api/cron). Recipients are comma-separated. */}
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-4 mb-2">{t('Utskick & larm')}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Rapport via e-post')}</label>
+                  <select
+                    value={roiDraft.digestFrequency}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, digestFrequency: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                  >
+                    <option value="">{t('Av')}</option>
+                    <option value="weekly">{t('Veckovis (måndag morgon)')}</option>
+                    <option value="monthly">{t('Månadsvis (den 1:a)')}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Mottagare av rapporten (kommaseparerade)')}</label>
+                  <input
+                    type="text"
+                    value={roiDraft.digestRecipients}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, digestRecipients: e.target.value }))}
+                    placeholder={t('namn@företag.se, chef@företag.se')}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="slaAlertsEnabled"
+                    type="checkbox"
+                    checked={roiDraft.slaAlertsEnabled}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, slaAlertsEnabled: e.target.checked }))}
+                    className="w-4 h-4 accent-[#7C5CFF]"
+                  />
+                  <label htmlFor="slaAlertsEnabled" className="text-xs text-slate-600 dark:text-slate-300">
+                    {t('SLA-larm via e-post (varning vid 80 % av målet, larm vid överskridet mål)')}
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t('Mottagare av SLA-larm (kommaseparerade)')}</label>
+                  <input
+                    type="text"
+                    value={roiDraft.alertRecipients}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, alertRecipients: e.target.value }))}
+                    placeholder={t('namn@företag.se')}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2 sm:col-span-2">
+                  <input
+                    id="csatEnabled"
+                    type="checkbox"
+                    checked={roiDraft.csatEnabled}
+                    onChange={(e) => setRoiDraft((d) => ({ ...d, csatEnabled: e.target.checked }))}
+                    className="w-4 h-4 accent-[#7C5CFF]"
+                  />
+                  <label htmlFor="csatEnabled" className="text-xs text-slate-600 dark:text-slate-300">
+                    {t('Kundnöjdhet (CSAT): lägg till 👍/👎-länkar i utgående svar')}
+                  </label>
+                </div>
               </div>
-              <button
-                onClick={saveRoiSettings}
-                disabled={savingRoi}
-                className="px-4 py-2 rounded-md bg-[#7C5CFF] text-white text-sm font-medium hover:brightness-110 disabled:opacity-50"
-              >
-                {savingRoi ? t('Sparar…') : t('Spara')}
-              </button>
+
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={saveRoiSettings}
+                  disabled={savingRoi}
+                  className="px-4 py-2 rounded-md bg-[#7C5CFF] text-white text-sm font-medium hover:brightness-110 disabled:opacity-50"
+                >
+                  {savingRoi ? t('Sparar…') : t('Spara')}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -460,6 +1100,73 @@ export default function ReportsPage() {
                 </div>
               ))}
               <p className="text-[11px] text-slate-400 mt-3">{t('Baserat på')} {editStats.count} {t('svar med AI-utkast.')}</p>
+
+              {/* Drill-down: the actual rewritten replies, draft vs sent.
+                  This is the working list for fixing the AI — each row shows
+                  what the draft missed and what the right answer was. */}
+              {editStats.heavy > 0 && (
+                <div className="mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
+                  <button
+                    onClick={() => setShowRewritten((v) => !v)}
+                    className="text-sm font-medium text-[#7C5CFF] hover:underline"
+                  >
+                    {showRewritten
+                      ? t('Dölj omskrivna svar')
+                      : `${t('Visa omskrivna svar')} (${editStats.heavy})`}
+                  </button>
+
+                  {showRewritten && (
+                    <div className="mt-3 space-y-2">
+                      {loadingRewritten && (
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{t('Laddar…')}</p>
+                      )}
+                      {!loadingRewritten && rewritten && rewritten.length === 0 && (
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{t('Inga omskrivna svar i perioden.')}</p>
+                      )}
+                      {!loadingRewritten && rewritten && rewritten.map((item) => {
+                        const isOpen = expandedRewritten === item.ticketId;
+                        return (
+                          <div key={item.ticketId} className="rounded-lg border border-slate-200 dark:border-slate-700">
+                            <button
+                              onClick={() => setExpandedRewritten(isOpen ? null : item.ticketId)}
+                              className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg"
+                            >
+                              <span className="shrink-0 text-[11px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                {item.keptPct}% {t('behållet')}
+                              </span>
+                              <span className="flex-1 min-w-0 truncate text-sm text-slate-800 dark:text-slate-200">{item.subject}</span>
+                              <span className="shrink-0 text-xs text-slate-400">
+                                {item.sentAt ? new Date(item.sentAt).toLocaleDateString('sv-SE') : ''}
+                                {item.sentBy ? ` · ${item.sentBy.split('@')[0].split(' ')[0]}` : ''}
+                              </span>
+                            </button>
+                            {isOpen && (
+                              <div className="px-3 pb-3 space-y-3">
+                                {item.question && (
+                                  <div>
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">{t('Kundens fråga')}</p>
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap max-h-32 overflow-y-auto">{item.question}</p>
+                                  </div>
+                                )}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div className="rounded-md border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 p-2.5">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-500 dark:text-rose-400 mb-1">{t('AI-utkastet (skickades inte)')}</p>
+                                    <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap max-h-64 overflow-y-auto">{item.aiDraft}</p>
+                                  </div>
+                                  <div className="rounded-md border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 p-2.5">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 mb-1">{t('Skickat svar')}</p>
+                                    <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap max-h-64 overflow-y-auto">{item.sentReply}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -612,15 +1319,26 @@ export default function ReportsPage() {
           <div className="space-y-4">
             {perUserStats.map((agent) => {
               const share = data.totalSent > 0 ? Math.round((agent.sent / data.totalSent) * 100) : 0;
+              const isExpanded = expandedAgent === agent.name;
+              const detail = agentDetails?.find((d) => d.name === agent.name);
               return (
                 <div key={agent.name}>
                   <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setExpandedAgent(isExpanded ? null : agent.name)}
+                      className="flex items-center gap-2 text-left"
+                      title={t('Visa detaljer per medarbetare')}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      )}
                       <div className="w-7 h-7 rounded-full bg-[#7C5CFF]/15 text-[#7C5CFF] dark:text-[#B8A6FF] flex items-center justify-center text-xs font-bold">
                         {agent.name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()}
                       </div>
                       <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{agent.name}</span>
-                    </div>
+                    </button>
                     <div className="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
                       <span className="flex items-center gap-1">
                         <Users className="w-3.5 h-3.5" />
@@ -647,6 +1365,57 @@ export default function ReportsPage() {
                     />
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1">{share}% {t('av skickade svar')}</p>
+
+                  {/* Drill-down: per-agent medians. Every figure ships with
+                      its sample size; below MIN_GROUP we mark it as thin
+                      instead of hiding it. */}
+                  {isExpanded && (
+                    <div className="mt-2 mb-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+                      {loadingAgentDetails && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t('Laddar…')}</p>
+                      )}
+                      {!loadingAgentDetails && !detail && agentDetails && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t('Inga skickade svar i perioden.')}</p>
+                      )}
+                      {!loadingAgentDetails && detail && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">{t('Svarstid per svar')}</p>
+                            <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                              {detail.responseCount > 0 ? `${detail.responseMedianHours} h` : '–'}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              {detail.responseCount > 0
+                                ? `${t('median')} · ${detail.responseCount} ${t('svar')}${detail.responseCount < MIN_GROUP ? ` · ${t('litet underlag')}` : ''}`
+                                : t('Ingen data i perioden')}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">{t('Aktiv arbetstid / ärende')}</p>
+                            <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                              {detail.activeWorkCount > 0 ? fmtMinutes(detail.activeWorkMedianMinutes) : '–'}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              {detail.activeWorkCount > 0
+                                ? `${t('median')} · ${detail.activeWorkCount} ${t('ärenden')}${detail.activeWorkCount < MIN_GROUP ? ` · ${t('litet underlag')}` : ''}`
+                                : t('Ingen data i perioden')}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">{t('Från AI-utkastet')}</p>
+                            <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                              {detail.keptCount > 0 ? `${detail.keptMedianPct}%` : '–'}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              {detail.keptCount > 0
+                                ? `${t('median')} · ${detail.keptCount} ${t('svar med AI-utkast.')}${detail.keptCount < MIN_GROUP ? ` · ${t('litet underlag')}` : ''}`
+                                : t('Ingen data i perioden')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -734,6 +1503,316 @@ export default function ReportsPage() {
           );
         })()}
       </div>
+
+      {/* Volume heatmap: weekday × hour. The pattern here is what the
+          bemanning page turns into a staffing recommendation. */}
+      {data.heatmap && data.heatmap.some((row) => row.some((c) => c > 0)) && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <CalendarDays className="w-5 h-5 text-[#7C5CFF]" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Volym per veckodag och timme')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Antal inkomna ärenden per timme (svensk tid) i vald period. Mörkare = fler ärenden.')}
+          </p>
+          {(() => {
+            const heatmap = data.heatmap!;
+            const weekdays = [t('Mån'), t('Tis'), t('Ons'), t('Tor'), t('Fre'), t('Lör'), t('Sön')];
+            const max = Math.max(1, ...heatmap.flat());
+            return (
+              <div className="overflow-x-auto">
+                <div className="min-w-[560px]">
+                  {heatmap.map((row, wd) => (
+                    <div key={wd} className="flex items-center gap-1 mb-1">
+                      <span className="w-10 shrink-0 text-[11px] text-slate-500 dark:text-slate-400">{weekdays[wd]}</span>
+                      {row.map((count, hour) => (
+                        <div
+                          key={hour}
+                          title={`${weekdays[wd]} ${String(hour).padStart(2, '0')}:00 – ${count} ${t('ärenden')}`}
+                          className={`h-5 flex-1 rounded-sm ${count === 0 ? 'bg-slate-100 dark:bg-slate-700/40' : ''}`}
+                          style={count > 0 ? { backgroundColor: `rgba(124, 92, 255, ${0.15 + 0.85 * (count / max)})` } : undefined}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="w-10 shrink-0" />
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <span key={hour} className="flex-1 text-center text-[9px] text-slate-400">
+                        {hour % 6 === 0 ? String(hour).padStart(2, '0') : ''}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Backlog: open tickets at the end of each day. */}
+      {data.backlog && data.backlog.length > 1 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Layers className="w-5 h-5 text-[#7C5CFF]" />
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Ärendebalans (backlogg)')}</h3>
+            </div>
+            {filtersActive && (
+              <span className="text-[11px] text-slate-400">{t('Filter påverkar inte denna panel')}</span>
+            )}
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Antal öppna ärenden vid varje dags slut. Stigande balans betyder att det kommer in mer än teamet hinner besvara.')}
+          </p>
+          {(() => {
+            const backlog = data.backlog!;
+            const maxOpen = Math.max(1, ...backlog.map((b) => b.open));
+            const labelEvery = backlog.length > 31 ? 7 : backlog.length > 14 ? 3 : 1;
+            return (
+              <div>
+                <div className="flex items-end justify-between gap-1 sm:gap-2 h-40 border-b border-slate-200 dark:border-slate-700">
+                  {backlog.map((point, index) => {
+                    const height = point.open === 0 ? 1.5 : Math.max((point.open / maxOpen) * 100, 4);
+                    return (
+                      <div
+                        key={index}
+                        className="flex-1 flex items-end h-full min-w-0"
+                        title={`${point.date} – ${point.open} ${t('öppna')}${point.approximate ? ` (${t('uppskattat')})` : ''}`}
+                      >
+                        <div
+                          className={`w-full rounded-t-md transition-all hover:brightness-110 ${
+                            point.open === 0
+                              ? 'bg-slate-200 dark:bg-slate-700'
+                              : point.approximate
+                                ? 'bg-gradient-to-t from-slate-400 to-slate-300 dark:from-slate-600 dark:to-slate-500'
+                                : 'bg-gradient-to-t from-amber-500 to-amber-400'
+                          }`}
+                          style={{ height: `${height}%` }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex justify-between gap-1 sm:gap-2 mt-2">
+                  {backlog.map((point, index) => (
+                    <span key={index} className="flex-1 text-[10px] text-slate-500 dark:text-slate-400 truncate text-center min-w-0">
+                      {index % labelEvery === 0 || index === backlog.length - 1
+                        ? new Date(point.date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })
+                        : ''}
+                    </span>
+                  ))}
+                </div>
+                {backlog.some((b) => b.approximate) && (
+                  <p className="text-[11px] text-slate-400 mt-2">
+                    {t('Grå staplar är uppskattade — de ligger före händelseloggens start och bygger på ungefärliga stängningstider.')}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Replies per ticket: how many rounds a case takes. */}
+      {data.repliesPerTicket && data.repliesPerTicket.ticketCount > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <MessageSquare className="w-5 h-5 text-[#7C5CFF]" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Svar per ärende')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Hur många svar en konversation kräver. Många fleromgångsärenden kan tyda på att första svaret inte löser frågan.')}
+          </p>
+          <div className="flex items-baseline gap-2 mb-4">
+            <span className="text-4xl font-bold text-[#7C5CFF]">{data.repliesPerTicket.avg}</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">{t('svar per ärende i snitt')}</span>
+          </div>
+          {([
+            { label: t('Löst med 1 svar'), value: data.repliesPerTicket.distribution.one, color: 'bg-emerald-500' },
+            { label: t('2 svar'), value: data.repliesPerTicket.distribution.two, color: 'bg-amber-500' },
+            { label: t('3 eller fler svar'), value: data.repliesPerTicket.distribution.threePlus, color: 'bg-slate-400' },
+          ] as const).map(({ label, value, color }) => (
+            <div key={label} className="mb-2.5">
+              <div className="flex items-center justify-between mb-1 text-xs text-slate-600 dark:text-slate-400">
+                <span>{label}</span>
+                <span className="font-semibold text-slate-900 dark:text-slate-100">{value}</span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                <div className={`${color} h-2 rounded-full transition-all`} style={{ width: `${(value / data.repliesPerTicket!.ticketCount) * 100}%` }} />
+              </div>
+            </div>
+          ))}
+          <p className="text-[11px] text-slate-400 mt-3">{t('Baserat på')} {data.repliesPerTicket.ticketCount} {t('ärenden med minst ett svar i perioden.')}</p>
+        </div>
+      )}
+
+      {/* What customers ask about: AI-classified ticket categories with
+          per-category response medians. Clicking a row filters the report. */}
+      {data.ticketsByCategory && data.ticketsByCategory.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Tag className="w-5 h-5 text-[#7C5CFF]" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Vad ärendena handlar om')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('AI-klassade kategorier för inkomna ärenden i perioden. Klicka på en kategori för att filtrera hela rapporten.')}
+          </p>
+          {(() => {
+            const cats = data.ticketsByCategory!;
+            const maxCount = Math.max(1, ...cats.map((c) => c.count));
+            return (
+              <div className="space-y-2.5">
+                {cats.map((c) => {
+                  const key = c.category ?? 'uncategorized';
+                  const label = c.category ?? t('Okategoriserat');
+                  const isActive = filterCategory === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setFilterCategory(isActive ? '' : key)}
+                      className={`w-full text-left group ${isActive ? '' : ''}`}
+                      title={isActive ? t('Rensa filter') : t('Filtrera på denna kategori')}
+                    >
+                      <div className="flex items-center justify-between mb-1 text-xs">
+                        <span className={`${isActive ? 'text-[#7C5CFF] font-semibold' : 'text-slate-600 dark:text-slate-400'} group-hover:text-[#7C5CFF]`}>
+                          {label}
+                        </span>
+                        <span className="text-slate-600 dark:text-slate-400">
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">{c.count}</span> {t('ärenden')}
+                          {c.responseCount >= MIN_GROUP && (
+                            <span className="text-slate-400"> · {t('median svarstid')} {c.responseMedianHours}h</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all ${c.category == null ? 'bg-slate-400' : 'bg-[#7C5CFF]'} group-hover:brightness-110`}
+                          style={{ width: `${(c.count / maxCount) * 100}%` }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          <p className="text-[11px] text-slate-400 mt-3">
+            {t('Nya ärenden klassas automatiskt; äldre ärenden kan kategoriseras i efterhand med backfill-skriptet.')}
+          </p>
+        </div>
+      )}
+
+      {/* Follow-up quality: does "closed" stick, and does the first reply
+          resolve the case? From the status-change event log. */}
+      {data.followUp && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <RefreshCcw className="w-5 h-5 text-[#7C5CFF]" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Uppföljningskvalitet')}</h3>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Håller stängningarna? Återöppnade ärenden och andelen som löses med ett enda svar.')}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{t('Återöppnade ärenden')}</p>
+              <p className={`text-3xl font-bold ${
+                data.followUp.reopenRatePct == null ? 'text-slate-900 dark:text-slate-100'
+                : data.followUp.reopenRatePct <= 5 ? 'text-emerald-600 dark:text-emerald-400'
+                : data.followUp.reopenRatePct <= 15 ? 'text-amber-600 dark:text-amber-400'
+                : 'text-red-500'
+              }`}>
+                {data.followUp.reopenRatePct != null ? `${data.followUp.reopenRatePct}%` : data.followUp.reopenedCount}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {data.followUp.reopenedCount} {t('av')} {data.followUp.closedCount} {t('stängda ärenden öppnades igen i perioden.')}
+                {data.followUp.reopenRatePct == null && data.followUp.closedCount > 0 && ` ${t('(för få stängda för en andel)')}`}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{t('Löst med ett svar')}</p>
+              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100">
+                {data.followUp.oneTouch.pct != null ? `${data.followUp.oneTouch.pct}%` : data.followUp.oneTouch.oneReply}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {data.followUp.oneTouch.oneReply} {t('av')} {data.followUp.oneTouch.resolved} {t('lösta ärenden klarades med ett enda svar.')}
+                {data.followUp.oneTouch.pct == null && data.followUp.oneTouch.resolved > 0 && ` ${t('(för få lösta för en andel)')}`}
+              </p>
+            </div>
+          </div>
+          {!data.followUp.covered && (
+            <p className="text-[11px] text-slate-400 mt-3">
+              {t('Händelseloggen täcker inte hela perioden – siffrorna kan vara ofullständiga.')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Customer satisfaction from the one-click 👍/👎 email links. */}
+      {data.csat && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('Kundnöjdhet (CSAT)')}</h3>
+            </div>
+            {filtersActive && (
+              <span className="text-[11px] text-slate-400">{t('Filter påverkar inte denna panel')}</span>
+            )}
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            {t('Ett-klicks-betyg (👍/👎) från kunderna via länkarna i utgående svar.')}
+          </p>
+          {data.csat.count === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {roi?.csatEnabled
+                ? t('Inga betyg i perioden ännu – de kommer in i takt med att kunder klickar i mejlen.')
+                : t('Inga betyg ännu. Aktivera CSAT under Inställningar för att lägga till betygslänkar i utgående svar.')}
+            </p>
+          ) : (
+            <>
+              <div className="flex items-baseline gap-3">
+                <span className={`text-4xl font-bold ${
+                  data.csat.sharePct == null ? 'text-slate-900 dark:text-slate-100'
+                  : data.csat.sharePct >= 85 ? 'text-emerald-600 dark:text-emerald-400'
+                  : data.csat.sharePct >= 60 ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-red-500'
+                }`}>
+                  {data.csat.sharePct != null ? `${data.csat.sharePct}%` : `${data.csat.positive}/${data.csat.count}`}
+                </span>
+                <span className="text-sm text-slate-500 dark:text-slate-400">
+                  {data.csat.sharePct != null ? t('nöjda av de som svarat') : t('positiva betyg')}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                👍 {data.csat.positive} · 👎 {data.csat.negative} · {data.csat.count} {t('svar totalt')}
+                {data.csat.sharePct == null && ` · ${t('för få svar för en andel (minst')} ${10})`}
+              </p>
+              {data.csat.negatives.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-2">{t('Senaste missnöjda:')}</p>
+                  <ul className="space-y-1.5">
+                    {data.csat.negatives.map((n) => (
+                      <li key={n.ticketId} className="text-sm">
+                        <a href={`/tickets?ticket=${n.ticketId}`} className="text-[#7C5CFF] hover:underline">
+                          {n.subject || t('(utan ämne)')}
+                        </a>
+                        <span className="text-xs text-slate-400 ml-2">
+                          {new Date(n.createdAt).toLocaleDateString('sv-SE')}
+                        </span>
+                        {n.comment && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 italic">”{n.comment}”</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

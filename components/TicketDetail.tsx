@@ -7,6 +7,7 @@ import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 import { getAgents, statusLabelSv, agentColor } from '@/lib/constants';
 import { t } from '@/lib/i18n';
 import { product } from '@/lib/products';
+import TicketTimeline from '@/components/TicketTimeline';
 
 // Three-level "traffic light" priority used to rank customers at a glance.
 // We keep the existing four DB values working but expose only the three
@@ -77,7 +78,7 @@ interface CustomerHistoryResponse {
 interface TicketDetailProps {
   ticket: Ticket;
   onUpdate: (ticketId: string, updates: Partial<Ticket>) => void;
-  onGenerateAI: (ticketId: string) => Promise<string | null>;
+  onGenerateAI: (ticketId: string) => Promise<{ response: string | null; error?: string }>;
   // Deliver freshly re-fetched customer data (from the open-time context
   // refresh) straight into the parent's state so the cards update without a
   // manual regenerate. Local state only — does not bump updatedAt.
@@ -462,10 +463,16 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onContext
 
   const handleGenerateAI = async () => {
     setIsGenerating(true);
-    const aiResponse = await onGenerateAI(ticket.id);
-    if (aiResponse) {
-      setAiSuggestion(aiResponse);
-      setResponse(aiResponse);
+    const result = await onGenerateAI(ticket.id);
+    if (result.response) {
+      setAiSuggestion(result.response);
+      setResponse(result.response);
+    } else if (result.error) {
+      setSendConfirmation({
+        type: 'error',
+        message: `${t('Kunde inte generera AI-svar:')} ${result.error}`,
+      });
+      setTimeout(() => setSendConfirmation(null), 20000);
     }
     setIsGenerating(false);
   };
@@ -1063,6 +1070,9 @@ export default function TicketDetail({ ticket, onUpdate, onGenerateAI, onContext
             </div>
           )}
         </div>
+
+        {/* Activity timeline from the ticket event log — collapsible, lazy. */}
+        <TicketTimeline ticketId={ticket.id} />
 
         {(ticket.contextData || hasBillectaIntegration) && (
           <div>
