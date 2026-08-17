@@ -4,6 +4,7 @@ import type { KnowledgeBase } from '@/lib/types';
 import { product } from '@/lib/products';
 import { parseTicketThread, type ThreadEntry } from '@/lib/services/ticket-thread';
 import { selectLearningExamples, formatLearningExamples } from '@/lib/services/learning-examples';
+import { selectCandidates, CARD_STATUS } from '@/lib/services/knowledge-cards';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -204,6 +205,47 @@ async function findRelevantKnowledge(
   } catch (error) {
     console.error('[AI] Error fetching knowledge base:', error);
     return { formatted: '', citedIds: [] };
+  }
+}
+
+// --- Knowledge cards (verified answers, maintained per question) ---
+
+// Cards carry what agents have actually answered, reconciled into one entry
+// per recurring question (lib/services/knowledge-cards.ts). They replace the
+// old "Lärande från skickade svar" articles, which entered the KB as
+// ordinary rows and were down-weighted to 0.7 because duplicates and stale
+// answers were indistinguishable there.
+//
+// Only 'active' cards are used: a card in 'review' has an unresolved
+// contradiction, and quoting a contested answer is exactly what the review
+// queue exists to prevent. Cards are presented as verified, with their
+// confirmation count, so the model can prefer them over general articles.
+async function findRelevantCards(
+  tenantId: string,
+  subject: string,
+  message: string
+): Promise<string> {
+  try {
+    const cards = await prisma.knowledgeCard.findMany({
+      where: { tenantId, status: CARD_STATUS.active },
+      select: { id: true, question: true, answer: true, category: true, tags: true },
+      orderBy: { lastConfirmedAt: 'desc' },
+      take: 300,
+    });
+    if (cards.length === 0) return '';
+
+    const selected = selectCandidates(cards, `${subject} ${message}`).slice(0, 3);
+    if (selected.length === 0) return '';
+
+    let formatted =
+      '\n\n=== VERIFIERADE SVAR (tidigare skickade och bekräftade av handläggare — väg dessa tyngre än allmänna artiklar) ===\n';
+    selected.forEach(card => {
+      formatted += `\n--- Fråga: ${card.question} ---\nSvar: ${card.answer}\n`;
+    });
+    return formatted;
+  } catch (error) {
+    console.error('[AI] Error fetching knowledge cards:', error);
+    return '';
   }
 }
 
@@ -564,11 +606,16 @@ export async function generateAIResponse(
       ? [latestCustomer.body, ...customerEntries.slice(0, -1).map((e: ThreadEntry) => e.body)].join('\n\n')
       : (thread[0]?.body ?? originalMessage);
 
-    const [knowledgeResult, learningPrompt, previousTicketsPrompt] = await Promise.all([
+    const [knowledgeResult, cardsPrompt, learningPrompt, previousTicketsPrompt] = await Promise.all([
       tenantId ? findRelevantKnowledge(tenantId, subject, retrievalText) : Promise.resolve({ formatted: '', citedIds: [] }),
+      tenantId ? findRelevantCards(tenantId, subject, retrievalText) : Promise.resolve(''),
       tenantId ? findLearningExamples(tenantId, subject, retrievalText) : Promise.resolve(''),
       (tenantId && customerEmail) ? findPreviousTicketContext(tenantId, customerEmail, ticketId) : Promise.resolve(''),
     ]);
+
+    // Verified cards ride along with the KB block so every downstream
+    // "do we have grounding?" check counts them too.
+    knowledgeResult.formatted += cardsPrompt;
 
     const hasKnowledge = knowledgeResult.formatted.length > 0;
     const hasPreviousTickets = previousTicketsPrompt.length > 0;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { KnowledgeBase } from '@/lib/types';
 import { t } from '@/lib/i18n';
 
@@ -28,6 +28,16 @@ export default function KnowledgeList({
 }: KnowledgeListProps) {
   const [activeTab, setActiveTab] = useState<KnowledgeTab>('manual');
   const [visibility, setVisibility] = useState<VisibilityFilter>('all');
+  // Badge on the knowledge-cards link: contradictions waiting for someone to
+  // pick a version. Best-effort — a failed count just hides the badge.
+  const [openConflicts, setOpenConflicts] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/knowledge/conflicts?status=open')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => setOpenConflicts(data?.conflicts?.length ?? 0))
+      .catch(() => setOpenConflicts(0));
+  }, []);
 
   const { manualArticles, learnedArticles, reviewArticles, visibleArticles } = useMemo(() => {
     const manual = articles.filter((a) => !isAutoLearned(a));
@@ -72,6 +82,14 @@ export default function KnowledgeList({
           <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{articles.length} artiklar</p>
         </div>
         <div className="flex items-center gap-2">
+          <a href="/knowledge/cards" className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center gap-1.5" title="Kunskapskort och motsägelser att granska">
+            Kunskapskort
+            {openConflicts > 0 && (
+              <span className="px-1.5 py-0.5 text-xs rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                {openConflicts}
+              </span>
+            )}
+          </a>
           <a href="/knowledge/design" className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300" title="Hjälpcentrets design">
             Design
           </a>

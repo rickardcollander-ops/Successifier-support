@@ -1,5 +1,79 @@
 # Kunskapsbas & publikt hjälpcenter
 
+## Kunskapskort (självunderhållande kunskap)
+
+Vid sidan av de redigerade artiklarna underhåller plattformen **kunskapskort**:
+ett kort per återkommande fråga, med ett svar som handläggare har bekräftat och
+en lista över de ärenden som ligger bakom det. Korten skapas automatiskt när ett
+svar skickas – ingen skriver dem för hand.
+
+Tidigare sparades varje skickat svar som en **ny** artikel i kategorin
+`Lärande från skickade svar`, deduplicerad enbart på de 50 första tecknen i
+ämnesraden. Två handläggare som svarade olika på samma fråga gav två artiklar,
+båda matades till AI:n, och ingenstans registrerades att de sa emot varandra.
+Högen rensades efter 30 dagar i stället för att underhållas. Kunskapskorten
+ersätter det.
+
+### Flödet
+
+Varje skickat svar bedöms mot befintliga kort (`lib/services/knowledge-cards.ts`)
+och hamnar i exakt ett av tre lägen:
+
+| Utfall | Vad som händer |
+|--------|----------------|
+| **Nytt** | Inget kort besvarar frågan → ett nytt kort skapas. |
+| **Bekräftar** | Ett kort besvarar frågan och svaren är förenliga → ärendet läggs till som källa, `confirmedCount` ökar. |
+| **Motsäger** | Svaren säger olika saker i sak → en `KnowledgeCardConflict` skapas och kortet parkeras i `review`. |
+
+Urvalet sker i två steg: en billig lexikal filtrering (`selectCandidates`) väljer
+ut rimliga kandidater, sedan avgör **ett** modellanrop med tvingat verktygsanrop
+vilket kort domen gäller. Modellen är instruerad att vid tvekan välja
+`confirms` (en falsk motsägelse stjäl handläggartid) respektive `new` (ett extra
+kort är billigare än ett kort som blandar ihop två frågor).
+
+Ett kort i `review` **används inte** av AI-generatorn. Poängen med kön är just att
+sluta citera ett svar vi inte längre litar på.
+
+### Granskning
+
+Motsägelser löses **aldrig** automatiskt. En hjälpmodell räcker för att märka att
+två svar skiljer sig, men inte för att avgöra vilket som är sant – och fel val
+förgiftar varje framtida AI-svar i ämnet. Under **Kunskapsbas → Kunskapskort**
+(`/knowledge/cards`) ser handläggaren de två versionerna sida vid sida och väljer:
+
+- **Behåll nuvarande** (`kept_current`)
+- **Använd det nya svaret** (`accepted_proposed`)
+- **Skriv eget svar** (`merged`)
+- **Ingen motsägelse** – avfärdar konflikten, kortet behåller sitt svar
+
+Kortet återgår till `active` först när det inte har några öppna konflikter kvar,
+så ett kort som ifrågasatts två gånger blir inte betrott efter en enda lösning.
+
+Ett svar som en människa har redigerat stämplas med `curatedAt`/`curatedBy` och
+skrivs aldrig över automatiskt – ett motsägande svar skapar en ny konflikt i
+stället för att tyst köra över det någon har bestämt.
+
+### API
+
+| Metod & väg | Beskrivning |
+|-------------|-------------|
+| `GET /api/knowledge/cards` | Alla kort (filtrera med `?status=active\|review\|archived`) |
+| `GET /api/knowledge/cards/<id>` | Ett kort med källärenden och konflikthistorik |
+| `PATCH /api/knowledge/cards/<id>` | Redigera fråga, svar, kategori, taggar, status |
+| `DELETE /api/knowledge/cards/<id>` | Ta bort ett kort |
+| `GET /api/knowledge/conflicts` | Granskningskön (`?status=open\|resolved\|dismissed`) |
+| `POST /api/knowledge/conflicts/<id>` | Lös (`{resolution}`) eller avfärda (`{action:"dismiss"}`) |
+
+Att aktivera ett kort via `PATCH` medan det har öppna konflikter ger `409` – kön
+går inte att gå runt.
+
+### Kvarvarande `Lärande från skickade svar`
+
+Artiklar i den gamla kategorin skapas inte längre, men befintliga rader ligger
+kvar tills 30-dagarsrensningen i `GET /api/knowledge` tar dem. Under tiden
+används de som förut, nedviktade i AI-generatorns rankning.
+
+
 Kunskapsbasen driver både AI-svaren (internt) och ett **publikt hjälpcenter**
 som kan integreras med hemsidan. All publik åtkomst sker via ett läs-endast
 API som bara exponerar **publicerade, publika** artiklar – aldrig kunddata.

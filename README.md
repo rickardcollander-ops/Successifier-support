@@ -84,6 +84,8 @@ npm run dev
 
 - ✅ **Tickets** — AI-drafted replies with knowledge-base grounding
 - ✅ **Knowledge Base** — internal articles + public help center per tenant
+- ✅ **Knowledge Cards** — sent replies reconciled into one card per recurring
+  question, with contradiction detection and a human review queue
 - ✅ **Help Center** — branded, public, with AI chat per tenant
 - ✅ **Reports** — analytics, ROI/value tracking per tenant
 - ✅ **Gmail Integration** — email-to-ticket conversion

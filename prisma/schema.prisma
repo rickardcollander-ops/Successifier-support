@@ -50,6 +50,8 @@ model Tenant {
   ticketEvents   TicketEvent[]
   workSessions   AgentWorkSession[]
   csatResponses  CsatResponse[]
+  knowledgeCards KnowledgeCard[]
+  cardConflicts  KnowledgeCardConflict[]
 }
 
 // Per-tenant configuration of the inbox tabs (folders) shown on the tickets
@@ -364,6 +366,117 @@ model KnowledgeRevision {
   article KnowledgeBase @relation(fields: [articleId], references: [id], onDelete: Cascade)
 
   @@index([articleId, createdAt])
+}
+
+// A knowledge card is a knowledge IDENTITY: one question customers keep
+// asking, one currently-accepted answer, and every sent reply that confirmed
+// it. It replaces the old auto-learning in tickets/[id]/send, which wrote a
+// fresh KnowledgeBase article per sent reply (matched only on the first 50
+// chars of the subject), never merged them and never noticed when two
+// replies said opposite things — so the pile was pruned after 30 days
+// instead of being reconciled.
+//
+// The lifecycle is driven by lib/services/knowledge-cards.ts: a sent reply
+// either confirms an existing card, contradicts it (raising a
+// KnowledgeCardConflict for human review) or becomes a new card.
+model KnowledgeCard {
+  id       String @id @default(cuid())
+  tenantId String
+  // The canonical phrasing of the question, normalised when the card is
+  // created so repeated wordings of the same question land on one card.
+  question String @db.Text
+  // The currently accepted answer. Fed to the AI generator when the card is
+  // 'active'; never overwritten silently once an agent has curated it.
+  answer   String @db.Text
+  category String?
+  tags     String[]
+  // 'active'   — trusted; used for AI grounding.
+  // 'review'   — an open conflict makes the answer untrustworthy, so the
+  //              card is withheld from grounding until an agent resolves it.
+  // 'archived' — retired by an agent; never used.
+  status   String @default("active")
+  // How many sent replies have agreed with this answer, and when the most
+  // recent one did. Both feed ranking: a card confirmed twenty times last
+  // week is worth more than one confirmed once a year ago.
+  confirmedCount  Int      @default(1)
+  lastConfirmedAt DateTime @default(now())
+  // Set when an agent edits the answer by hand. A curated answer is never
+  // replaced automatically — a contradicting reply raises a conflict
+  // instead, so human judgement is not silently undone by a helper model.
+  curatedAt DateTime?
+  curatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sources   KnowledgeCardSource[]
+  conflicts KnowledgeCardConflict[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, lastConfirmedAt])
+}
+
+// One sent reply that supports a card's answer — the provenance trail that
+// lets an agent ask "why does the system believe this?" and read the actual
+// tickets behind it. Deliberately stores no customer email or body: the
+// subject is enough to find the ticket, and these rows are read while
+// looking at knowledge shared across customers.
+model KnowledgeCardSource {
+  id       String @id @default(cuid())
+  cardId   String
+  ticketId String
+  subject  String
+  // 'created'   — this reply established the card.
+  // 'confirmed' — it later agreed with the card's answer.
+  // 'contested' — it contradicted the card and raised a conflict. Kept as a
+  //               source anyway: the ticket is part of the card's history
+  //               and is exactly what an agent wants to open when judging
+  //               the disagreement.
+  role     String @default("confirmed")
+  sentAt   DateTime @default(now())
+
+  card KnowledgeCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  // A ticket supports a given card once, however many times it is processed.
+  @@unique([cardId, ticketId])
+  @@index([cardId, sentAt])
+}
+
+// A detected contradiction between a card's accepted answer and what an
+// agent just sent to a customer. Never resolved automatically: the whole
+// point is that a human decides which version is true, because picking
+// wrong here poisons every future AI answer on the topic.
+model KnowledgeCardConflict {
+  id       String @id @default(cuid())
+  tenantId String
+  cardId   String
+  // The ticket whose reply contradicted the card, for "see where this came
+  // from" in the review queue.
+  ticketId String
+  subject  String
+  // Snapshot of the card's answer AT DETECTION TIME. Kept verbatim rather
+  // than read live from the card, so the review queue keeps showing the two
+  // versions that actually disagreed even if the card moves on.
+  currentAnswer  String @db.Text
+  proposedAnswer String @db.Text
+  // The helper model's one-sentence account of what contradicts what. Shown
+  // to the agent as a hint, never as the deciding vote.
+  reason String @db.Text
+  // 'open' | 'resolved' | 'dismissed'
+  status String @default("open")
+  // How it was settled: 'kept_current' | 'accepted_proposed' | 'merged'.
+  resolution   String?
+  // The answer the agent settled on — what the card carries afterwards.
+  resolvedAnswer String? @db.Text
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  card   KnowledgeCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, createdAt])
+  @@index([cardId, createdAt])
 }
 
 // Per-tenant appearance of the public help center. One row per deployment;

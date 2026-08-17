@@ -17,6 +17,7 @@ import {
 import { decryptCredentials } from '@/lib/integrations/credentials';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
 import { buildCsatFooterHtml } from '@/lib/csat-token';
+import { recordSentReply } from '@/lib/services/knowledge-cards';
 
 export async function POST(
   request: NextRequest,
@@ -450,54 +451,25 @@ export async function POST(
       console.error('Failed to log send events:', eventError);
     }
 
-    // Learning system: Save sent response as knowledge base article
-    // This helps AI learn from actual responses sent to customers
-    try {
-      const existingKB = await prisma.knowledgeBase.findFirst({
-        where: {
-          tenantId: ticket.tenantId,
-          title: {
-            contains: ticket.subject.substring(0, 50),
-          },
-          category: 'Lärande från skickade svar',
-        },
-      });
-
-      if (!existingKB) {
-        // Keep the learning article free of direct identifiers: no
-        // customer email and only the first part of the question. These
-        // articles are fed into AI responses for OTHER customers, so
-        // anything stored here can resurface in someone else's reply.
-        const questionExcerpt = ticket.originalMessage
-          .split(/\n---\n/)[0]
-          .substring(0, 2000);
-        await prisma.knowledgeBase.create({
-          data: {
-            tenantId: ticket.tenantId,
-            title: `${ticket.subject.substring(0, 150)}`,
-            content: `# ${ticket.subject}
-
-## Kundfråga
-${questionExcerpt}
-
-## Skickat Svar (Verifierat)
-${response}
-
-## Metadata
-- Skickat: ${new Date().toISOString()}
-${(ticket.contextData as any)?.billecta ? `- Billecta-kontext: Ja (${(ticket.contextData as any).billecta.invoices?.length || 0} fakturor)` : ''}
-
-Detta svar har skickats till en riktig kund och är verifierat korrekt.`,
-            category: 'Lärande från skickade svar',
-            tags: ['verified-response', 'customer-sent', 'learning', ...ticket.subject.toLowerCase().split(' ').slice(0, 3)],
-            isActive: true,
-          },
-        });
-      }
-    } catch (error) {
-      console.error('Failed to create learning KB article:', error);
-      // Don't fail the send if KB creation fails
-    }
+    // Learning system: fold the sent reply into the tenant's knowledge
+    // cards — either confirming an existing card, contradicting one (which
+    // queues a conflict for review) or starting a new one. This replaced
+    // the old "write one KnowledgeBase article per sent reply" behaviour,
+    // which produced near-duplicates that nobody reconciled and that were
+    // deleted after 30 days rather than maintained.
+    //
+    // Only the first part of the customer's message is passed on, with the
+    // rest of the thread stripped: cards are shared knowledge, quoted back
+    // to OTHER customers, so anything stored here can resurface elsewhere.
+    // recordSentReply never throws — a failure here must not fail the send.
+    await recordSentReply({
+      tenantId: ticket.tenantId,
+      ticketId: ticket.id,
+      subject: ticket.subject,
+      question: ticket.originalMessage.split(/\n---\n/)[0].substring(0, 2000),
+      answer: response,
+      category: ticket.category,
+    });
 
     return NextResponse.json({ ...updatedTicket, sentVia });
   } catch (error: any) {
