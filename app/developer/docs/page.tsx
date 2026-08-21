@@ -655,6 +655,10 @@ app.listen(3000);`}</code>
               together with a <strong>Send test</strong> button that delivers a{' '}
               <span className="font-mono">ping</span> event.
             </li>
+            <li>
+              Redirects are not followed, and the endpoint&apos;s hostname must resolve to a public address —
+              checked before every delivery, not only at registration.
+            </li>
             <li>Rotating an endpoint&apos;s secret invalidates the old one immediately, so roll it out on your side first.</li>
           </ul>
         </div>

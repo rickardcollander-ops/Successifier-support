@@ -12,7 +12,7 @@ import {
   subscribesTo,
   ticketEventData,
 } from '@/lib/webhooks/events';
-import { validateWebhookUrl } from '@/lib/webhooks/url';
+import { isPrivateAddress, resolvesToPublicHost, validateWebhookUrl } from '@/lib/webhooks/url';
 
 const SECRET = 'whsec_test_secret';
 const BODY = JSON.stringify({ id: 'evt_1', type: 'ticket.created', data: { id: 't1' } });
@@ -186,5 +186,42 @@ describe('webhook URL validation', () => {
     expect(validateWebhookUrl('not a url').ok).toBe(false);
     expect(validateWebhookUrl('').ok).toBe(false);
     expect(validateWebhookUrl(null).ok).toBe(false);
+  });
+});
+
+describe('webhook SSRF guards', () => {
+  it('classifies resolved addresses, including IPv4-mapped IPv6', () => {
+    for (const ip of [
+      '127.0.0.1',
+      '10.1.2.3',
+      '172.16.0.1',
+      '172.31.255.255',
+      '192.168.0.1',
+      '169.254.169.254',
+      '100.64.0.1',
+      '::1',
+      'fd00::1',
+      'fe80::1',
+      '::ffff:169.254.169.254',
+    ]) {
+      expect(isPrivateAddress(ip), ip).toBe(true);
+    }
+
+    for (const ip of ['93.184.216.34', '8.8.8.8', '172.32.0.1', '2606:2800:220:1::']) {
+      expect(isPrivateAddress(ip), ip).toBe(false);
+    }
+  });
+
+  it('refuses a public hostname that resolves into the private network', async () => {
+    // The literal-host check passes — only resolution catches this, which is
+    // why it runs before every delivery and not just at registration.
+    expect(validateWebhookUrl('https://rebind.example.com/hooks', { allowLocal: false }).ok).toBe(true);
+    expect(await resolvesToPublicHost('localhost', { allowLocal: false })).toBe(false);
+  });
+
+  it('fails closed on a name that does not resolve', async () => {
+    expect(
+      await resolvesToPublicHost('nonexistent.invalid', { allowLocal: false }),
+    ).toBe(false);
   });
 });

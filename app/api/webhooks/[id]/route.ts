@@ -5,7 +5,7 @@ import { findScopedWebhook } from '@/lib/db/scoped';
 import { encrypt } from '@/lib/crypto';
 import { generateWebhookSecret } from '@/lib/webhooks/signature';
 import { normalizeSubscription } from '@/lib/webhooks/events';
-import { validateWebhookUrl } from '@/lib/webhooks/url';
+import { validateWebhookUrlResolved } from '@/lib/webhooks/url';
 
 const PUBLIC_SELECT = {
   id: true,
@@ -37,7 +37,7 @@ export async function PATCH(
     const data: Record<string, unknown> = {};
 
     if ('url' in body) {
-      const url = validateWebhookUrl(body.url);
+      const url = await validateWebhookUrlResolved(body.url);
       if (!url.ok) return NextResponse.json({ error: url.error }, { status: 400 });
       data.url = url.url;
     }

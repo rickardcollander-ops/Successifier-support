@@ -310,6 +310,8 @@ function verify(rawBody, header, secret) {
 - Delivery is at-least-once — use the envelope's `id` to stay idempotent.
 - After 15 consecutive failures the endpoint is disabled automatically; the portal
   shows the last error and re-enabling resumes deliveries.
+- Redirects are not followed, and the endpoint's hostname must resolve to a
+  public address — checked before every delivery, not only at registration.
 - Rotating the secret invalidates the old one immediately, so roll it out on your
   side first.
 

@@ -8,6 +8,7 @@ import {
   ticketEventData,
   type WebhookEnvelope,
 } from '@/lib/webhooks/events';
+import { resolvesToPublicHost } from '@/lib/webhooks/url';
 import {
   DELIVERY_HEADER,
   EVENT_HEADER,
@@ -65,6 +66,11 @@ async function attemptDelivery(
       headers,
       body,
       signal: AbortSignal.timeout(TIMEOUT_MS),
+      // Never follow a redirect: a receiver that answers 302 to
+      // http://169.254.169.254 would otherwise walk us straight into the
+      // metadata service, past the checks we did on the registered URL.
+      // A 3xx is not `ok`, so it is recorded as a failed delivery.
+      redirect: 'manual',
     });
     if (response.ok) return { ok: true, statusCode: response.status, error: null };
 
@@ -99,6 +105,28 @@ export async function deliverToEndpoint(
   const body = JSON.stringify(envelope);
   const secret = decryptIfEncrypted(endpoint.secret);
   const startedAt = Date.now();
+
+  // Re-check what the hostname resolves to on every delivery. The URL passed
+  // this test when it was registered, but the name belongs to the customer
+  // and can be repointed at our internal network afterwards.
+  const hostname = (() => {
+    try {
+      return new URL(endpoint.url).hostname;
+    } catch {
+      return '';
+    }
+  })();
+  if (!hostname || !(await resolvesToPublicHost(hostname))) {
+    const blocked: DeliveryResult = {
+      ok: false,
+      statusCode: null,
+      attempts: 0,
+      error: `Refused: ${hostname || endpoint.url} does not resolve to a public address`,
+      durationMs: Date.now() - startedAt,
+    };
+    await recordDelivery(endpoint, envelope, blocked);
+    return blocked;
+  }
 
   let last: { ok: boolean; statusCode: number | null; error: string | null } = {
     ok: false,

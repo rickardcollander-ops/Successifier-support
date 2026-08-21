@@ -5,7 +5,7 @@ import { getTenantId } from '@/lib/products/tenant';
 import { encrypt } from '@/lib/crypto';
 import { generateWebhookSecret } from '@/lib/webhooks/signature';
 import { normalizeSubscription } from '@/lib/webhooks/events';
-import { validateWebhookUrl } from '@/lib/webhooks/url';
+import { validateWebhookUrlResolved } from '@/lib/webhooks/url';
 
 // Endpoints a customer registers to receive ticket events. Operator-only,
 // like API keys: an API key must not be able to mint a new destination for
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    const url = validateWebhookUrl(body?.url);
+    const url = await validateWebhookUrlResolved(body?.url);
     if (!url.ok) return NextResponse.json({ error: url.error }, { status: 400 });
 
     const subscription = normalizeSubscription(body?.events);
