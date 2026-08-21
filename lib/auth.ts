@@ -29,6 +29,31 @@ const authSecret =
   process.env.NEXTAUTH_SECRET ||
   (process.env.NODE_ENV === "development" ? "local-dev-auth-secret-change-me" : undefined);
 
+// Without a secret Auth.js fails its config assertion before it ever routes a
+// request, so EVERY /api/auth/* endpoint answers 500 "There is a problem with
+// the server configuration" — /api/auth/csrf included, which means the Google
+// button on the sign-in page cannot even start the OAuth flow. That message
+// names no cause, so name it here: this line is what tells you which env var
+// is missing on a deployment that suddenly cannot log anyone in.
+if (!authSecret) {
+  console.error(
+    '[NextAuth] FATAL: neither AUTH_SECRET nor NEXTAUTH_SECRET is set on this ' +
+      'deployment. All /api/auth/* routes will return 500 and nobody can sign ' +
+      'in. Generate one with `openssl rand -base64 32`, add it to the ' +
+      'environment (both names, same value) and redeploy.',
+  );
+}
+
+// Same story for the Google credentials: the non-null assertions below hide a
+// missing value until Google rejects the authorize request with a useless
+// error, so say it up front.
+if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+  console.error(
+    '[NextAuth] FATAL: GOOGLE_CLIENT_ID and/or GOOGLE_CLIENT_SECRET is missing ' +
+      '— Google sign-in cannot work on this deployment.',
+  );
+}
+
 // Emails that may sign in regardless of allowedDomains AND are granted admin
 // (superadmin) access on every deployment — see the jwt callback, which forces
 // role = 'superadmin' for these regardless of the per-product User.role.
@@ -157,5 +182,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   pages: {
     signIn: '/auth/signin',
+    // Keep failures on our own branded page. The built-in /api/auth/error page
+    // renders an unbranded "Server error" with no hint of what to do; the
+    // sign-in page turns the same ?error= code into a Swedish explanation.
+    error: '/auth/signin',
   },
 });

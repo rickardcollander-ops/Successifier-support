@@ -22,12 +22,26 @@ ENCRYPTION_KEY=<32-byte hex, finns i Vercel env>
 
 **VIKTIGT:** Denna nyckel krypterar alla API-nycklar och integration credentials i databasen. Utan den kommer appen inte fungera. Om nyckeln roteras måste alla lagrade credentials krypteras om — gör inte det utan en migreringsplan.
 
-### 3. NextAuth
+### 3. NextAuth ⚠️ KRITISK
 ```
-NEXTAUTH_URL=https://doldadress.successifier.com
+NEXTAUTH_URL=https://<deployens egen domän>
 NEXTAUTH_SECRET=[generera med: openssl rand -base64 32]
 AUTH_SECRET=[samma som NEXTAUTH_SECRET]
 ```
+
+**`AUTH_SECRET` måste finnas på VARJE deploy och i varje environment**
+(Production, Preview, Development). Saknas den avbryter Auth.js sin
+konfigurationskontroll innan den ens dirigerar requesten, och **alla**
+`/api/auth/*`-rutter svarar 500 — inklusive `/api/auth/csrf`, som
+Google-knappen behöver för att över huvud taget starta OAuth-flödet.
+Symtomet är att man landar på `/api/auth/error` med den intetsägande texten
+"There is a problem with the server configuration". Se felsökningen längst
+ned.
+
+Sätter du upp en **ny domän** för en befintlig deploy räcker det inte att
+peka DNS dit: varje ny domän behöver egna redirect-URI:er i Google Cloud
+Console (avsnitt 5) och en egen `NEXTAUTH_URL`/`APP_BASE_URL` om den ska
+vara deployens kanoniska adress.
 
 ### 4. AI (Anthropic)
 ```
@@ -123,3 +137,36 @@ footer — en felkonfiguration blockerar aldrig själva utskicket.
 3. Uppdatera ENCRYPTION_KEY
 4. Kryptera om alla credentials med nya nyckeln
 5. Använd `scripts/encrypt-existing-credentials.cjs` för bulk-uppdatering
+
+## Felsökning: "There is a problem with the server configuration"
+
+Du landar på `/api/auth/error` (eller ser den röda rutan på `/auth/signin`)
+och kommer inte in i appen med Google.
+
+**Ställ diagnos på 5 sekunder** — `/api/auth/csrf` rör varken databasen,
+Google eller några callbacks. Den behöver bara `AUTH_SECRET`:
+
+```bash
+curl -s https://<din-domän>/api/auth/csrf
+```
+
+* `{"csrfToken":"..."}` → hemligheten finns, felet ligger längre fram i
+  flödet (Google-credentials, redirect-URI, databas). Kolla Vercel-loggen
+  för raderna `[NextAuth ERROR]`.
+* `{"message":"There was a problem with the server configuration..."}` →
+  Auth.js konfigurationskontroll faller. I praktiken alltid att
+  **`AUTH_SECRET`/`NEXTAUTH_SECRET` saknas på den deployen**.
+
+**Åtgärd:**
+
+1. Vercel → Project → Settings → Environment Variables.
+2. Lägg till `AUTH_SECRET` **och** `NEXTAUTH_SECRET` med samma värde
+   (`openssl rand -base64 32`), i alla environments som används.
+3. Redeploya — env-variabler slår inte igenom på en redan byggd deploy.
+4. Verifiera med `curl` ovan att `/api/auth/csrf` ger en token igen.
+
+Byter du värdet loggas alla ut (befintliga JWT-sessioner blir ogiltiga),
+men inget data går förlorat.
+
+`lib/auth.ts` loggar numera `[NextAuth] FATAL: ...` vid uppstart och namnger
+exakt vilken variabel som saknas — sök efter den raden i Vercel-loggen.

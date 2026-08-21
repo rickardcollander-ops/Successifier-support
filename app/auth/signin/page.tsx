@@ -5,9 +5,47 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { product } from '@/lib/products';
 
+interface SignInMessage {
+  text: string;
+  tone: 'error' | 'warning';
+}
+
+/**
+ * Turn an Auth.js ?error= code into something a human can act on. NextAuth
+ * sends the user here for every failure (pages.error in lib/auth.ts), so an
+ * unmapped code must still say *something* rather than silently render a
+ * plain sign-in box the user has already failed to get past.
+ */
+function signInErrorMessage(error: string | null, allowedDomain?: string): SignInMessage | null {
+  if (!error) return null;
+  switch (error) {
+    case 'AccessDenied':
+      return {
+        tone: 'error',
+        text: allowedDomain
+          ? `Åtkomst nekad. Bara @${allowedDomain}-konton kan logga in.`
+          : 'Åtkomst nekad. Ditt konto saknar behörighet till den här arbetsytan.',
+      };
+    case 'Configuration':
+      // Auth.js failed its config assertion — almost always a missing
+      // AUTH_SECRET/NEXTAUTH_SECRET or Google-credential on the deployment.
+      // Nothing the user can do, so point them at whoever can.
+      return {
+        tone: 'error',
+        text: 'Inloggningen är felkonfigurerad på servern och Google-inloggning kan inte startas. Kontakta administratören — serverloggen visar vilken miljövariabel som saknas.',
+      };
+    case 'Verification':
+      return { tone: 'warning', text: 'Inloggningslänken har gått ut eller är redan använd. Försök igen.' };
+    case 'OAuthAccountNotLinked':
+    default:
+      return { tone: 'warning', text: 'Det gick inte att logga in. Försök igen.' };
+  }
+}
+
 function SignInContent() {
   const searchParams = useSearchParams();
   const error = searchParams.get('error');
+  const message = signInErrorMessage(error, product.allowedDomains[0]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -21,15 +59,15 @@ function SignInContent() {
           </p>
         </div>
 
-        {error === 'AccessDenied' && (
-          <div className="mb-6 p-3 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300 text-center">
-            Åtkomst nekad. Bara @{product.allowedDomains[0]}-konton kan logga in.
-          </div>
-        )}
-
-        {error === 'OAuthAccountNotLinked' && (
-          <div className="mb-6 p-3 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-300 text-center">
-            Det gick inte att logga in. Försök igen.
+        {message && (
+          <div
+            className={`mb-6 p-3 bg-white dark:bg-slate-800 border rounded-lg text-sm text-center ${
+              message.tone === 'error'
+                ? 'border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+                : 'border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300'
+            }`}
+          >
+            {message.text}
           </div>
         )}
 
