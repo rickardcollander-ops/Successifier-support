@@ -581,6 +581,12 @@ performs account actions.
 | `DELETE` | `/api/integrations/:id` | Delete integration |
 | `POST` | `/api/integrations/:id/test` | Test integration credentials |
 
+### Specification
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/openapi` | OpenAPI 3.1 description of the API and its webhook events (import into Postman/Insomnia, or generate a client) |
+
 ### Webhooks
 
 | Method | Endpoint | Description |

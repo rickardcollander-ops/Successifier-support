@@ -47,6 +47,21 @@ Authorization: Bearer ${keyExample}`}</code>
         </pre>
       </section>
 
+      {/* Machine-readable spec */}
+      <section className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">Machine-readable spec</h2>
+        <p className="text-slate-600 dark:text-slate-400 mb-4">
+          The whole API — endpoints, schemas and the outbound webhook events — is described as
+          OpenAPI 3.1 at <span className="font-mono">GET /api/openapi</span>. Import it into
+          Postman or Insomnia, or generate a client from it. It is served behind the same API key
+          you are about to use, so tooling can fetch it directly:
+        </p>
+        <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto">
+          <code>{`curl -H "X-API-Key: ${keyExample}" \\
+  ${appDomain}/api/openapi -o support-api.json`}</code>
+        </pre>
+      </section>
+
       {/* Help Center & AI Chatbot on your own site */}
       <section className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 space-y-5">
         <div>
