@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/client';
 import { requireApiAuth } from '@/lib/api-auth';
 import { findScopedTicket } from '@/lib/db/scoped';
 import { auth } from '@/lib/auth';
+import { queueTicketWebhook } from '@/lib/webhooks/dispatch';
 import {
   eventsFromTicketPatch,
   eventActor,
@@ -111,6 +112,10 @@ export async function PATCH(
       prisma,
       eventsFromTicketPatch(existing, data, actor ?? EVENT_ACTOR.api)
     );
+
+    // Outbound webhook for integrators mirroring ticket state into their
+    // own systems. Queued so a slow receiver can't stall the PATCH.
+    queueTicketWebhook('ticket.updated', ticket);
 
     return NextResponse.json(ticket);
   } catch (error) {

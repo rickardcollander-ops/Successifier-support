@@ -16,6 +16,7 @@ import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 import { parseFramerForm } from '@/lib/services/inbound-forms';
 import { getMessageAttachments } from '@/lib/integrations/gmail-attachments';
 import { gmailOAuthClient } from '@/lib/integrations/gmail-account';
+import { saveAiDraft } from '@/lib/services/ai-draft';
 
 async function syncSingleAccount(account: {
   id: string;
@@ -354,15 +355,7 @@ async function syncSingleAccount(account: {
             const { response: aiResponse, confidence } = await generateAIResponse(
               subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined
             );
-            // Raw SQL so we don't bump updatedAt — AI generation is not
-            // customer activity and should not reorder the ticket list.
-            await prisma.$executeRaw`
-              UPDATE "Ticket"
-              SET "aiResponse" = ${aiResponse},
-                  "aiConfidence" = ${confidence},
-                  "contentRefreshedAt" = NOW()
-              WHERE id = ${ticket.id}
-            `;
+            await saveAiDraft({ ticketId: ticket.id, aiResponse, confidence });
           } catch (error) {
             console.error(error);
           }
@@ -380,15 +373,7 @@ async function syncSingleAccount(account: {
               const { response: aiResponse, confidence } = await generateAIResponse(
                 ticket.subject, ticket.originalMessage, contextData, tenant.id, ticket.id, customerEmail, customerName || undefined
               );
-              // Raw SQL so we don't bump updatedAt — AI generation is not
-              // customer activity and should not reorder the ticket list.
-              await prisma.$executeRaw`
-                UPDATE "Ticket"
-                SET "aiResponse" = ${aiResponse},
-                    "aiConfidence" = ${confidence},
-                    "contentRefreshedAt" = NOW()
-                WHERE id = ${ticket.id}
-              `;
+              await saveAiDraft({ ticketId: ticket.id, aiResponse, confidence });
             } catch (error) {
               console.error(error);
             }

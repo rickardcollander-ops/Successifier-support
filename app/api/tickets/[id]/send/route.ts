@@ -17,6 +17,7 @@ import {
 import { decryptCredentials } from '@/lib/integrations/credentials';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
 import { buildCsatFooterHtml } from '@/lib/csat-token';
+import { queueTicketWebhook } from '@/lib/webhooks/dispatch';
 
 export async function POST(
   request: NextRequest,
@@ -449,6 +450,10 @@ export async function POST(
     } catch (eventError) {
       console.error('Failed to log send events:', eventError);
     }
+
+    // Outbound webhook: the reply left the building. Queued so the agent's
+    // send never waits on a customer's receiver.
+    queueTicketWebhook('ticket.response_sent', updatedTicket);
 
     // Learning system: Save sent response as knowledge base article
     // This helps AI learn from actual responses sent to customers

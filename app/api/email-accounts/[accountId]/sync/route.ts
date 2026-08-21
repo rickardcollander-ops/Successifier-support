@@ -15,6 +15,7 @@ import { htmlToText, isHtml } from '@/lib/utils/html-to-text';
 import { parseFramerForm } from '@/lib/services/inbound-forms';
 import { getMessageAttachments } from '@/lib/integrations/gmail-attachments';
 import { gmailOAuthClient } from '@/lib/integrations/gmail-account';
+import { saveAiDraft } from '@/lib/services/ai-draft';
 
 export async function POST(
   request: NextRequest,
@@ -324,15 +325,7 @@ export async function POST(
               const { response, confidence } = await generateAIResponse(
                 subject, body || 'No content', contextData, tenant.id, ticket.id, customerEmail, customerName || undefined
               );
-              // Raw SQL so we don't bump updatedAt — AI generation is not
-              // customer activity and should not reorder the ticket list.
-              await prisma.$executeRaw`
-                UPDATE "Ticket"
-                SET "aiResponse" = ${response},
-                    "aiConfidence" = ${confidence},
-                    "contentRefreshedAt" = NOW()
-                WHERE id = ${ticket.id}
-              `;
+              await saveAiDraft({ ticketId: ticket.id, aiResponse: response, confidence });
             } catch (error) {
               console.error(error);
             }
@@ -348,15 +341,7 @@ export async function POST(
               const { response, confidence } = await generateAIResponse(
                 ticket.subject, ticket.originalMessage, contextData, tenant.id, ticket.id, customerEmail, customerName || undefined
               );
-              // Raw SQL so we don't bump updatedAt — AI generation is not
-              // customer activity and should not reorder the ticket list.
-              await prisma.$executeRaw`
-                UPDATE "Ticket"
-                SET "aiResponse" = ${response},
-                    "aiConfidence" = ${confidence},
-                    "contentRefreshedAt" = NOW()
-                WHERE id = ${ticket.id}
-              `;
+              await saveAiDraft({ ticketId: ticket.id, aiResponse: response, confidence });
             } catch (error) {
               console.error(error);
             }

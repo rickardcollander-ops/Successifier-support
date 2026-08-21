@@ -87,7 +87,8 @@ npm run dev
 - ✅ **Help Center** — branded, public, with AI chat per tenant
 - ✅ **Reports** — analytics, ROI/value tracking per tenant
 - ✅ **Gmail Integration** — email-to-ticket conversion
-- ✅ **Public API + SDK** — per-tenant API keys (`/developer`)
+- ✅ **Public API + webhooks** — per-tenant API keys, signed outbound
+  ticket events and a copy-paste TypeScript client (`/developer`)
 - ✅ **Multi-tenant** — branding, agents, language & integrations per tenant
 
 ## Integrations (per tenant, toggled in settings)

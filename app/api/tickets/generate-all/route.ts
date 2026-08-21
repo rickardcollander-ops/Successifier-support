@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
 import { generateAIResponse } from '@/lib/services/ai-generator';
 import { requireApiAuth, requireSession } from '@/lib/api-auth';
+import { saveAiDraft } from '@/lib/services/ai-draft';
 
 export async function POST() {
   const authResult = await requireSession();
@@ -38,15 +39,7 @@ export async function POST() {
           tenant.id
         );
 
-        // Raw SQL so we don't bump updatedAt — AI generation is not
-        // customer activity and should not reorder the ticket list.
-        await prisma.$executeRaw`
-          UPDATE "Ticket"
-          SET "aiResponse" = ${aiResponse},
-              "aiConfidence" = ${confidence},
-              "contentRefreshedAt" = NOW()
-          WHERE id = ${ticket.id}
-        `;
+        await saveAiDraft({ ticketId: ticket.id, aiResponse, confidence });
 
         results.push({
           ticketId: ticket.id,

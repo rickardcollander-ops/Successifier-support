@@ -50,6 +50,7 @@ model Tenant {
   ticketEvents   TicketEvent[]
   workSessions   AgentWorkSession[]
   csatResponses  CsatResponse[]
+  webhooks       WebhookEndpoint[]
 }
 
 // Per-tenant configuration of the inbox tabs (folders) shown on the tickets
@@ -554,4 +555,68 @@ model ApiKey {
 
   @@index([tenantId])
   @@index([key])
+}
+
+// Outbound webhooks — the push half of the public API. A customer registers
+// an HTTPS endpoint here and we POST a signed JSON envelope to it whenever a
+// ticket in their tenant changes, so their own systems (CRM, Slack bot,
+// warehouse, whatever) stay in sync without polling /api/tickets.
+//
+// Every delivery carries an X-Successifier-Signature header, HMAC-SHA256 over
+// "<timestamp>.<raw body>" with this endpoint's secret — the same scheme the
+// Developer Portal documents. The secret is encrypted at rest (lib/crypto)
+// and shown in plaintext exactly once, at creation or rotation.
+model WebhookEndpoint {
+  id          String  @id @default(cuid())
+  tenantId    String
+  url         String
+  description String?
+  // Encrypted (iv:authTag:ciphertext). Never returned by the API.
+  secret      String
+  // Event types this endpoint wants. Empty means "every event", so a new
+  // event type reaches existing integrations without them re-registering.
+  events      String[]
+  isActive    Boolean @default(true)
+
+  // Rolling health, so the portal can show a dead endpoint without anyone
+  // opening the delivery log.
+  lastDeliveryAt      DateTime?
+  lastStatusCode      Int?
+  lastError           String?
+  consecutiveFailures Int       @default(0)
+  // Set when we auto-disabled the endpoint after too many failures in a row.
+  autoDisabledAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([tenantId])
+}
+
+// Delivery log — one row per event per endpoint, kept so a customer can see
+// exactly what we sent and what came back while they are building against
+// the webhook. Trimmed to the newest MAX_DELIVERY_LOG rows per endpoint by
+// lib/webhooks/dispatch.ts.
+model WebhookDelivery {
+  id         String  @id @default(cuid())
+  tenantId   String
+  endpointId String
+  event      String
+  // The exact envelope we POSTed, so a failed delivery can be replayed.
+  payload    Json
+  // 'success' | 'failed'
+  status     String
+  statusCode Int?
+  attempts   Int     @default(1)
+  error      String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+  @@index([tenantId, createdAt])
 }

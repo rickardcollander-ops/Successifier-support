@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { Key, Copy, Trash2, Plus, CheckCircle } from 'lucide-react';
-import { product } from '@/lib/products';
 
 interface ApiKey {
   id: string;
@@ -22,6 +21,13 @@ export default function DeveloperPage() {
   const [newKeyName, setNewKeyName] = useState('');
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  // Examples should show the domain the admin is actually on, so they can be
+  // pasted into a terminal as-is.
+  const [origin, setOrigin] = useState('');
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   useEffect(() => {
     fetchApiKeys();
@@ -132,7 +138,14 @@ export default function DeveloperPage() {
           className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 hover:border-[#7C5CFF] transition-colors"
         >
           <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">📚 API Documentation</h3>
-          <p className="text-sm text-slate-600 dark:text-slate-400">Complete API reference and guides</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400">Endpoints, payloads, errors and limits</p>
+        </a>
+        <a
+          href="/developer/webhooks"
+          className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 hover:border-[#7C5CFF] transition-colors"
+        >
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">🔔 Webhooks</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400">Get ticket events pushed to your systems</p>
         </a>
         <a
           href="/developer/docs#logged-in-chatbot"
@@ -145,18 +158,52 @@ export default function DeveloperPage() {
           href="/developer/sdk"
           className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 hover:border-[#7C5CFF] transition-colors"
         >
-          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">📦 Node.js SDK</h3>
-          <p className="text-sm text-slate-600 dark:text-slate-400">Install and use our Node.js SDK</p>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">📦 Client &amp; examples</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400">A ready-to-paste TypeScript client</p>
         </a>
-        <a
-          href={`https://github.com/${product.key}/api-examples`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 hover:border-[#7C5CFF] transition-colors"
-        >
-          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">💻 Code Examples</h3>
-          <p className="text-sm text-slate-600 dark:text-slate-400">Sample code and integrations</p>
-        </a>
+      </div>
+
+      {/* Quick start — the shortest path from "no integration" to a first
+          ticket, so an evaluating customer can try the API in one sitting. */}
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Quick start</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+            Three steps from nothing to a ticket created from your own system.
+          </p>
+        </div>
+
+        <ol className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
+          <li>
+            <strong className="text-slate-900 dark:text-slate-100">1. Create an API key</strong> — use{' '}
+            <em>Create API Key</em> above. The key is shown once; store it as a secret in your backend.
+          </li>
+          <li>
+            <strong className="text-slate-900 dark:text-slate-100">2. Create your first ticket</strong>
+            <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg overflow-x-auto mt-2">
+              <code>{`curl -X POST ${origin || 'https://your-subdomain.example.com'}/api/tickets \\
+  -H "X-API-Key: $SUPPORT_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "customerEmail": "customer@example.com",
+    "subject": "Need help with billing",
+    "originalMessage": "I have a question about my invoice..."
+  }'`}</code>
+            </pre>
+          </li>
+          <li>
+            <strong className="text-slate-900 dark:text-slate-100">3. Receive events instead of polling</strong> —
+            register an endpoint under{' '}
+            <a href="/developer/webhooks" className="text-[#7C5CFF] hover:underline">
+              Webhooks
+            </a>{' '}
+            and we POST every ticket change to it, signed. The{' '}
+            <a href="/developer/docs#webhooks" className="text-[#7C5CFF] hover:underline">
+              webhook guide
+            </a>{' '}
+            has the verification snippet.
+          </li>
+        </ol>
       </div>
 
       {/* API Keys List */}

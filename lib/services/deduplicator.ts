@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/client';
 import type { Prisma } from '@prisma/client';
 import { logTicketEvent, TICKET_EVENT, EVENT_ACTOR } from '@/lib/services/ticket-events';
+import { queueTicketWebhook } from '@/lib/webhooks/dispatch';
 
 // Window used to detect duplicates. Two messages from the same sender with
 // the same normalized subject within this span are treated as the same
@@ -70,7 +71,7 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
   const refTime = (input.receivedAt ?? new Date()).getTime();
   const since = new Date(refTime - DUPLICATE_WINDOW_MS);
 
-  return await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     // Serialize all concurrent inserts with the same sender+subject for
     // this tenant. The lock is automatically released at the end of the
     // transaction regardless of outcome.
@@ -252,4 +253,19 @@ export async function upsertTicket(input: UpsertTicketInput): Promise<UpsertTick
 
     return { ticket: created, created: true, merged: false };
   });
+
+  // Outbound webhooks. Every creation path (API, inbound webhook, Gmail
+  // sync, contact form) funnels through here, so registering the hook once
+  // at this choke point is what makes the public event stream complete.
+  // Queued, never awaited: a customer's slow receiver must not slow down
+  // ticket intake.
+  if (result.ticket) {
+    if (result.created) {
+      queueTicketWebhook('ticket.created', result.ticket, input.tenantId);
+    } else if (result.merged) {
+      queueTicketWebhook('ticket.updated', result.ticket, input.tenantId);
+    }
+  }
+
+  return result;
 }

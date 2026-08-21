@@ -33,3 +33,14 @@ export async function findScopedEmailAccount(id: string) {
     where: { id, ...(tenantId ? { user: { tenantId } } : {}) },
   });
 }
+
+/**
+ * Find a webhook endpoint belonging to this deployment's tenant, so an id
+ * taken from the URL can never reach another tenant's destination.
+ */
+export async function findScopedWebhook(id: string) {
+  const tenantId = await getTenantId();
+  return prisma.webhookEndpoint.findFirst({
+    where: { id, ...(tenantId ? { tenantId } : {}) },
+  });
+}

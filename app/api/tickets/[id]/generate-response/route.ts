@@ -5,6 +5,7 @@ import { generateAIResponse } from '@/lib/services/ai-generator';
 import { requireApiAuth } from '@/lib/api-auth';
 import { findScopedTicket } from '@/lib/db/scoped';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
+import { saveAiDraft } from '@/lib/services/ai-draft';
 
 export async function POST(
   request: NextRequest,
@@ -76,18 +77,9 @@ export async function POST(
     );
 
     step = 'save-to-db';
-    // Raw SQL so we don't bump updatedAt — AI generation is not customer
-    // activity and should not reorder the ticket list. The manual
-    // "Generera AI" button regenerates a draft without implying new
-    // customer action, so position in the sorted list should stay stable.
-    await prisma.$executeRaw`
-      UPDATE "Ticket"
-      SET "aiResponse" = ${aiResponse},
-          "aiConfidence" = ${confidence},
-          "contextData" = ${JSON.stringify(context)}::jsonb,
-          "contentRefreshedAt" = NOW()
-      WHERE id = ${id}
-    `;
+    // The manual "Generera AI" button regenerates a draft without implying
+    // new customer action, so position in the sorted list stays stable.
+    await saveAiDraft({ ticketId: id, aiResponse, confidence, contextData: context });
 
     // Return the full updated ticket for the frontend to merge into state.
     const updatedTicket = await prisma.ticket.findUnique({ where: { id } });

@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { getTenant } from '@/lib/products/tenant';
 import { generateAIResponse } from '@/lib/services/ai-generator';
+import { saveAiDraft } from '@/lib/services/ai-draft';
 import { upsertTicket } from '@/lib/services/deduplicator';
 import { sanitizeInboundText } from '@/lib/services/sanitize';
 import { requireApiAuth } from '@/lib/api-auth';
@@ -211,15 +212,7 @@ export async function POST(request: NextRequest) {
           const { response, confidence } = await generateAIResponse(
             subject, originalMessage, null, tenant.id, ticket.id, customerEmail, customerName || undefined
           );
-          // Raw SQL so we don't bump updatedAt — AI generation is not
-          // customer activity and should not reorder the ticket list.
-          await prisma.$executeRaw`
-            UPDATE "Ticket"
-            SET "aiResponse" = ${response},
-                "aiConfidence" = ${confidence},
-                "contentRefreshedAt" = NOW()
-            WHERE id = ${ticket.id}
-          `;
+          await saveAiDraft({ ticketId: ticket.id, aiResponse: response, confidence });
           console.log(`AI response generated for ticket ${ticket.id} with ${Math.round(confidence * 100)}% confidence`);
         } catch (error) {
           console.error(`Failed to generate AI response for ticket ${ticket.id}:`, error);

@@ -214,32 +214,104 @@ If Doldadress has contact forms, chatbots, or other external sources that should
 ```json
 {
   "success": true,
-  "ticketId": "cmlb49srj00003se5j3w"
+  "ticketId": "cmlb49srj00003se5j3w",
+  "merged": false
 }
 ```
+
+`merged: true` means the message joined an existing ticket instead of opening a
+new one — a `Re:`/`Sv:` subject reopens the customer's matching ticket, and
+repeats of the same message within 10 minutes are merged rather than duplicated.
 
 **Note:** The webhook automatically triggers context aggregation from all active integrations.
 
 ### 3.2 Outbound Webhooks (Receive Ticket Events)
 
-Successifier can notify your systems when ticket events occur. Configure a webhook URL in settings to receive:
+Successifier pushes ticket events to your systems so you don't have to poll
+`/api/tickets`. Register an HTTPS endpoint under **Developer → Webhooks** in the
+portal; you get a signing secret shown once, a **Send test** button, and a log of
+the last 50 deliveries with response codes and errors.
 
-```json
+**Event types:**
+
+| Event | Fires when |
+|-------|------------|
+| `ticket.created` | A ticket is opened — API, inbound webhook, contact form or inbox sync |
+| `ticket.updated` | Status, priority, assignee or customer fields change (incl. a customer follow-up merged into the ticket) |
+| `ticket.ai_response_generated` | The AI draft finished generating (it is `null` on `ticket.created`) |
+| `ticket.response_sent` | A reply was sent to the customer |
+| `ping` | Test delivery from the portal's **Send test** button |
+
+An endpoint with no events selected receives all of them, including event types
+added later.
+
+**What we POST:**
+
+```http
+POST https://your-server.example.com/hooks/support
+Content-Type: application/json
+X-Successifier-Signature: t=1755777600,v1=6c4f…
+X-Successifier-Event: ticket.created
+X-Successifier-Delivery: evt_9f1c2b7d0a4e
+
 {
+  "id": "evt_9f1c2b7d0a4e",
   "type": "ticket.created",
+  "createdAt": "2026-08-21T09:15:00.000Z",
+  "tenantId": "cmlb49srj00003se5",
   "data": {
-    "id": "ticket_id",
+    "id": "cmlb49srj00003se5j3w",
     "customerEmail": "customer@example.com",
-    "subject": "...",
-    "status": "new"
+    "customerName": "Customer Name",
+    "subject": "Support request subject",
+    "status": "new",
+    "priority": "normal",
+    "category": null,
+    "originalMessage": "The full message content...",
+    "aiResponse": null,
+    "aiConfidence": null,
+    "finalResponse": null,
+    "assignedTo": null,
+    "sentBy": null,
+    "sentAt": null,
+    "createdAt": "2026-08-21T09:15:00.000Z",
+    "updatedAt": "2026-08-21T09:15:00.000Z"
   }
 }
 ```
 
-**Event types:**
-- `ticket.created` - New ticket created
-- `ticket.updated` - Ticket status/priority changed
-- `ticket.ai_response_generated` - AI response is ready for review
+The ticket's `contextData` (records fetched from Stripe/Billecta/Retool, mail
+attachments) is deliberately **not** in the payload — read it from
+`GET /api/tickets/:id` with an API key if you need it.
+
+**Verifying the signature.** `X-Successifier-Signature` is
+`t=<unix seconds>,v1=<hex>`, where the HMAC-SHA256 is taken over
+`"<t>.<raw request body>"` with the endpoint's secret. Verify against the **raw**
+body — re-serializing parsed JSON changes the bytes:
+
+```js
+const crypto = require('crypto');
+
+function verify(rawBody, header, secret) {
+  const parts = Object.fromEntries(header.split(',').map((p) => p.trim().split('=')));
+  const expected = crypto.createHmac('sha256', secret).update(parts.t + '.' + rawBody).digest('hex');
+  const a = Buffer.from(expected, 'utf8');
+  const b = Buffer.from(parts.v1 || '', 'utf8');
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+  // Reject replays of an old delivery.
+  return Math.abs(Math.floor(Date.now() / 1000) - Number(parts.t)) <= 300;
+}
+```
+
+**Delivery semantics:**
+
+- Answer with any `2xx` within 10 seconds; anything else counts as a failure.
+- Failures are retried twice (after 1s and 3s). A `4xx` other than `429` is not retried.
+- Delivery is at-least-once — use the envelope's `id` to stay idempotent.
+- After 15 consecutive failures the endpoint is disabled automatically; the portal
+  shows the last error and re-enabling resumes deliveries.
+- Rotating the secret invalidates the old one immediately, so roll it out on your
+  side first.
 
 ---
 
@@ -509,11 +581,20 @@ performs account actions.
 | `DELETE` | `/api/integrations/:id` | Delete integration |
 | `POST` | `/api/integrations/:id/test` | Test integration credentials |
 
-### Webhook
+### Webhooks
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/webhook/ticket` | Create ticket from external source |
+| `POST` | `/api/webhook/ticket` | Create ticket from external source (inbound) |
+| `GET` | `/api/webhooks` | List registered outbound endpoints |
+| `POST` | `/api/webhooks` | Register an endpoint (returns the signing secret once) |
+| `PATCH` | `/api/webhooks/:id` | Update url/events/active state, or rotate the secret |
+| `DELETE` | `/api/webhooks/:id` | Delete an endpoint |
+| `POST` | `/api/webhooks/:id/test` | Send a `ping` delivery and return the result |
+| `GET` | `/api/webhooks/:id/deliveries` | Recent deliveries with status codes and errors |
+
+Outbound webhook management is operator-only (signed-in settings admin); API keys
+are not accepted, so a key can never mint a new destination for ticket data.
 
 ---
 
