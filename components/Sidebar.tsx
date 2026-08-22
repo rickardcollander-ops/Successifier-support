@@ -21,6 +21,7 @@ import {
   LogOut
 } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
+import TenantSwitcher from "./TenantSwitcher";
 
 type NavItem = {
   href: string;
@@ -103,6 +104,9 @@ export default function Sidebar() {
           </button>
         </div>
       </div>
+
+      {/* Workspace switcher — superadmins only (lib/tenant-switch.ts) */}
+      {isSuperadmin && <TenantSwitcher collapsed={collapsed} />}
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto">

@@ -7,8 +7,8 @@ import {
   hostToSubdomain,
   resolveTenantBySubdomain,
   resolveTenantForRequest,
-  resolveTenantFromHeaders,
 } from '@/lib/products/tenant';
+import { resolveTenantForSession, type SessionIdentity } from '@/lib/tenant-switch';
 import { billingState } from '@/lib/billing';
 
 export { generateApiKey, hashApiKey, maskApiKey } from '@/lib/api-keys';
@@ -88,15 +88,12 @@ export async function validateApiKey(request: NextRequest): Promise<{ valid: boo
 type SessionAuth = { ok: true; via: 'session'; userEmail: string; role: string };
 
 /**
- * Install the signed-in user's tenant as the request context: the tenant on
- * the session token first, then host subdomain / env pin as fallback.
+ * Install the signed-in user's tenant as the request context: a superadmin's
+ * active tenant switch first, then the tenant on the session token, then host
+ * subdomain / env pin as fallback (see lib/tenant-switch.ts).
  */
-async function enterSessionTenant(tenantId?: string | null): Promise<void> {
-  if (tenantId) {
-    await resolveTenantForRequest({ tenantId });
-  } else {
-    await resolveTenantFromHeaders();
-  }
+async function enterSessionTenant(user: SessionIdentity): Promise<void> {
+  await resolveTenantForSession(user);
 }
 type ApiKeyAuth = { ok: true; via: 'api-key'; tenantId: string };
 type AuthFailure = { ok: false; response: NextResponse };
@@ -140,7 +137,7 @@ function billingBlock(role?: string): AuthFailure | null {
 export async function requireApiAuth(request: NextRequest): Promise<ApiAuthResult> {
   const session = await auth();
   if (session?.user?.email) {
-    await enterSessionTenant(session.user.tenantId);
+    await enterSessionTenant(session.user);
     const blocked = billingBlock(session.user.role);
     if (blocked) return blocked;
     return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role || 'agent' };
@@ -166,7 +163,7 @@ export async function requireApiAuth(request: NextRequest): Promise<ApiAuthResul
 export async function requireSession(): Promise<SessionAuth | AuthFailure> {
   const session = await auth();
   if (session?.user?.email) {
-    await enterSessionTenant(session.user.tenantId);
+    await enterSessionTenant(session.user);
     const blocked = billingBlock(session.user.role);
     if (blocked) return blocked;
     return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role || 'agent' };
@@ -183,7 +180,7 @@ export async function requireSuperadmin(): Promise<SessionAuth | AuthFailure> {
   if (session.user.role !== 'superadmin') {
     return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
-  await enterSessionTenant(session.user.tenantId);
+  await enterSessionTenant(session.user);
   return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role };
 }
 
@@ -200,7 +197,7 @@ export async function requireSettingsAdmin(): Promise<SessionAuth | AuthFailure>
   if (!session.user.isSettingsAdmin) {
     return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
-  await enterSessionTenant(session.user.tenantId);
+  await enterSessionTenant(session.user);
   const blocked = billingBlock(session.user.role);
   if (blocked) return blocked;
   return { ok: true, via: 'session', userEmail: session.user.email, role: session.user.role || 'agent' };

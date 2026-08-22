@@ -42,6 +42,25 @@ can be managed via:
 - `GET/PATCH /api/admin/tenants/:id` — read/update a tenant's settings and
   see the effective merged config (superadmin)
 
+## Switching workspace as superadmin
+
+A superadmin's own user belongs to one tenant like everybody else's, and the
+session's tenant beats the host subdomain when a request resolves its tenant.
+So looking inside a customer's workspace is an explicit switch, not something
+the role grants by itself:
+
+- The workspace picker at the top of the sidebar (superadmins only), or
+  **Öppna** on any tenant in `/admin`.
+- `POST /api/admin/tenants/switch` with `{ "tenantId": "..." }` — or
+  `{ "tenantId": null }` to go back to your own workspace.
+
+The switch is a `sa_tenant` cookie holding the tenant id, honoured for 12
+hours and **only** for sessions whose role is `superadmin` (forced from
+`SUPERADMIN_EMAILS`, so it can't be self-assigned). Every other role's cookie
+is ignored, so it never widens anyone's access. While switched, the sidebar
+picker turns amber so it's obvious you're looking at someone else's data.
+See `lib/tenant-switch.ts`.
+
 ## Quick Start (development)
 
 1. **Install dependencies:**

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Shield, Plus, Building2, Users, Ticket, BookOpen, Bot, Loader2, Settings2, ChevronDown } from 'lucide-react';
+import { Shield, Plus, Building2, Users, Ticket, BookOpen, Bot, Loader2, Settings2, ChevronDown, LogIn } from 'lucide-react';
 import TenantSettingsEditor from '@/components/admin/TenantSettingsEditor';
 
 interface Tenant {
@@ -40,6 +40,7 @@ export default function AdminPage() {
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [openTenantId, setOpenTenantId] = useState<string | null>(null);
+  const [enteringId, setEnteringId] = useState<string | null>(null);
 
   const loadTenants = async () => {
     setError(null);
@@ -61,6 +62,28 @@ export default function AdminPage() {
   useEffect(() => {
     loadTenants();
   }, []);
+
+  // Switch our superadmin session into a tenant's workspace and land in its
+  // inbox. A hard navigation, so every tenant-scoped fetch starts fresh.
+  const handleEnter = async (tenantId: string) => {
+    setError(null);
+    setEnteringId(tenantId);
+    try {
+      const res = await fetch('/api/admin/tenants/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Kunde inte öppna arbetsytan (${res.status})`);
+      }
+      window.location.href = '/tickets';
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Något gick fel');
+      setEnteringId(null);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,6 +234,19 @@ export default function AdminPage() {
                     <Stat icon={Ticket} label="Ärenden" value={tn._count.tickets} />
                     <Stat icon={BookOpen} label="Artiklar" value={tn._count.knowledge} />
                     <Stat icon={Bot} label="Agenter" value={tn._count.agents} />
+                    <button
+                      type="button"
+                      onClick={() => handleEnter(tn.id)}
+                      disabled={enteringId !== null}
+                      className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:border-white/25 disabled:opacity-50"
+                    >
+                      {enteringId === tn.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <LogIn className="h-3.5 w-3.5" />
+                      )}
+                      Öppna
+                    </button>
                     <button
                       type="button"
                       onClick={() => setOpenTenantId(openTenantId === tn.id ? null : tn.id)}
