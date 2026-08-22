@@ -475,6 +475,17 @@ model User {
   emailVerified DateTime?
   image         String?
   role          String    @default("agent")
+  // Account lifecycle, independent of the sign-in provider:
+  //   'invited'  — provisioned by an admin, has never signed in
+  //   'active'   — has signed in at least once
+  //   'disabled' — access revoked; kept for ticket history and audit
+  // The jwt callback re-reads this on every refresh, so disabling an
+  // account takes effect within SESSION_REFRESH_SECONDS rather than at
+  // token expiry (see lib/auth.ts).
+  status        String    @default("active")
+  invitedAt     DateTime?
+  invitedByEmail String?
+  lastLoginAt   DateTime?
   tenantId      String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -505,6 +516,17 @@ model Account {
 
   @@unique([provider, providerAccountId])
   @@index([userId])
+}
+
+// Single-use magic-link tokens. Written by the Prisma adapter when a link is
+// requested and deleted the moment it is redeemed, so a link never works
+// twice. Auth.js stores a HASH of the token here, not the value mailed out.
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 model Session {

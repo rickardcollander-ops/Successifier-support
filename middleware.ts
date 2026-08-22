@@ -1,5 +1,13 @@
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
 import { NextResponse } from "next/server";
+
+// The middleware runs on the edge, where neither Prisma nor the Resend SDK
+// can be bundled — so it builds its own NextAuth instance from the edge-safe
+// half of the config instead of importing lib/auth.ts. It only ever READS the
+// session cookie, which needs no database: both instances share AUTH_SECRET,
+// so the token issued server-side verifies here.
+const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;

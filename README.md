@@ -31,16 +31,40 @@ on the same codebase.
 
 ```bash
 node scripts/create-tenant.js acme "Acme AB" --admin anna@acme.se --domain acme.se
+# …or, for a customer on neither Google nor Microsoft:
+node scripts/create-tenant.js acme "Acme AB" --admin anna@acme.se --auth resend
 ```
 
 This creates the tenant with sensible branding defaults, allowlists the
-customer's email domain for Google sign-in and provisions their first admin
-user. The tenant is then served at `https://acme.<TENANT_ROOT_DOMAIN>` and
+customer's email domain for sign-in and provisions their first admin user
+(as an invitation — the account flips to active on their first sign-in).
+The tenant is then served at `https://acme.<TENANT_ROOT_DOMAIN>` and
 can be managed via:
 
 - `GET/POST /api/admin/tenants` — list/create tenants (superadmin)
 - `GET/PATCH /api/admin/tenants/:id` — read/update a tenant's settings and
   see the effective merged config (superadmin)
+
+### Who may sign in
+
+Access is decided by the `User` row, not by the sign-in provider — see
+`lib/auth-policy.ts`, which both the NextAuth callback and the invite API
+read so the rule can't drift between them:
+
+- **Invited users** (a `User` row with this tenant's `tenantId`) always get
+  in, whatever their e-mail domain. Settings → Users has the invite form;
+  `POST /api/users` is the API.
+- **Domain auto-join** additionally admits anyone on an `allowedDomains`
+  domain. On by default (the historic behaviour); set
+  `allowDomainAutoJoin: false` for a customer who wants strict invite-only.
+- **Disabled accounts** (`User.status = 'disabled'`) are refused before any
+  other rule can re-admit them, and their live sessions stop working within
+  ~5 minutes — the JWT re-reads role, tenant and status from the database on
+  that interval rather than trusting the token until it expires.
+
+`authProviders` per tenant decides HOW they prove it: `['google']` (default)
+or `['resend']` (magic link). A tenant should normally offer one method —
+with two enabled, the weaker one sets the security level of every account.
 
 ## Quick Start (development)
 

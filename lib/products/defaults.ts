@@ -22,6 +22,12 @@ export const DEFAULT_TENANT_CONFIG: ProductConfig = {
     senders: [],
   },
   allowedDomains: [],
+  // Google is the default sign-in for a new tenant; magic link is opt-in per
+  // customer from the tenant editor. Auto-join preserves the historic
+  // behaviour for existing deployments — new customers who want strict
+  // invite-only access turn it off.
+  authProviders: ['google'],
+  allowDomainAutoJoin: true,
   adminEmails: [],
   agents: [],
   agentSignatures: {},

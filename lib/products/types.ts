@@ -13,6 +13,11 @@ export interface AgentColor {
   text: string;
 }
 
+/** A sign-in method a tenant can offer. See ProductConfig.authProviders. */
+export type AuthProvider = 'google' | 'resend';
+
+export const AUTH_PROVIDERS: AuthProvider[] = ['google', 'resend'];
+
 export interface ProductConfig {
   /**
    * Stable key for this product. By convention this equals BOTH the
@@ -55,6 +60,31 @@ export interface ProductConfig {
 
   /** Domains (besides superadmins) allowed to sign in. */
   allowedDomains: string[];
+
+  /**
+   * Which sign-in methods this tenant offers. The sign-in page renders a
+   * button per entry and the auth callbacks reject any provider not listed
+   * here, so turning one off closes the door rather than just hiding it.
+   *
+   *   'google' — Google Workspace / Gmail accounts (default)
+   *   'resend' — magic link by e-mail, for customers on neither Google
+   *              nor Microsoft. Requires an active Resend integration (or
+   *              the platform AUTH_RESEND_KEY/AUTH_EMAIL_FROM env pair).
+   *
+   * A tenant should normally offer ONE method: with several enabled, the
+   * weakest one defines the security of every account. Enable a second only
+   * while migrating between them.
+   */
+  authProviders: AuthProvider[];
+
+  /**
+   * Whether anyone on an `allowedDomains` domain gets an account simply by
+   * signing in (the historic behaviour), or whether an admin must invite
+   * them first. Off = the User row is the single source of truth for who
+   * may access the tenant, which is what you want for a customer whose
+   * domain is shared with people outside the support team.
+   */
+  allowDomainAutoJoin: boolean;
 
   /**
    * Emails (besides the global superadmins) granted access to the Settings

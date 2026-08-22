@@ -1,7 +1,36 @@
 # Säkerhetsmodell
 
-Senast uppdaterad: 2026-06-10 (andra passet: tenant-skopning, send/comment-guards,
-delta-polling, markörsanering).
+Senast uppdaterad: 2026-08-22 (tredje passet: inbjudningsgrind, magisk länk,
+återkallningsbara sessioner).
+
+## Vem som får logga in
+
+- **`lib/auth-policy.ts`** är den enda platsen som avgör åtkomst. Både
+  NextAuths `signIn`-callback och inbjudnings-API:t (`POST /api/users`)
+  läser den, så regeln kan inte glida isär mellan "vem släpps in" och
+  "vem bjuds in".
+- Ordningen är medvetet fail-closed: avstängt konto avvisas före allt
+  annat, korsande tenant avvisas alltid, och utan resolvad tenant sker
+  ingen domän-autojoin.
+- **`User`-raden är sanningen**, providern bevisar bara identiteten. Att
+  byta en kund från Google till magisk länk (eller senare till egen OIDC)
+  ändrar därför inte vem som har åtkomst.
+- **Sessioner är återkallningsbara.** JWT-strategin läser om roll, tenant
+  och status var femte minut (`SESSION_REFRESH_SECONDS`) och returnerar
+  `null` för raderade/avstängda konton, så borttag i user-adminen biter
+  inom minuter i stället för vid tokenutgång. Total livslängd 12 timmar
+  i stället för NextAuths 30 dygn.
+- **Magisk länk avslöjar inte vilka adresser som finns.** Avvisade adresser
+  får aldrig något mejl (`signIn` returnerar false på verificationRequest-
+  benet) och inloggningssidan visar samma bekräftelse oavsett.
+- `allowDangerousEmailAccountLinking` är kvar men är inte längre farlig i
+  praktiken: båda providrarna bevisar kontroll över SAMMA adress (Google
+  verifierar e-post — vilket dessutom kontrolleras explicit via
+  `profile.email_verified` — och en magisk länk är per definition bevis på
+  mejlåtkomst). Den behövs för att inbjudningar ska fungera, eftersom ett
+  inbjudet konto saknar `Account`-rad tills personen loggar in första
+  gången. **Innan en provider som kan returnera overifierad e-post läggs
+  till måste den bort, eller den providern undantas från länkning.**
 
 ## Autentisering av API-rutter
 
@@ -85,7 +114,10 @@ delta-polling, markörsanering).
   serverless.
 - Bilagor lagras som data-URL:er i `Ticket.contextData`. Flytta till
   objektlagring (S3/motsv.) när volymen växer.
-- `allowDangerousEmailAccountLinking: true` i `lib/auth.ts` är acceptabelt så
-  länge Google är enda providern — ta bort den innan fler providers läggs till.
+- Magisk länk är rate-limitad av `lib/rate-limit.ts`, som är per serverless-
+  instans. Byt till en delad store innan volymen växer, annars kan en
+  angripare mejlbomba en känd adress genom att träffa flera instanser.
+- Kunder som kör magisk länk har e-postkontot som enda faktor. Där MFA
+  krävs, styr kunden mot Google/M365 (eller egen OIDC) i stället.
 - Superadmin-listan styrs av `SUPERADMIN_EMAILS` (env, kommaseparerad) med
   nuvarande adresser som fallback.

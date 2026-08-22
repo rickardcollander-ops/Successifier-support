@@ -9,7 +9,8 @@
 //   node scripts/create-tenant.js <subdomain> "<Display name>" \
 //     [--settings path/to/settings.json] \
 //     [--admin admin@customer.com] \
-//     [--domain customer.com]
+//     [--domain customer.com] \
+//     [--auth google|resend]
 //
 // Examples:
 //   node scripts/create-tenant.js acme "Acme AB" --admin anna@acme.se --domain acme.se
@@ -29,7 +30,7 @@ function parseArgs(argv) {
   const flags = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--settings' || a === '--admin' || a === '--domain') {
+    if (a === '--settings' || a === '--admin' || a === '--domain' || a === '--auth') {
       flags[a.slice(2)] = argv[++i];
     } else {
       positional.push(a);
@@ -44,7 +45,7 @@ async function main() {
   const name = (positional[1] || '').trim();
 
   if (!SUBDOMAIN_RE.test(subdomain) || !name) {
-    console.error('Usage: node scripts/create-tenant.js <subdomain> "<Display name>" [--settings file.json] [--admin email] [--domain customer.com]');
+    console.error('Usage: node scripts/create-tenant.js <subdomain> "<Display name>" [--settings file.json] [--admin email] [--domain customer.com] [--auth google|resend]');
     process.exit(1);
   }
 
@@ -60,6 +61,18 @@ async function main() {
     const admin = flags.admin.trim().toLowerCase();
     settings.adminEmails = Array.from(new Set([...(settings.adminEmails || []), admin]));
   }
+  // Which sign-in method the customer gets. Google unless told otherwise;
+  // 'resend' onboards a customer who runs neither Google nor Microsoft
+  // straight onto magic-link sign-in.
+  if (flags.auth) {
+    const auth = flags.auth.trim().toLowerCase();
+    if (!['google', 'resend'].includes(auth)) {
+      console.error(`Unknown --auth "${auth}". Valid values: google, resend.`);
+      process.exit(1);
+    }
+    settings.authProviders = [auth];
+  }
+  settings.authProviders = settings.authProviders || ['google'];
   // Sensible branding defaults derived from the display name; everything is
   // editable later via the superadmin tenant API.
   settings.displayName = settings.displayName || name;
@@ -85,9 +98,16 @@ async function main() {
     const user = await prisma.user.upsert({
       where: { email },
       update: { tenantId: tenant.id, role: 'admin' },
-      create: { email, role: 'admin', tenantId: tenant.id },
+      create: {
+        email,
+        role: 'admin',
+        tenantId: tenant.id,
+        status: 'invited',
+        invitedAt: new Date(),
+      },
     });
-    console.log(`Admin user ready: ${user.email} (role=admin) — can sign in with Google immediately.`);
+    const how = settings.authProviders.includes('resend') ? 'a magic link' : 'Google';
+    console.log(`Admin user ready: ${user.email} (role=admin) — can sign in with ${how} immediately.`);
   }
 
   const rootDomain = process.env.TENANT_ROOT_DOMAIN || 'successifier.app';

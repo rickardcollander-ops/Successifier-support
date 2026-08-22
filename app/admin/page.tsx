@@ -37,6 +37,7 @@ export default function AdminPage() {
   const [subdomain, setSubdomain] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [domain, setDomain] = useState('');
+  const [authProvider, setAuthProvider] = useState('google');
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [openTenantId, setOpenTenantId] = useState<string | null>(null);
@@ -70,7 +71,7 @@ export default function AdminPage() {
       const res = await fetch('/api/admin/tenants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, subdomain, adminEmail, domain }),
+        body: JSON.stringify({ name, subdomain, adminEmail, domain, authProviders: [authProvider] }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -78,6 +79,7 @@ export default function AdminPage() {
       }
       setName('');
       setSubdomain('');
+      setAuthProvider('google');
       setAdminEmail('');
       setDomain('');
       await loadTenants();
@@ -145,6 +147,21 @@ export default function AdminPage() {
               placeholder="acme.se"
               className="rounded-lg border border-white/10 bg-[#0B0F1A] px-3 py-2 text-sm focus:border-[#7C5CFF] focus:outline-none"
             />
+          </div>
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <label className="text-xs text-slate-400">Inloggningssätt</label>
+            <select
+              value={authProvider}
+              onChange={(e) => setAuthProvider(e.target.value)}
+              className="rounded-lg border border-white/10 bg-[#0B0F1A] px-3 py-2 text-sm focus:border-[#7C5CFF] focus:outline-none"
+            >
+              <option value="google">Google (Workspace/Gmail)</option>
+              <option value="resend">Magisk länk via e-post</option>
+            </select>
+            <p className="text-[11px] text-slate-500">
+              Välj ett sätt. Magisk länk kräver att kunden har en aktiv Resend-integration
+              eller att AUTH_RESEND_KEY/AUTH_EMAIL_FROM är satta. Kan ändras senare per tenant.
+            </p>
           </div>
           <div className="sm:col-span-2">
             <button

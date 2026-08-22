@@ -18,7 +18,10 @@ async function loadScopedUser(id: string) {
   return { tenant, user };
 }
 
-// PATCH — change a user's role (agent ⇄ admin).
+const SETTABLE_STATUSES = ['active', 'disabled'] as const;
+
+// PATCH — change a user's role (agent ⇄ admin) and/or their status
+// (active ⇄ disabled).
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -30,16 +33,38 @@ export async function PATCH(
   const { user } = await loadScopedUser(id);
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-  let body: { role?: string };
+  let body: { role?: string; status?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const role = String(body.role || '');
-  if (!ASSIGNABLE_ROLES.includes(role as (typeof ASSIGNABLE_ROLES)[number])) {
-    return NextResponse.json({ error: 'Role must be agent or admin' }, { status: 400 });
+  const data: { role?: string; status?: string } = {};
+
+  if (body.role !== undefined) {
+    const role = String(body.role);
+    if (!ASSIGNABLE_ROLES.includes(role as (typeof ASSIGNABLE_ROLES)[number])) {
+      return NextResponse.json({ error: 'Role must be agent or admin' }, { status: 400 });
+    }
+    data.role = role;
+  }
+
+  if (body.status !== undefined) {
+    const status = String(body.status);
+    if (!SETTABLE_STATUSES.includes(status as (typeof SETTABLE_STATUSES)[number])) {
+      return NextResponse.json({ error: 'Status must be active or disabled' }, { status: 400 });
+    }
+    // Disabling yourself would lock you out of the very screen you'd need to
+    // undo it — the same reasoning as the self-delete guard below.
+    if (status === 'disabled' && user.email.toLowerCase() === authResult.userEmail.toLowerCase()) {
+      return NextResponse.json({ error: 'Du kan inte stänga av ditt eget konto.' }, { status: 400 });
+    }
+    data.status = status;
+  }
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: 'Inget att uppdatera.' }, { status: 400 });
   }
 
   // Platform superadmins are controlled by SUPERADMIN_EMAILS at the deploy
@@ -54,8 +79,8 @@ export async function PATCH(
 
   const updated = await prisma.user.update({
     where: { id: user.id },
-    data: { role },
-    select: { id: true, role: true },
+    data,
+    select: { id: true, role: true, status: true },
   });
 
   return NextResponse.json({ ok: true, ...updated });

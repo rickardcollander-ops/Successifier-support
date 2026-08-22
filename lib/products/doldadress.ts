@@ -21,6 +21,8 @@ export const doldadress: ProductConfig = {
     senders: ['no-reply@billecta.com'],
   },
   allowedDomains: ['doldadress.se', 'becomeanon.com'],
+  authProviders: ['google'],
+  allowDomainAutoJoin: true,
   adminEmails: ['ida@doldadress.se'],
   agents: ['Ida Rosell', 'Malin Sundberg', 'Filippa Kramp'],
   // Broad buckets mirroring the KEYWORD_GROUPS the AI search already uses.

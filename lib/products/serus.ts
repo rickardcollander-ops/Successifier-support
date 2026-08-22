@@ -32,6 +32,8 @@ export const serus: ProductConfig = {
     senders: ['no-reply@stripe.com', 'support@stripe.com'],
   },
   allowedDomains: ['serus.ai'],
+  authProviders: ['google'],
+  allowDomainAutoJoin: true,
   adminEmails: ['ida@serus.ai'],
   // Same support team as Doldadress, plus Anthon Wansland and Argjent Sahiti.
   // Names must match how the agents appear in their Google accounts.

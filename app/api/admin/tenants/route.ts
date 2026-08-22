@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { requireSuperadmin } from '@/lib/api-auth';
 import { defaultTrialEnd } from '@/lib/billing';
+import { AUTH_PROVIDERS, type AuthProvider } from '@/lib/products/types';
 
 // Cross-tenant administration. The superadmin role is granted globally
 // (see SUPERADMIN_EMAILS in lib/auth.ts), so these endpoints intentionally
@@ -44,7 +45,13 @@ export async function POST(request: NextRequest) {
   const authResult = await requireSuperadmin();
   if (!authResult.ok) return authResult.response;
 
-  let body: { subdomain?: unknown; name?: unknown; adminEmail?: unknown; domain?: unknown };
+  let body: {
+    subdomain?: unknown;
+    name?: unknown;
+    adminEmail?: unknown;
+    domain?: unknown;
+    authProviders?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -55,6 +62,21 @@ export async function POST(request: NextRequest) {
   const name = String(body.name ?? '').trim();
   const adminEmail = String(body.adminEmail ?? '').trim().toLowerCase();
   const domain = String(body.domain ?? '').trim().toLowerCase().replace(/^@/, '');
+  // Which sign-in method the customer gets. Defaults to Google; a customer on
+  // neither Google nor Microsoft is onboarded straight onto magic link.
+  const requestedProviders = Array.isArray(body.authProviders)
+    ? body.authProviders.map((p) => String(p).trim().toLowerCase())
+    : [];
+  const authProviders = requestedProviders.filter((p): p is AuthProvider =>
+    (AUTH_PROVIDERS as string[]).includes(p),
+  );
+  if (requestedProviders.length > 0 && authProviders.length === 0) {
+    return NextResponse.json(
+      { error: `Okänt inloggningssätt. Giltiga: ${AUTH_PROVIDERS.join(', ')}.` },
+      { status: 400 },
+    );
+  }
+  if (authProviders.length === 0) authProviders.push('google');
 
   if (!name) {
     return NextResponse.json({ error: 'Namn krävs' }, { status: 400 });
@@ -79,7 +101,7 @@ export async function POST(request: NextRequest) {
 
   // Branding defaults derived from the display name plus the optional
   // sign-in allowlists — everything editable later in the tenant editor.
-  const settings: Record<string, string | string[]> = {
+  const settings: Record<string, string | string[] | boolean> = {
     displayName: name,
     brandName: name,
     supportName: `${name} Support`,
@@ -87,6 +109,7 @@ export async function POST(request: NextRequest) {
   };
   if (domain) settings.allowedDomains = [domain];
   if (adminEmail) settings.adminEmails = [adminEmail];
+  settings.authProviders = authProviders;
 
   const tenant = await prisma.tenant.create({
     // New customers start on a free trial; the platform webhook or the
@@ -102,7 +125,14 @@ export async function POST(request: NextRequest) {
     await prisma.user.upsert({
       where: { email: adminEmail },
       update: { tenantId: tenant.id, role: 'admin' },
-      create: { email: adminEmail, role: 'admin', tenantId: tenant.id },
+      create: {
+        email: adminEmail,
+        role: 'admin',
+        tenantId: tenant.id,
+        status: 'invited',
+        invitedAt: new Date(),
+        invitedByEmail: authResult.userEmail.toLowerCase(),
+      },
     });
   }
 
